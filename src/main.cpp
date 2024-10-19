@@ -8,10 +8,13 @@ Revised for Integration to ESP32 for real time data logging Greg Liebig 12/7/23 
 /*-----( Import needed libraries )-----*/
 #include <Arduino.h>
 #include <Wire.h>  // Comes with Arduino IDE
-#include <LiquidCrystal_I2C.h>
+//#include <LiquidCrystal_I2C.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "RTClib.h"
 #include "SD.h"
 
+/*
 // SD chip select pin
 const uint8_t chipSelect = SS;
 
@@ -23,22 +26,26 @@ ArduinoOutStream cout(Serial);
 
 // store error strings in flash to save RAM
 #define error(s) sd.errorHalt_P(PSTR(s));
-
+*/
+File Total;  // file to store total counts
 
 RTC_DS1307 RTC;
 
+
 /*-----( Declare Constants )-----*/
-#define firstDetectorPin 6
-#define secondDetectorPin 7
+#define firstDetectorPin 32
+#define secondDetectorPin 33
 #define countSuccessPin 8
+#define PIN_SPI_CS 5 // SD Card CS GPIO5
 
-#define redArchPin 02
-#define greenArchPin 03
-// set the LCD address to 0x27 for a 20 chars 4 line display
-// Set the pins on the I2C chip used for LCD connections:
+#define redArchPin 25
+#define greenArchPin 26
+// set the display address to 0x27 for a 20 chars 4 line display
+// Set the pins on the I2C chip used for display connections:
 //                    addr, en,rw,rs,d4,d5,d6,d7,bl,blpol
-LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
-
+//LiquidCrystal_I2C display(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the display I2C address
+// var ************* DISPLAY SIZE ************
+Adafruit_SSD1306 display = Adafruit_SSD1306(128, 64, &Wire, -1);
 
 /*-----( Declare Variables )-----*/
 int firstDetectorState;  // Holds the current state of the FIRST IR receiver/detector
@@ -137,91 +144,91 @@ void incrementDailyTotal()
 
 void displayGrandTotal()
   {
-    lcd.clear();
-    lcd.setCursor(0,0); //Start at character 4 on line 0
-    lcd.print("Total Cars Since");
-    lcd.setCursor(0,1);
-    lcd.print("1st Night: ");
-    lcd.print(totalCars);
+    display.clearDisplay();
+    display.setCursor(0,0); //Start at character 4 on line 0
+    display.print("Total Cars Since");
+    display.setCursor(0,1);
+    display.print("1st Night: ");
+    display.print(totalCars);
   }
 
 void displayDailyTotal()
   {
-    lcd.clear();
-    lcd.setCursor(0,0); //Start at character 4 on line 0
-    lcd.print("Total Cars");
-    lcd.setCursor(0,1);
-    lcd.print("Today: ");
-    lcd.print(dailyTotal);
+    display.clearDisplay();
+    display.setCursor(0,0); //Start at character 4 on line 0
+    display.print("Total Cars");
+    display.setCursor(0,1);
+    display.print("Today: ");
+    display.print(dailyTotal);
   }
   
 /* void displayDailyAverage()
   {
-    lcd.clear();
-    lcd.setCursor(0,0); //Start at character 1 on line 0
-    lcd.print("Daily Average");
-    lcd.setCursor(0,1);
-    lcd.print(totalCars / daysRunning);
+    display.clearDisplay();
+    display.setCursor(0,0); //Start at character 1 on line 0
+    display.print("Daily Average");
+    display.setCursor(0,1);
+    display.print(totalCars / daysRunning);
   }
 
 void displayHourlyAverage()
   {
-    lcd.clear();
-    lcd.setCursor(0,0); //Start at character 1 on line 0
-    lcd.print("Hourly Average");
-    lcd.setCursor(0,1);
-    lcd.print(totalCars / (daysRunning * 4));
+    display.clearDisplay();
+    display.setCursor(0,0); //Start at character 1 on line 0
+    display.print("Hourly Average");
+    display.setCursor(0,1);
+    display.print(totalCars / (daysRunning * 4));
   }
 Averages no longer displayed.  Removing subroutines from code in next version (6.4) */
 
 void displayDate()
   {
     DateTime now = RTC.now();
-    lcd.clear();
-    lcd.setCursor(0,0);
-    lcd.print("The Current Date");
-    lcd.setCursor(0,1);
-    lcd.print("   ");
-    lcd.print(now.month());
-    lcd.print("/");
-    lcd.print(now.day());
-    lcd.print("/");
-    lcd.print(now.year());
+    display.clear();
+    display.setCursor(0,0);
+    display.print("The Current Date");
+    display.setCursor(0,1);
+    display.print("   ");
+    display.print(now.month());
+    display.print("/");
+    display.print(now.day());
+    display.print("/");
+    display.print(now.year());
   }
   
 void displayTime()
   {
     DateTime now = RTC.now();
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("The Current Time");
-  lcd.setCursor(0,1);
-  lcd.print("    ");
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.print("The Current Time");
+  display.setCursor(0,1);
+  display.print("    ");
   if (now.hour() <= 12)
     {  
-    lcd.print(now.hour(), DEC);
+    display.print(now.hour(), DEC);
     }
   else
     {
-    lcd.print(now.hour()-12, DEC);  
+    display.print(now.hour()-12, DEC);  
     }
-  lcd.print(':');
+  display.print(':');
   if (now.minute() < 10)
     {
-    lcd.print("0");  
-    lcd.print(now.minute(), DEC);
+    display.print("0");  
+    display.print(now.minute(), DEC);
     }
   else
     {
-     lcd.print(now.minute(), DEC);
+     display.print(now.minute(), DEC);
     }
   if (now.hour() >= 12)
     {
-    lcd.print(" PM");
+    display.print(" PM");
     }
   else
     {
-    lcd.print(" AM");  
+    display.print(" AM");  
     }
   }
   
@@ -301,10 +308,13 @@ void beamCarDetect () // If a car is detected by a beam break, then increment th
     detectorTrippedCount++;                // add 1 to the counter, this prevents the code from being run more than once after tripped for 3 seconds.
     Serial.print("Cars Today:  ");
     Serial.println(dailyTotal);
-    lcd.noBacklight();
+/*
+    display.noBacklight();
     delay(125);
-    lcd.backlight();
+    display.backlight();
     delay(125);    
+*/
+
 //    displayGrandTotal();
     digitalWrite(redArchPin, LOW);
     digitalWrite(greenArchPin, HIGH);
@@ -419,74 +429,82 @@ void setup()   /*----( SETUP: RUNS ONCE )----*/
 
   
   // initialize serial communication:
-  Serial.begin(9600);
+  Serial.begin(115200);
   Wire.begin();
   RTC.begin();
-  lcd.begin(16,2);   // initialize the lcd for 16 chars 2 lines, turn on backlight
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   
-  // ------- Quick 3 blinks of LCD backlight  -------------
+ /*
+  // ------- Quick 3 blinks of display backlight  -------------
   for(int i = 0; i< 3; i++)
   {
-    lcd.backlight();
+    display.backlight();
     delay(250);
-    lcd.noBacklight();
+    display.noBacklight();
     delay(250);
   }
-  lcd.backlight(); // finish with LCD backlight on  
-  
+  display.backlight(); // finish with display backlight on  
+  */
 
 
-//-------- Write the startup messages on the LCD display ------------------
+//-------- Write the startup messages on the display display ------------------
 // NOTE: Cursor Position: (CHAR, LINE) start at 0,0 for leftmost line 1 start at 0,1 for leftmost line 2  
   
-/*  lcd.setCursor(0,0);
-  lcd.print(" Making Spirits");
-  lcd.setCursor(0,1);
-  lcd.print("     Bright");
+/*  display.setCursor(0,0);
+  display.print(" Making Spirits");
+  display.setCursor(0,1);
+  display.print("     Bright");
   delay(4000);
-  lcd.clear();  
-  lcd.setCursor(0,0);
-  lcd.print("Traffic Counter");
-  lcd.setCursor(0,1);
-  lcd.print("& Light Control");
+  display.clear();  
+  display.setCursor(0,0);
+  display.print("Traffic Counter");
+  display.setCursor(0,1);
+  display.print("& Light Control");
   delay(4000);  
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print(" WARNING - HIGH");
-  lcd.setCursor(0,1);
-  lcd.print(" VOLTAGE INSIDE!");
+  display.clear();
+  display.setCursor(0,0);
+  display.print(" WARNING - HIGH");
+  display.setCursor(0,1);
+  display.print(" VOLTAGE INSIDE!");
   delay(4000);  
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("DISCONNECT POWER");
-  lcd.setCursor(0,1);
-  lcd.print("BEFORE OPENING!!");
+  display.clear();
+  display.setCursor(0,0);
+  display.print("DISCONNECT POWER");
+  display.setCursor(0,1);
+  display.print("BEFORE OPENING!!");
   delay(4000);  
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("Instructions On");
-  lcd.setCursor(0,1);
-  lcd.print("SD Card in Unit");
+  display.clear();
+  display.setCursor(0,0);
+  display.print("Instructions On");
+  display.setCursor(0,1);
+  display.print("SD Card in Unit");
   delay(4000);  
-  displayDate(); //Display the current Date on the LCD display
+  displayDate(); //Display the current Date on the display display
   delay(4000);
-  displayTime(); //Display the current Time on the LCD display
+  displayTime(); //Display the current Time on the display display
   delay(4000); 
   
 //  Removed startup information display section to speed up testing, found it was not needed for normal operation and will leave commented out */ 
   
-  lcd.clear();
-  lcd.setCursor(0,0);
-  lcd.print("    Ready to");
-  lcd.setCursor(0,1);
-  lcd.print("   Count Cars!");
+  display.  display.clearDisplay();
+  display.setCursor(0,0);
+  display.print("    Ready to");
+  display.setCursor(0,1);
+  display.print("   Count Cars!");
   digitalWrite(greenArchPin, LOW); // Turn Green Arch On
 
   
-  // Init SD Card
-  // initialize the SD card at SPI_HALF_SPEED to avoid bus errors with
-  // breadboards.  use SPI_FULL_SPEED for better performance.
-  if (!sd.begin(chipSelect, SPI_HALF_SPEED)) sd.initErrorHalt();
+  //Initialize SD Card
+  if (!SD.begin(PIN_SPI_CS)) {
+    Serial.println(F("SD CARD FAILED, OR NOT PRESENT!"));
+    while (1); // stop the program
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setTextColor(WHITE);
+    display.setCursor(0,line1);
+    display.println("Check SD Card");
+    display.display();
+  }
 
 getInitialTotal();
 getInitialDailyTotal();
@@ -542,7 +560,7 @@ void  loop ()  /*----( LOOP: RUNS CONSTANTLY )----*/
    
    }
 
-/*-------- Rotate through LCD Displays for Grand Total, Total Today, Current Date & Current Time - change every 5 seconds ---------*/
+/*-------- Rotate through display Displays for Grand Total, Total Today, Current Date & Current Time - change every 5 seconds ---------*/
 if (displayMode == 0 && (millis() - displayModeMillis) >= 5000)
   {
   displayGrandTotal();
