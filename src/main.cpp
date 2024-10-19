@@ -5,6 +5,8 @@ Version 2014.1.0 (Based off Version 6.5) (11/13/2014 8:04pm)
 Removed all reference to manual counter button.  Added second beam. Temporarily commented out startup messages to speed testing.
 Revised for Integration to ESP32 for real time data logging Greg Liebig 12/7/23 9:25 pm with countSuccessPin 8
 
+Rewrite for ESP32 10/19/24 
+
 /*-----( Import needed libraries )-----*/
 #include <Arduino.h>
 #include <Wire.h>  // Comes with Arduino IDE
@@ -35,7 +37,7 @@ RTC_DS1307 RTC;
 /*-----( Declare Constants )-----*/
 #define firstDetectorPin 32
 #define secondDetectorPin 33
-#define countSuccessPin 8
+//#define countSuccessPin 8
 #define PIN_SPI_CS 5 // SD Card CS GPIO5
 
 #define redArchPin 25
@@ -304,7 +306,7 @@ void checkDay() // See if it's a new day and if so, reset int dailyTotal
 void beamCarDetect () // If a car is detected by a beam break, then increment the counter by 1 and add an entry to the Master.csv log file on the SD card
 {
     DateTime now = RTC.now();
-    digitalWrite (countSuccessPin, HIGH);
+//    digitalWrite (countSuccessPin, HIGH);
     detectorTrippedCount++;                // add 1 to the counter, this prevents the code from being run more than once after tripped for 3 seconds.
     Serial.print("Cars Today:  ");
     Serial.println(dailyTotal);
@@ -351,7 +353,7 @@ void beamCarDetect () // If a car is detected by a beam break, then increment th
 
   incrementTotalFile();
   incrementDailyTotal();
-  digitalWrite (countSuccessPin, LOW);
+//  digitalWrite (countSuccessPin, LOW);
 }
 
 void playPattern() // Flash an alternating pattern on the arches (called if a car hasn't been detected for over 30 seconds)
@@ -424,8 +426,8 @@ void setup()   /*----( SETUP: RUNS ONCE )----*/
   pinMode(secondDetectorPin, INPUT);
   pinMode(redArchPin, OUTPUT);
   pinMode(greenArchPin, OUTPUT);
-  pinMode(countSuccessPin, OUTPUT);
-  digitalWrite(countSuccessPin, LOW);
+//  pinMode(countSuccessPin, OUTPUT);
+//  digitalWrite(countSuccessPin, LOW);
 
   
   // initialize serial communication:
