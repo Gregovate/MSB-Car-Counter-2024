@@ -3,6 +3,10 @@ Car counter Interface to MQTT by Greg Liebig gliebig@sheboyganlights.org
 Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 Added MQTT to Hive MQTT and Fixed WIFI for Testing at home and on-site7 12/15/23
+Used the ESP32 MQTT Program as a base and merged Andrew Bubb's code into it. The sdin, sdout
+and serial writes used in the Arduino program were impossible to correct for ESP32. Spent
+12 Hours before the program would compile. Problems may exist with the counts but ready for debugging. 10/20/24 GAL
+
 
 Purpose: suppliments Car Counter to improve traffic control and determine park capacity
 Counts vehicles as they exit the park
@@ -695,7 +699,7 @@ void setup() {
     if (!SD.exists("/DailyTot.csv")) {
       Serial.println(F("DailyTot.csv doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile2 = SD.open("/DailyTot.txt", FILE_WRITE);
+      myFile2 = SD.open("/DailyTot.csv", FILE_WRITE);
       myFile2.close();
           // recheck if file is created or not & write Header
     if (SD.exists("/DailyTot.csv")){
@@ -789,8 +793,8 @@ void setup() {
   display.setTextColor(WHITE);
   display.setTextSize(2);
   display.setCursor(0, line3);
-  display.println("CAR Count");
-  display.println("Ready!");
+  display.println("Ready To");
+  display.println("Count Cars");
 
   Serial.println  ("Initializing Car Counter");
     Serial.print("Temperature: ");
