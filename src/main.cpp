@@ -91,10 +91,11 @@ void onOTAEnd(bool success) {
 //#include <DS3231.h> & Setup display variables
 RTC_DS3231 rtc;
 
-int line1 =0;
-int line2 =9;
-int line3 = 20;
-int line4 = 35;
+const int line1 =0;
+const int line2 =9;
+const int line3 = 20;
+const int line4 = 35;
+const int line5 = 50;
 
 //Create Multiple WIFI Object
 WiFiMulti wifiMulti;
@@ -284,6 +285,11 @@ void reconnect() {
     String clientId = "ESP32ClientCar";
     // Attempt to connect
     if (mqtt_client.connect(clientId.c_str(), mqtt_username, mqtt_password)) {
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(0,line5);
+      display.println("MQTT Connect");
+      display.display();
       Serial.println("connected!");
       Serial.println("Waiting for Car...");
       // Once connected, publish an announcement…
@@ -294,6 +300,11 @@ void reconnect() {
       Serial.print("failed, rc = ");
       Serial.print(mqtt_client.state());
       Serial.println(" try again in 5 seconds");
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(0,line4);
+      display.println("MQTT Error");
+      display.display();
     }
   }
 }
@@ -793,7 +804,7 @@ void setup() {
   display.setTextColor(WHITE);
   display.setTextSize(2);
   display.setCursor(0, line3);
-  display.println("Ready To");
+  display.println(" Ready To");
   display.println("Count Cars");
 
   Serial.println  ("Initializing Car Counter");
