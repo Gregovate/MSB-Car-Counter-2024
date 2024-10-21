@@ -6,8 +6,8 @@ Added MQTT to Hive MQTT and Fixed WIFI for Testing at home and on-site7 12/15/23
 Used the ESP32 MQTT Program as a base and merged Andrew Bubb's code into it. The sdin, sdout
 and serial writes used in the Arduino program were impossible to correct for ESP32. Spent
 12 Hours before the program would compile. Problems may exist with the counts but ready for debugging. 10/20/24 GAL
-
-
+FW Version
+23.10.21 Include FS.h
 Purpose: suppliments Car Counter to improve traffic control and determine park capacity
 Counts vehicles as they exit the park
 Connects to WiFi and updates RTC on Boot
@@ -35,6 +35,7 @@ D23 - MOSI
 #include "time.h"
 //#include "FS.h"
 #include "SD.h"
+#include "FS.h"
 #include "SPI.h"
 #if defined(ESP8266)
   #include <ESP8266WiFi.h>
@@ -56,7 +57,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.10.17.2" // Firmware Version
+#define FWVersion "24.10.21.1" // Firmware Version
 #define OTA_Title "Gate Counter" // OTA Title
 // **************************************************
 
