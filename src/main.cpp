@@ -2,12 +2,14 @@
 Car counter Interface to MQTT by Greg Liebig gliebig@sheboyganlights.org
 Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
-Added MQTT to Hive MQTT and Fixed WIFI for Testing at home and on-site7 12/15/23
-Used the ESP32 MQTT Program as a base and merged Andrew Bubb's code into it. The sdin, sdout
+
+FW Version
+24.10.21 Include FS.h
+24.10.19 Used the ESP32 MQTT Program as a base and merged Andrew Bubb's code into it. The sdin, sdout
 and serial writes used in the Arduino program were impossible to correct for ESP32. Spent
 12 Hours before the program would compile. Problems may exist with the counts but ready for debugging. 10/20/24 GAL
-FW Version
-23.10.21 Include FS.h
+24.10.17.2 
+23.12.15 Added MQTT to Hive MQTT and Fixed WIFI for Testing at home and on-site7 12/15/23
 Purpose: suppliments Car Counter to improve traffic control and determine park capacity
 Counts vehicles as they exit the park
 Connects to WiFi and updates RTC on Boot
@@ -49,8 +51,8 @@ D23 - MOSI
 #include <ElegantOTAPro.h>
 
 // ******************** CONSTANTS *******************
-#define firstDetectorPin 32
-#define secondDetectorPin 33
+#define firstDetectorPin 33
+#define secondDetectorPin 32
 #define redArchPin 25
 #define greenArchPin 26
 #define PIN_SPI_CS 5 // The ESP32 pin GPIO5
@@ -158,21 +160,21 @@ unsigned long mqtt_lastReconnectAttemptMillis;
 unsigned long mqtt_connectionCheckMillis = 5000;
 unsigned long nowwifi;
 unsigned long nowmqtt;
-int firstDetectorState;  // Holds the current state of the FIRST IR receiver/detector
-int secondDetectorState;  // Holds the current state of the SECOND IR receiver/detector
+int firstDetectorState = 0;  // Holds the current state of the FIRST IR receiver/detector
+int secondDetectorState = 0;  // Holds the current state of the SECOND IR receiver/detector
 
-int previousFirstDetectorState; // Holds the previous state of the FIRST IR receiver/detector
-int previousSecondDetectorState; // Holds the previous state of the SECOND IR receiver/detector
+int previousFirstDetectorState = 0; // Holds the previous state of the FIRST IR receiver/detector
+int previousSecondDetectorState =0; // Holds the previous state of the SECOND IR receiver/detector
 
 
-int detectorState;  // was used for interface between ESP32 and UNO 2023
-int lastdetectorState = 0; // was used for interface between ESP32 and UNO 2023
+//int detectorState;  // was used for interface between ESP32 and UNO 2023
+//int lastdetectorState = 0; // was used for interface between ESP32 and UNO 2023
 
 unsigned long detectorMillis = 0;
 int detectorTrippedCount = 0;
 unsigned long noCarTimer = 0;
 unsigned int totalCars;
-unsigned int dailyTotal;  
+unsigned int totalDailyCarstal;  
 int displayMode = 0;
 unsigned long displayModeMillis = 0;
 unsigned long dayMillis = 0;
@@ -186,12 +188,12 @@ File myFile; //used to write files to SD Card
 File myFile2; // writes hourly car data to file
 
 // **********FILE NAMES FOR SD CARD *********
-String fileName1 = "DailyTot.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
-String fileName2 = "ShowTot.txt";  // ShowTot.txt file to store season total counts
-String fileName3 = "CalDay.txt"; // CalDay.txt file to store current day number
-String fileName4 = "RunDays.txt"; // RunDays.txt file to store days since open
-String fileName5 = "CarLog.csv"; // CarLog.csv file to store all car counts for season (was MASTER.CSV)
-
+String fileName1 = "/DailyTot.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
+String fileName2 = "/ShowTot.txt";  // ShowTot.txt file to store season total counts
+String fileName3 = "/CalDay.txt"; // CalDay.txt file to store current day number
+String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
+String fileName5 = "/CarLog.csv"; // CarLog.csv file to store all car counts for season (was MASTER.CSV)
+String fileName6 = "/DailySummary.csv"; // DailySummary.csv Stores Daily Totals by Hour and total
 
 char days[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 char months[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -359,6 +361,8 @@ void getShowTotal()  {   // open ShowTot.txt to get totalCars for season
     if (myFile) {
       while (myFile.available()) {
       totalShowCars = myFile.parseInt(); // read total
+      Serial.print(" Total cars from file = ");
+      Serial.println(totalShowCars);
     }
     myFile.close();
     }  else {
@@ -371,6 +375,8 @@ void getInitialDailyTotal()  { // open DAILYTOT.txt to get initial dailyTotal va
     if (myFile) {
       while (myFile.available()) {
       totalDailyCars = myFile.parseInt(); // read total
+      Serial.print(" Daily cars from file = ");
+      Serial.println(totalDailyCars);
     }
     myFile.close();
     }  else {
@@ -383,6 +389,8 @@ void getInitialDayRunning() {  // Days the show has been running)
     if (myFile) {
       while (myFile.available()) {
       daysRunning = myFile.parseInt(); // read day Number
+      Serial.print(" Days Running = ");
+      Serial.println(daysRunning);
     }
     myFile.close();
     }  else {
@@ -395,6 +403,8 @@ void getLastDayRunning() {  // get the last calendar day used for reset daily co
     if (myFile) {
       while (myFile.available()) {
        lastCalDay = myFile.parseInt(); // read day Number
+      Serial.print(" Calendar Day = ");
+      Serial.println(lastCalDay);
     }
     myFile.close();
     }  else {
@@ -402,7 +412,7 @@ void getLastDayRunning() {  // get the last calendar day used for reset daily co
     }
 } 
 
-void HourlyTotals(){
+void HourlyTotals()  {
   if (currentHour == 18){
     carsHr1 = totalDailyCars;
   }
@@ -427,7 +437,7 @@ void WriteTotals(){
   totalDailyCars ++;     
   Serial.print(totalDailyCars) ;  
   // open file for writing Car Data
-  myFile2 = SD.open("/DailyTotals", FILE_APPEND);
+  myFile2 = SD.open(fileName6, FILE_APPEND);
   if (myFile) {
   myFile2.print(now.toString(buf2));
   myFile2.print(", ");
@@ -443,7 +453,7 @@ void WriteTotals(){
   myFile2.print(", ");
   myFile2.println(totalDailyCars);
   myFile2.close();
-  Serial.println(F(" = Total Daily Cars. CarLog Recorded SD Card."));
+  Serial.println(F(" = Daily Summary Recorded SD Card."));
     // Publish Totals
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
@@ -490,7 +500,7 @@ void incrementDaysRunning()  {
 
 void displayGrandTotal()  {
     display.clearDisplay();
-    display.setCursor(0,0); //Start at character 4 on line 0
+    display.setCursor(0,line3); //Start at character 4 on line 0
     display.print("Total Cars Since");
     display.setCursor(0,1);
     display.print("1st Night: ");
@@ -499,11 +509,11 @@ void displayGrandTotal()  {
 
 void displayDailyTotal()  {
     display.clearDisplay();
-    display.setCursor(0,0); //Start at character 4 on line 0
+    display.setCursor(0,line3); //Start at character 4 on line 0
     display.print("Total Cars");
     display.setCursor(0,1);
     display.print("Today: ");
-    display.print(dailyTotal);
+    display.print(totalDailyCarstal);
 }
   
 void displayDate()  {
@@ -609,13 +619,13 @@ void playPattern() // Flash an alternating pattern on the arches (called if a ca
     }
 }
 
-void beamCarDetect () // If a car is detected by a beam break, then increment the counter by 1 and add an entry to the Master.csv log file on the SD card
+void beamCarDetect() // If a car is detected by a beam break, then increment the counter by 1 and add an entry to the Master.csv log file on the SD card
 {
 
 //    digitalWrite (countSuccessPin, HIGH);
     detectorTrippedCount++;                // add 1 to the counter, this prevents the code from being run more than once after tripped for 3 seconds.
     Serial.print("Cars Today:  ");
-    Serial.println(dailyTotal);
+    Serial.println(totalDailyCars);
 
 //    displayGrandTotal();
     digitalWrite(redArchPin, LOW);
@@ -633,7 +643,7 @@ void beamCarDetect () // If a car is detected by a beam break, then increment th
     totalShowCars ++;  
     Serial.print(totalDailyCars) ;  
     // open file for writing Car Data
-    myFile = SD.open("/CarLog.csv", FILE_APPEND);
+    myFile = SD.open(fileName5, FILE_APPEND);
     if (myFile) {
         myFile.print(now.toString(buf2));
         myFile.print(", ");
@@ -643,7 +653,7 @@ void beamCarDetect () // If a car is detected by a beam break, then increment th
         myFile.print(", ");
         myFile.println(tempF);
         myFile.close();
-        Serial.println(F(" = Total Daily Cars. CarLog Recorded SD Card."));
+        Serial.println(F(" = CarLog Recorded SD Card."));
 
           mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
           mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
@@ -653,8 +663,8 @@ void beamCarDetect () // If a car is detected by a beam break, then increment th
     }
 
 
-  updateDailyTotal();
-  updateShowTotal();
+  updateDailyTotal(); //update total daily count in event of power failure
+  updateShowTotal(); // update show total count in event of power failure
 
 }
 
@@ -691,7 +701,7 @@ void setup() {
     display.display();
 
   //***** Check/Prep Files for use ******/ 
-  if (!SD.exists("/CarLog.csv")) {
+  if (!SD.exists(fileName5)) {
     Serial.println(F("CarLog.csv doesn't exist. Creating CarLog.csv file..."));
     // create a new file by opening a new file and immediately close it
     myFile = SD.open("/CarLog.csv", FILE_WRITE);
@@ -708,34 +718,34 @@ void setup() {
     }
   }
 
-    if (!SD.exists("/DailyTot.csv")) {
-      Serial.println(F("DailyTot.csv doesn't exist. Creating file..."));
+    if (!SD.exists(fileName6)) {
+      Serial.println(F("DailySummary.csv doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile2 = SD.open("/DailyTot.csv", FILE_WRITE);
+      myFile2 = SD.open(fileName6, FILE_WRITE);
       myFile2.close();
           // recheck if file is created or not & write Header
-    if (SD.exists("/DailyTot.csv")){
-      Serial.println(F("DailyTot.csv exists on SD Card."));
-      myFile = SD.open("/DailyTot.csv", FILE_APPEND);
+    if (SD.exists(fileName6))  {
+      Serial.println(F("DailySummary.csv exists on SD Card."));
+      myFile = SD.open(fileName6, FILE_APPEND);
       myFile.println("Date, Temp, Hour1, Hour2, Hour3, Hour4, Total");
       myFile.close();
-      Serial.println(F("Header Written to file"));
+      Serial.println(F("Header Written to file DailySummary.csv"));
     }else{
       Serial.println(F("DailyTot.csv doesn't exist on SD Card."));
     }
   }
-     if (!SD.exists("/CalDay.txt")) {
+     if (!SD.exists(fileName3)) {
       Serial.println(F("CalDay.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile2 = SD.open("/CalDay.txt", FILE_WRITE);
+      myFile2 = SD.open(fileName3, FILE_WRITE);
       myFile2.close();
           // recheck if file is created or not & write Header
    }
 
-    if (!SD.exists("/RunDays.txt")) {
+    if (!SD.exists(fileName4)) {
       Serial.println(F("RunDays.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile2 = SD.open("/RunDays.txt", FILE_WRITE);
+      myFile2 = SD.open(fileName4, FILE_WRITE);
       myFile2.close();
           // recheck if file is created or not & write Header
    }
@@ -814,6 +824,22 @@ void setup() {
     Serial.print(tempF);
     Serial.println(" F");
   display.display();
+
+getInitialDailyTotal();
+getInitialDayRunning();
+getLastDayRunning();
+getShowTotal();
+
+// Read Digital Pin States for debugging
+firstDetectorState = digitalRead (firstDetectorPin); //Read the current state of the FIRST IR beam receiver/detector
+secondDetectorState = digitalRead (secondDetectorPin);
+digitalWrite(redArchPin, HIGH);
+digitalWrite(greenArchPin, HIGH);
+Serial.print("firstdetector State = ");
+Serial.print(firstDetectorState);
+Serial.print(" secondDetectorState = ");
+Serial.println(secondDetectorState);
+
   delay(3000);
 } //***** END SETUP ******/
 
@@ -932,30 +958,41 @@ void loop() {
       if (now.minute()==0 && now.second()==0){
         HourlyTotals();
       }
-
+/*
+digitalWrite(redArchPin, HIGH);
+digitalWrite(greenArchPin, HIGH);
+Serial.print("firstdetector State = ");
+Serial.print(firstDetectorState);
+Serial.print(" secondDetectorState = ");
+Serial.println(secondDetectorState);
+*/
 
 //***** DETECT CARS *****/
   firstDetectorState = digitalRead (firstDetectorPin); //Read the current state of the FIRST IR beam receiver/detector
   secondDetectorState = digitalRead (secondDetectorPin); //Read the current state of the SECOND IR beam receiver/detector
-
-  if (secondDetectorState == LOW && previousSecondDetectorState == HIGH && millis()- detectorMillis > 200) // Bounce check, if the beam is broken start the timer and turn on only the green arch
+  
+  // Bounce check, if the beam is broken start the timer and turn on only the green arch
+  if (secondDetectorState == LOW && previousSecondDetectorState == HIGH && millis()- detectorMillis > 200) 
     {
-    digitalWrite(redArchPin, HIGH); // Turn Red Arch Off
-    digitalWrite(greenArchPin, LOW); // Turn Green Arch On
+    digitalWrite(redArchPin, LOW); // Turn Red Arch Off
+    digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
     detectorMillis = millis();    // if the beam is broken remember the time 
     }
-
-  if (secondDetectorState == LOW && ((millis() - detectorMillis) % 500) < 20 && millis() - detectorMillis > 500 && detectorTrippedCount == 0 && firstDetectorState == LOW) // If the SECOND beam has been broken for more than 0.50 second (1000= 1 Second) & the FIRST beam is broken
+  
+  // If the SECOND beam has been broken for more than 0.50 second (1000= 1 Second) & the FIRST beam is broken
+  if (secondDetectorState == LOW && ((millis() - detectorMillis) % 500) < 20 && millis() - detectorMillis > 500 && detectorTrippedCount == 0 && firstDetectorState == LOW) 
     {
       //***** CAR PASSED *****/
-      beamCarDetect();  //Call the subroutine that increments the car counter and appends the log with an entry for the vehicle when the IR beam is broken
+      /*Call the subroutine that increments the car counter and appends the log with an entry for the 
+      vehicle when the IR beam is broken */
+      beamCarDetect();  
     }
     
   /*--------- Reset the counter if the beam is not broken --------- */    
  if (secondDetectorState == HIGH)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
    {
       if (detectorTrippedCount != 0)
-      digitalWrite(redArchPin, HIGH);// Turn Red Arch Off
+      digitalWrite(redArchPin, LOW);// Turn Red Arch Off
       if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
         {
         //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
@@ -963,13 +1000,40 @@ void loop() {
         }
       else
       {
-        digitalWrite(greenArchPin, LOW); // Turn Green Arch On
+        digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
       }
       detectorTrippedCount = 0;
     }
 //***** END OF CAR DETECTION *****/
 
 
+/*-------- Rotate through LCD Displays for Grand Total, Total Today, Current Date & Current Time - change every 5 seconds ---------*/
+if (displayMode == 0 && (millis() - displayModeMillis) >= 5000)
+  {
+  displayGrandTotal();
+  displayMode++;
+  displayModeMillis = millis();
+  }
+if (displayMode == 1 && (millis() - displayModeMillis) >= 5000)
+  {
+  displayDailyTotal();
+  displayMode++;
+  displayModeMillis = millis();
+  }
+/*
+if (displayMode == 2 && (millis() - displayModeMillis) >= 5000)
+  {
+  displayDate();
+  displayMode++;
+  displayModeMillis = millis();
+  }      
+if (displayMode == 3 && (millis() - displayModeMillis) >= 5000)
+  {
+  displayTime();
+  displayMode = 0;
+  displayModeMillis = millis();
+  }    
+*/
 
 /*-------- Reset the detector and button state to 0 for the next go-around of the loop ---------*/    
 previousSecondDetectorState = secondDetectorState; // Reset detector state
