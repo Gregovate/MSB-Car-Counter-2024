@@ -4,6 +4,9 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 FW Version
+24.10.22.4 Testing Elegant OTA auto reboot
+24.10.22.3 Added & debugged mqtt keep alive timer
+24.10.21 Multiple bug fixes including ineverting beam signals, Display, MQTT Keep Alive
 24.10.21 Include FS.h
 24.10.19 Used the ESP32 MQTT Program as a base and merged Andrew Bubb's code into it. The sdin, sdout
 and serial writes used in the Arduino program were impossible to correct for ESP32. Spent
@@ -35,7 +38,6 @@ D23 - MOSI
 #include "WiFiMulti.h"
 #include "secrets.h"
 #include "time.h"
-//#include "FS.h"
 #include "SD.h"
 #include "FS.h"
 #include "SPI.h"
@@ -59,7 +61,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.10.21.1" // Firmware Version
+#define FWVersion "24.10.22.4" // Firmware Version
 #define OTA_Title "Gate Counter" // OTA Title
 // **************************************************
 
@@ -122,7 +124,6 @@ int wifi_connect_attempts = 5;
 
 //***** MQTT DEFINITIONS *****/
 int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client connected
-unsigned long mqttKeepAliveTimer; // timer for mqttKeepAlive
 #define THIS_MQTT_CLIENT "espCarCounter" // Look at line 90 and set variable for WiFi Client secure & PubSubCLient 12/23/23
 #define MQTT_PUB_TOPIC0  "msb/traffic/enter/hello"
 #define MQTT_PUB_TOPIC1  "msb/traffic/enter/temp"
@@ -146,10 +147,11 @@ unsigned int lastCalDay = 0;
 unsigned int totalDailyCars = 0;
 unsigned int totalShowCars = 0;
 int connectionAttempts = 5;
-unsigned int carsHr1 =0;
-unsigned int carsHr2 =0;
-unsigned int carsHr3 =0;
-unsigned int carsHr4 =0;
+unsigned int carsHr1 =0; // total cars hour 1
+unsigned int carsHr2 =0; // total cars hour 2
+unsigned int carsHr3 =0; // total cars hour 3
+unsigned int carsHr4 =0; // total cars hour 4
+int directionFlag; //Determine the direction of travel through beam sensors
 
 
 unsigned long debounceMillis = 12000; // Time required for my truck to pass totally
@@ -162,10 +164,10 @@ unsigned long firstDectorTripTime; // millis when first detector tripped
 unsigned long secondDetectorTripTIme; // millis when second detector tripped
 unsigned long wifi_lastReconnectAttemptMillis;
 unsigned long wifi_connectioncheckMillis = 5000; // check for connection every 5 sec
-unsigned long mqtt_lastReconnectAttemptMillis;
-unsigned long mqtt_connectionCheckMillis = 5000;
-unsigned long nowwifi;
-unsigned long nowmqtt;
+unsigned long mqtt_connectionCheckMillis = 20000; // check for connection
+unsigned long start_MqttMillis;
+unsigned long start_WiFiMillis;
+
 int firstDetectorState = 0;  // Holds the current state of the FIRST IR receiver/detector
 int secondDetectorState = 0;  // Holds the current state of the SECOND IR receiver/detector
 
@@ -273,6 +275,7 @@ void setup_wifi() {
   Serial.println("HTTP server started");
 
   delay(5000);
+
 }
 
 
@@ -287,7 +290,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 
-void MQTTreconnect() {
+void reconnectMQTT() {
   // Loop until we’re reconnected
   while (!mqtt_client.connected()) {
     Serial.print("Attempting MQTT connection… ");
@@ -434,10 +437,12 @@ void HourlyTotals()  {
   }
 }
 
-void KeepmqttAlive(){
+void KeepMqttAlive()
+{
       mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
+      Serial.println("Keeping MQTT Alive");
+      start_MqttMillis = currentMillis;
 }
-
 
 void WriteTotals(){
   DateTime now = rtc.now();
@@ -684,6 +689,8 @@ void beamCarDetect() // If a car is detected by a beam break, then increment the
 
 void setup() {
   Serial.begin(115200);
+  ElegantOTA.setAutoReboot(true);
+
   //Initialize Display
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
@@ -857,35 +864,43 @@ Serial.print(" secondDetectorState = ");
 Serial.println(secondDetectorState);
 
   delay(3000);
+  start_MqttMillis = millis();
 } //***** END SETUP ******/
 
 void loop() {
       DateTime now = rtc.now();
       tempF=((rtc.getTemperature()*9/5)+32);
+      currentMillis = millis();
+
     // non-blocking WiFi and MQTT Connectivity Checks
     if (wifiMulti.run() == WL_CONNECTED) {
       // Check for MQTT connection only if wifi is connected
-      if (!mqtt_client.connected()){
-        nowmqtt=millis();
-        if(nowmqtt - mqtt_lastReconnectAttemptMillis > mqtt_connectionCheckMillis){
-          mqtt_lastReconnectAttemptMillis = nowmqtt;
-          Serial.print("hour = ");
-          Serial.println(currentHour);
-          Serial.println("Attempting MQTT Connection");
-          MQTTreconnect();
-        }
-          mqtt_lastReconnectAttemptMillis =0;
-      } else {
+ 
+      if (!mqtt_client.connected())
+      {
+         if(currentMillis - start_MqttMillis > mqtt_connectionCheckMillis)
+         {
+           Serial.print("hour = ");
+           Serial.println(currentHour);
+           Serial.println("Attempting MQTT Connection");
+           reconnectMQTT();
+           start_MqttMillis = currentMillis;
+         }   
+      } 
+      else
+      {
         //keep MQTT client connected when WiFi is connected
         mqtt_client.loop();
       }
-    } else {
+    } 
+    else
+    {
         // Reconnect WiFi if lost, non blocking
-        nowwifi=millis();
-          if ((nowwifi - wifi_lastReconnectAttemptMillis) > wifi_connectioncheckMillis){
+          if ((currentMillis - start_WiFiMillis) > wifi_connectioncheckMillis)
+          {
             setup_wifi();
+            start_WiFiMillis = currentMillis;
           }
-        wifi_lastReconnectAttemptMillis = 0;
     }
      
 
@@ -903,8 +918,6 @@ void loop() {
              WriteTotals();
         }
 
-        
-
       /****** Print Day and Date 1st line  ******/
       display.clearDisplay();
       display.setTextSize(1);
@@ -913,8 +926,9 @@ void loop() {
       display.print(days[now.dayOfTheWeek()]);
 
       //  Display Date
-      display.print(" ");         
-      display.print(months[now.month(), DEC +1]);
+      display.print(" ");
+      //display.print(&timeinfo, "%b");         
+      display.print(months[now.month(), (DEC-1)]);
       display.print(" ");
       display.print(now.day(), DEC);
       display.print(", ");
@@ -1034,11 +1048,18 @@ Serial.println(secondDetectorState);
   {
     secondDetectorTripTIme = millis();
   }
-
+  if (firstDectorTripTime>secondDetectorTripTIme)
+  {
+     directionFlag =1;
+  }
+  else
+  {
+      directionFlag =-1;
+  }
 
   // Bounce check, if the beam is broken start the timer and turn on only the green arch
   if (secondDetectorState == HIGH && previousSecondDetectorState == LOW && millis()- detectorMillis > 200) 
-    {
+  {
     digitalWrite(redArchPin, LOW); // Turn Red Arch Off
     digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
     detectorMillis = millis();    // if the beam is broken remember the time 
@@ -1050,8 +1071,7 @@ Serial.println(secondDetectorState);
     Serial.print(secondDetectorState);
     Serial.print(" previoussecondDetectorState = ");
     Serial.println(previousSecondDetectorState);
-
-    }
+  }
   
   // If the SECOND beam has been broken for more than 0.50 second (1000= 1 Second) & the FIRST beam is broken
   if (secondDetectorState == HIGH && ((millis() - detectorMillis) % 500) < 20 && millis() - detectorMillis > 500 && detectorTrippedCount == 0 && firstDetectorState == HIGH) 
@@ -1092,7 +1112,7 @@ Serial.println(secondDetectorState);
       if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
         {
         //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
-        mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
+
         playPattern();
         }
       else
@@ -1102,7 +1122,12 @@ Serial.println(secondDetectorState);
       detectorTrippedCount = 0;
     }
 //***** END OF CAR DETECTION *****/
-
+  
+  //Added to kepp mqtt connection alive 10/11/24 gal
+  if  ((currentMillis - start_MqttMillis)> (mqttKeepAlive*1000))
+  {
+      KeepMqttAlive();
+  }
 
 
 /*-------- Reset the detector and button state to 0 for the next go-around of the loop ---------*/    
