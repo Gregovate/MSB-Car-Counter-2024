@@ -801,13 +801,15 @@ void setup() {
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   SetLocalTime();
   
-  //Set Input Pins
+  /* Set Input Pins Detector Pins set to pulldown 10/22/24 GAL undefined before
+  Detector Pins LOW when no car is present and go HIGH when beam is broken */
+
   firstDetectorState = 0;
   secondDetectorState = 0;
   digitalWrite(redArchPin, HIGH);
   digitalWrite(greenArchPin, HIGH);
-  pinMode(firstDetectorPin, INPUT);
-  pinMode(secondDetectorPin, INPUT);
+  pinMode(firstDetectorPin, INPUT_PULLDOWN);
+  pinMode(secondDetectorPin, INPUT_PULLDOWN);
   pinMode(redArchPin, OUTPUT);
   pinMode(greenArchPin, OUTPUT);
  
@@ -958,7 +960,8 @@ void loop() {
       if (now.minute()==0 && now.second()==0){
         HourlyTotals();
       }
-/*
+
+/* LOOP PIN STATE FOR DEBUG 
 digitalWrite(redArchPin, HIGH);
 digitalWrite(greenArchPin, HIGH);
 Serial.print("firstdetector State = ");
@@ -977,6 +980,15 @@ Serial.println(secondDetectorState);
     digitalWrite(redArchPin, LOW); // Turn Red Arch Off
     digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
     detectorMillis = millis();    // if the beam is broken remember the time 
+    /* LOOP PIN STATE FOR DEBUG */
+    Serial.print("Bounce Check ... ");
+    digitalWrite(redArchPin, HIGH);
+    digitalWrite(greenArchPin, LOW);
+    Serial.print("firstdetector State = ");
+    Serial.print(firstDetectorState);
+    Serial.print(" secondDetectorState = ");
+    Serial.println(secondDetectorState);
+
     }
   
   // If the SECOND beam has been broken for more than 0.50 second (1000= 1 Second) & the FIRST beam is broken
@@ -985,6 +997,16 @@ Serial.println(secondDetectorState);
       //***** CAR PASSED *****/
       /*Call the subroutine that increments the car counter and appends the log with an entry for the 
       vehicle when the IR beam is broken */
+ 
+      /* CAR DETECTED DEBUG */
+      Serial.print("Call to BEAM CAR DETECT ... ");
+      digitalWrite(redArchPin, LOW);
+      digitalWrite(greenArchPin, HIGH);
+      Serial.print("firstdetector State = ");
+      Serial.print(firstDetectorState);
+      Serial.print(" secondDetectorState = ");
+      Serial.println(secondDetectorState);
+
       beamCarDetect();  
     }
     
@@ -993,6 +1015,17 @@ Serial.println(secondDetectorState);
    {
       if (detectorTrippedCount != 0)
       digitalWrite(redArchPin, LOW);// Turn Red Arch Off
+
+      /* CAR DETECTED DEBUG */
+      Serial.print("Waiting to start Idle Pattern... ");
+      digitalWrite(redArchPin, LOW);
+      digitalWrite(greenArchPin, HIGH);
+      Serial.print("firstdetector State = ");
+      Serial.print(firstDetectorState);
+      Serial.print(" secondDetectorState = ");
+      Serial.println(secondDetectorState);
+
+      
       if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
         {
         //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
