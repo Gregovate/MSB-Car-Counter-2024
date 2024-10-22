@@ -129,6 +129,13 @@ int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client conn
 #define MQTT_PUB_TOPIC1  "msb/traffic/enter/temp"
 #define MQTT_PUB_TOPIC2  "msb/traffic/enter/time"
 #define MQTT_PUB_TOPIC3  "msb/traffic/enter/count"
+#define MQTT_PUB_TOPIC4  "msb/traffic/enter/hour1"
+#define MQTT_PUB_TOPIC5  "msb/traffic/enter/hour2"
+#define MQTT_PUB_TOPIC6  "msb/traffic/enter/hour3"
+#define MQTT_PUB_TOPIC7  "msb/traffic/enter/hour4"
+#define MQTT_PUB_TOPIC8  "msb/traffic/enter/DayTot"
+#define MQTT_PUB_TOPIC9  "msb/traffic/enter/ShoTot"
+
 
 
 
@@ -422,6 +429,7 @@ void getLastDayRunning() {  // get the last calendar day used for reset daily co
     }
 } 
 
+
 void HourlyTotals()  {
   if (currentHour == 18){
     carsHr1 = totalDailyCars;
@@ -475,6 +483,13 @@ void WriteTotals(){
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
     mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC4, String(carsHr1).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC5, String(carsHr2).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC6, String(carsHr3).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC7, String(carsHr4).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
+
   } else {
   Serial.print(F("SD Card: Issue encountered while attempting to open the file CarCount.csv"));
   }
