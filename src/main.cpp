@@ -92,11 +92,12 @@ void onOTAEnd(bool success) {
 }
 
 //#include <DS3231.h> & Setup display variables
+#define DS3231_I2C_ADDRESS 0x68
 RTC_DS3231 rtc;
 
 const int line1 =0;
 const int line2 =9;
-const int line3 = 20;
+const int line3 = 19;
 const int line4 = 35;
 const int line5 = 50;
 
@@ -118,7 +119,10 @@ bool mqtt_connected = false;
 bool wifi_connected = false;
 int wifi_connect_attempts = 5;
 
+
 //***** MQTT DEFINITIONS *****/
+int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client connected
+unsigned long mqttKeepAliveTimer; // timer for mqttKeepAlive
 #define THIS_MQTT_CLIENT "espCarCounter" // Look at line 90 and set variable for WiFi Client secure & PubSubCLient 12/23/23
 #define MQTT_PUB_TOPIC0  "msb/traffic/enter/hello"
 #define MQTT_PUB_TOPIC1  "msb/traffic/enter/temp"
@@ -154,6 +158,8 @@ unsigned long highMillis = 0; //Grab the time when the vehicle sensor is high
 unsigned long previousMillis; // Last time sendor pin changed state
 unsigned long currentMillis; // Comparrison time holder
 unsigned long carDetectedMillis;  // Grab the ime when sensor 1st trips
+unsigned long firstDectorTripTime; // millis when first detector tripped
+unsigned long secondDetectorTripTIme; // millis when second detector tripped
 unsigned long wifi_lastReconnectAttemptMillis;
 unsigned long wifi_connectioncheckMillis = 5000; // check for connection every 5 sec
 unsigned long mqtt_lastReconnectAttemptMillis;
@@ -281,7 +287,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 
-void reconnect() {
+void MQTTreconnect() {
   // Loop until we’re reconnected
   while (!mqtt_client.connected()) {
     Serial.print("Attempting MQTT connection… ");
@@ -297,6 +303,7 @@ void reconnect() {
       Serial.println("Waiting for Car...");
       // Once connected, publish an announcement…
       mqtt_client.publish(MQTT_PUB_TOPIC0, "Hello from Car Counter!");
+      mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
       // … and resubscribe
       mqtt_client.subscribe(MQTT_PUB_TOPIC0);
     } else {
@@ -427,6 +434,11 @@ void HourlyTotals()  {
   }
 }
 
+void KeepmqttAlive(){
+      mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
+}
+
+
 void WriteTotals(){
   DateTime now = rtc.now();
   char buf2[] = "YYYY-MM-DD hh:mm:ss";
@@ -505,15 +517,17 @@ void displayGrandTotal()  {
     display.setCursor(0,1);
     display.print("1st Night: ");
     display.print(totalShowCars);
+    display.display();
 }
 
 void displayDailyTotal()  {
     display.clearDisplay();
     display.setCursor(0,line3); //Start at character 4 on line 0
     display.print("Total Cars");
-    display.setCursor(0,1);
+    display.setCursor(0,6);
     display.print("Today: ");
-    display.print(totalDailyCarstal);
+    display.print(totalDailyCars);
+    display.display();
 }
   
 void displayDate()  {
@@ -846,6 +860,8 @@ Serial.println(secondDetectorState);
 } //***** END SETUP ******/
 
 void loop() {
+      DateTime now = rtc.now();
+      tempF=((rtc.getTemperature()*9/5)+32);
     // non-blocking WiFi and MQTT Connectivity Checks
     if (wifiMulti.run() == WL_CONNECTED) {
       // Check for MQTT connection only if wifi is connected
@@ -853,8 +869,10 @@ void loop() {
         nowmqtt=millis();
         if(nowmqtt - mqtt_lastReconnectAttemptMillis > mqtt_connectionCheckMillis){
           mqtt_lastReconnectAttemptMillis = nowmqtt;
+          Serial.print("hour = ");
+          Serial.println(currentHour);
           Serial.println("Attempting MQTT Connection");
-          reconnect();
+          MQTTreconnect();
         }
           mqtt_lastReconnectAttemptMillis =0;
       } else {
@@ -871,17 +889,23 @@ void loop() {
     }
      
 
-      DateTime now = rtc.now();
+//      DateTime now = rtc.now();
       tempF=((rtc.getTemperature()*9/5)+32);
-      //Reset Car Counter at 5:00:00 pm
-        if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0)){
+      /***** IMPORTANT ***** Reset Car Counter at 4:55:00 pm ****/
+      /* Only counting vehicles for show */
+        if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))
+        {
              totalDailyCars = 0;
-         }
-       //Write Totals at 9:10:00 pm 
-        if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0)){
+        }
+       //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
+        if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))
+        {
              WriteTotals();
         }
-      
+
+        
+
+      /****** Print Day and Date 1st line  ******/
       display.clearDisplay();
       display.setTextSize(1);
       display.setCursor(0, line1);
@@ -898,66 +922,95 @@ void loop() {
 
       // Convert 24 hour clock to 12 hours
       currentHour = now.hour();
-
-      if (currentHour - 12 > 0) {
-          ampm ="PM";
-          currentHour = now.hour() - 12;
-      }else{
-          currentHour = now.hour();
-          ampm = "AM";
+      if (currentHour <12)
+      {
+               ampm ="AM";
+      }
+      else
+      {
+               ampm ="PM";
+      }
+      if (currentHour > 12 )
+      {
+        currentHour = now.hour() - 12;
+      }
+      else
+      {
+        currentHour = now.hour();
       }
 
-      //Display Time
-      //add leading 0 to Hours & display Hours
+
+
+      /***** Display Time  and Temp Line 2 add leading 0 to Hours & display Hours *****/
+
       display.setTextSize(1);
-      if (currentHour < 10){
+      if (currentHour < 10)
+      {
         display.setCursor(0, line2);
         display.print("0");
-        display.println(currentHour, DEC);
-      }else{
+        display.print(currentHour, DEC);
+      }
+      else
+      {
         display.setCursor(0, line2);
-        display.println(currentHour, DEC);
+        display.print(currentHour, DEC);
       }
       display.setCursor(14, line2);
-      display.println(":");
-      if (now.minute() < 10) {
+      display.print(":");
+      
+      if (now.minute() < 10)
+      {
         display.setCursor(20, line2);
         display.print("0");
-        display.println(now.minute(), DEC);
-      }else{
+        display.print(now.minute(), DEC);
+      }
+      else
+      {
         display.setCursor(21, line2);
-        display.println(now.minute(), DEC);
+        display.print(now.minute(), DEC);
       }
       display.setCursor(34, line2);
-      display.println(":");
-      if (now.second() < 10){
+      display.print(":");
+      
+      if (now.second() < 10)
+      {
         display.setCursor(41, line2);
         display.print("0");
-        display.println(now.second(), DEC);
-      }else{
+        display.print(now.second(), DEC);
+      }
+      else
+      {
         display.setCursor(41, line2);
-        display.println(now.second(), DEC);   
+        display.print(now.second(), DEC);   
       }
 
       // Display AM-PM
       display.setCursor(56, line2);
-      display.println(ampm); 
+      display.print(ampm); 
 
       // Display Temp
       display.setCursor(73, line2);
       display.print("Temp: " );
       display.println(tempF, 0);
 
+            // Display Temp
+      display.setCursor(0, line3);
+      display.print("Day #: " );
+      display.print(daysRunning, 0);
+      display.print(" Total: ");
+      display.println(totalShowCars);
+
       // Display Car Count
       display.setTextSize(2);
-      display.setCursor(0, line4);
+      display.setCursor(0, line5);
       display.print("Cars: ");
       display.println(totalDailyCars);
 
       display.display();
 
       //Save Hourly Totals
-      if (now.minute()==0 && now.second()==0){
+      if (now.minute()==0 && now.second()==0)
+      {
         HourlyTotals();
       }
 
@@ -971,11 +1024,20 @@ Serial.println(secondDetectorState);
 */
 
 //***** DETECT CARS *****/
-  firstDetectorState = digitalRead (firstDetectorPin); //Read the current state of the FIRST IR beam receiver/detector
-  secondDetectorState = digitalRead (secondDetectorPin); //Read the current state of the SECOND IR beam receiver/detector
-  
+  firstDetectorState = digitalRead (firstDetectorPin); //Read the current state of the FIRST IR beam receiver/detector Tripped = 1
+  secondDetectorState = digitalRead (secondDetectorPin); //Read the current state of the SECOND IR beam receiver/detector Tripped =1
+  if (firstDetectorState == HIGH)
+  {
+     firstDectorTripTime = millis();
+  }
+  if (secondDetectorState == HIGH)
+  {
+    secondDetectorTripTIme = millis();
+  }
+
+
   // Bounce check, if the beam is broken start the timer and turn on only the green arch
-  if (secondDetectorState == LOW && previousSecondDetectorState == HIGH && millis()- detectorMillis > 200) 
+  if (secondDetectorState == HIGH && previousSecondDetectorState == LOW && millis()- detectorMillis > 200) 
     {
     digitalWrite(redArchPin, LOW); // Turn Red Arch Off
     digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
@@ -984,15 +1046,15 @@ Serial.println(secondDetectorState);
     Serial.print("Bounce Check ... ");
     digitalWrite(redArchPin, HIGH);
     digitalWrite(greenArchPin, LOW);
-    Serial.print("firstdetector State = ");
-    Serial.print(firstDetectorState);
-    Serial.print(" secondDetectorState = ");
-    Serial.println(secondDetectorState);
+    Serial.print("secondDetector State = ");
+    Serial.print(secondDetectorState);
+    Serial.print(" previoussecondDetectorState = ");
+    Serial.println(previousSecondDetectorState);
 
     }
   
   // If the SECOND beam has been broken for more than 0.50 second (1000= 1 Second) & the FIRST beam is broken
-  if (secondDetectorState == LOW && ((millis() - detectorMillis) % 500) < 20 && millis() - detectorMillis > 500 && detectorTrippedCount == 0 && firstDetectorState == LOW) 
+  if (secondDetectorState == HIGH && ((millis() - detectorMillis) % 500) < 20 && millis() - detectorMillis > 500 && detectorTrippedCount == 0 && firstDetectorState == HIGH) 
     {
       //***** CAR PASSED *****/
       /*Call the subroutine that increments the car counter and appends the log with an entry for the 
@@ -1011,12 +1073,13 @@ Serial.println(secondDetectorState);
     }
     
   /*--------- Reset the counter if the beam is not broken --------- */    
- if (secondDetectorState == HIGH)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
+ if (secondDetectorState == LOW)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
    {
       if (detectorTrippedCount != 0)
       digitalWrite(redArchPin, LOW);// Turn Red Arch Off
 
       /* CAR DETECTED DEBUG */
+ /*     
       Serial.print("Waiting to start Idle Pattern... ");
       digitalWrite(redArchPin, LOW);
       digitalWrite(greenArchPin, HIGH);
@@ -1024,11 +1087,12 @@ Serial.println(secondDetectorState);
       Serial.print(firstDetectorState);
       Serial.print(" secondDetectorState = ");
       Serial.println(secondDetectorState);
-
+*/
       
       if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
         {
         //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
+        mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
         playPattern();
         }
       else
@@ -1040,33 +1104,6 @@ Serial.println(secondDetectorState);
 //***** END OF CAR DETECTION *****/
 
 
-/*-------- Rotate through LCD Displays for Grand Total, Total Today, Current Date & Current Time - change every 5 seconds ---------*/
-if (displayMode == 0 && (millis() - displayModeMillis) >= 5000)
-  {
-  displayGrandTotal();
-  displayMode++;
-  displayModeMillis = millis();
-  }
-if (displayMode == 1 && (millis() - displayModeMillis) >= 5000)
-  {
-  displayDailyTotal();
-  displayMode++;
-  displayModeMillis = millis();
-  }
-/*
-if (displayMode == 2 && (millis() - displayModeMillis) >= 5000)
-  {
-  displayDate();
-  displayMode++;
-  displayModeMillis = millis();
-  }      
-if (displayMode == 3 && (millis() - displayModeMillis) >= 5000)
-  {
-  displayTime();
-  displayMode = 0;
-  displayModeMillis = millis();
-  }    
-*/
 
 /*-------- Reset the detector and button state to 0 for the next go-around of the loop ---------*/    
 previousSecondDetectorState = secondDetectorState; // Reset detector state
