@@ -697,6 +697,7 @@ void setup()
 {
   Serial.begin(115200);
   ElegantOTA.setAutoReboot(true);
+  ElegantOTA.setFilesystemMode(true);
 
   //Initialize Display
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
