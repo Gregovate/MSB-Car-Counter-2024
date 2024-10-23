@@ -62,7 +62,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.10.23.1" // Firmware Version
+#define FWVersion "24.10.23.2" // Firmware Version
 #define OTA_Title "Gate Counter" // OTA Title
 // **************************************************
 
@@ -150,14 +150,14 @@ unsigned int currentDay=1;
 unsigned int currentHour;
 unsigned int currentMin;
 unsigned int currentSec;
-unsigned int lastCalDay = 20;
-unsigned int totalDailyCars = 0;
-unsigned int totalShowCars = 0;
+int lastCalDay = 20;
+int totalDailyCars = 0;
+int totalShowCars = 0;
 int connectionAttempts = 5;
-unsigned int carsHr1 =0; // total cars hour 1
-unsigned int carsHr2 =0; // total cars hour 2
-unsigned int carsHr3 =0; // total cars hour 3
-unsigned int carsHr4 =0; // total cars hour 4
+int carsHr1 =0; // total cars hour 1
+int carsHr2 =0; // total cars hour 2
+int carsHr3 =0; // total cars hour 3
+int carsHr4 =0; // total cars hour 4
 int directionFlag; //Determine the direction of travel through beam sensors
 int carPresentFlag; // Flag used to detect car in detection zone
 
@@ -472,6 +472,7 @@ void HourlyTotals()
 void KeepMqttAlive()
 {
    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
+   mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
    Serial.println("Keeping MQTT Alive");
    start_MqttMillis = currentMillis;
 }
