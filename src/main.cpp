@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.10.24.1 Added enable arches between 4:30 pm & 9:30 pm
 24.10.23.5 Bug fixes with missing {} clarified prodecure names, added reset at midnight
 24.10.23.4 Added update/reset check in loop for date changes. Created initSDCard()
 24.10.23.3 Added update/reset check in loop for date changes
@@ -66,7 +67,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.10.23.5" // Firmware Version
+#define FWVersion "24.10.24.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 // **************************************************
 
@@ -150,10 +151,15 @@ const long  gmtOffset_sec = -21600;
 const int   daylightOffset_sec = 3600;
 int16_t tempF;
 
-unsigned int currentDay=1;
+// important time values
+unsigned int currentDay;
 unsigned int currentHour;
 unsigned int currentMin;
 unsigned int currentSec;
+unsigned int archOnSeconds = 59400; // seconds since midnight 16*3600 + 30*60 (4:30 pm)
+unsigned int archOffSeconds = 77400; // seconds sincce midnight 21*3600 + 30*60 (9:30 pm)
+bool enableArchesFlag= true;
+
 int lastCalDay = 0;
 int totalDailyCars = 0;
 int totalShowCars = 0;
@@ -182,7 +188,7 @@ int firstDetectorState = 0;  // Holds the current state of the FIRST IR receiver
 int secondDetectorState = 0;  // Holds the current state of the SECOND IR receiver/detector
 
 int previousFirstDetectorState = 0; // Holds the previous state of the FIRST IR receiver/detector
-int previousSecondDetectorState =0; // Holds the previous state of the SECOND IR receiver/detector
+int lastSecondDetectorState =0; // Holds the previous state of the SECOND IR receiver/detector
 
 
 //int detectorState;  // was used for interface between ESP32 and UNO 2023
@@ -589,7 +595,7 @@ void WriteTotals()
     Serial.print(F("SD Card: Issue encountered while attempting to open the file CarCount.csv"));
   }
 }
-/***** END OF FILE OPS *****/
+/***** END OF FILE UPDATES *****/
 
 
 
@@ -701,6 +707,17 @@ void beamCarDetect() // If a car is detected by a beam break, then increment the
   updateDailyTotal(); //update total daily count in event of power failure
   updateShowTotal(); // update show total count in event of power failure
 
+} /* END Beam Car Detect*/
+
+void enableArchesCheck()
+{
+  if ((((currentHour*3600) + (currentMin*60)) >= archOnSeconds) && (((currentHour*3600)+(currentMin*30)) <= archOffSeconds))
+  {
+    enableArchesFlag = true;
+  }
+  else{
+    enableArchesFlag = false;
+  }
 }
 
 // Init microSD card
@@ -763,6 +780,7 @@ void setup()
   display.setCursor(0, line1);
   display.display();
   
+  //Initialize SD Card
   initSDCard();
 
 /*
@@ -836,9 +854,14 @@ void setup()
       Serial.println(F(" exists on SD Card."));
     }
 
-    if (!SD.exists(fileName5))  { // DailySummary.csv
+    if (!SD.exists(fileName5))
+    { 
       Serial.println(F("DailySummary.csv doesn't exist. Creating File..."));
-      myFile = SD.open(fileName6, FILE_APPEND);
+    // create a new file by opening a new file and immediately close it
+      myFile = SD.open(fileName5, FILE_WRITE);
+      myFile.close();     
+      // recheck if file is created & write Header
+      myFile = SD.open(fileName5, FILE_APPEND);
       myFile.println("Date, Temp, Hour1, Hour2, Hour3, Hour4, Total");
       myFile.close();
       Serial.println(F("Header Written to file DailySummary.csv"));
@@ -853,14 +876,13 @@ void setup()
   if (!SD.exists(fileName6)) {
     Serial.println(F("CarLog.csv doesn't exist. Creating file..."));
     // create a new file by opening a new file and immediately close it
-    myFile = SD.open("/CarLog.csv", FILE_WRITE);
+    myFile = SD.open(fileName6, FILE_WRITE);
     myFile.close();
     // recheck if file is created write Header
-    myFile = SD.open("/CarLog.csv", FILE_APPEND);
+    myFile = SD.open(fileName6, FILE_APPEND);
     myFile.println("Date Time,Millis,Car,TotalDailyCars,Temp");
     myFile.close();
-    Serial.println(F("Header Written to CarLog.csv"));
-    myFile.close();
+   Serial.println(F("Header Written to CarLog.csv"));
     }
     else
     {
@@ -974,6 +996,7 @@ Serial.println(secondDetectorState);
 
 void loop()
 {
+   ElegantOTA.loop();
    DateTime now = rtc.now();
    tempF=((rtc.getTemperature()*9/5)+32);
    currentMillis = millis();
@@ -1181,7 +1204,7 @@ Serial.println(secondDetectorState);
   }
 
   // Bounce check, if the beam is broken start the timer and turn on only the green arch
-  if (secondDetectorState == HIGH && previousSecondDetectorState == LOW && millis()- detectorMillis > 200) 
+  if (secondDetectorState == HIGH && lastSecondDetectorState == LOW && millis()- detectorMillis > 200) 
   {
     digitalWrite(redArchPin, LOW); // Turn Red Arch Off
     digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
@@ -1192,8 +1215,8 @@ Serial.println(secondDetectorState);
     digitalWrite(greenArchPin, LOW);
     Serial.print("secondDetector State = ");
     Serial.print(secondDetectorState);
-    Serial.print(" previoussecondDetectorState = ");
-    Serial.println(previousSecondDetectorState);
+    Serial.print(" lastSecondDetectorState = ");
+    Serial.println(lastSecondDetectorState);
   }
   
   // If the SECOND beam has been broken for more than 0.50 second (1000= 1 Second) & the FIRST beam is broken
@@ -1234,7 +1257,16 @@ Serial.println(secondDetectorState);
 */
       if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
       {
-        playPattern();   //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
+        lastSecondDetectorState=0; // 10/24/24??
+        enableArchesCheck();
+        if (enableArchesFlag){
+           playPattern();   //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
+        }
+        else
+        {
+          digitalWrite(greenArchPin, LOW); // Turn Green Arch off
+           digitalWrite(redArchPin, LOW); // Turn Red Arch off
+        }
       }
       else
       {
@@ -1252,6 +1284,6 @@ Serial.println(secondDetectorState);
 
 
   /*-------- Reset the detector and button state to 0 for the next go-around of the loop ---------*/    
-  previousSecondDetectorState = secondDetectorState; // Reset detector state
+  lastSecondDetectorState = secondDetectorState; // Reset detector state
 
 } /***** Repeat Loop *****/
