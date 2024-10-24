@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.10.23.5 Bug fixes with missing {} clarified prodecure names, added reset at midnight
 24.10.23.4 Added update/reset check in loop for date changes. Created initSDCard()
 24.10.23.3 Added update/reset check in loop for date changes
 24.10.23.2 Updated totals, bug fixes, files ops comparrison to Gate counter 
@@ -65,7 +66,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.10.23.4" // Firmware Version
+#define FWVersion "24.10.23.5" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 // **************************************************
 
@@ -378,7 +379,7 @@ void SetLocalTime() {
 }
 
 // =========== GET SAVED SETUP FROM SD CARD ==========
-void getInitialDailyTotal()   // open DAILYTOT.txt to get initial dailyTotal value
+void getDailyTotal()   // open DAILYTOT.txt to get initial dailyTotal value
 {
    myFile = SD.open(fileName1,FILE_READ);
    if (myFile)
@@ -417,7 +418,7 @@ void getShowTotal()     // open ShowTot.txt to get totalCars for season
   }
 }
 
-void getLastCalDay()  // get the last calendar day used for reset daily counts)
+void getCalDay()  // get the last calendar day used for reset daily counts)
 {
    myFile = SD.open(fileName3,FILE_READ);
    if (myFile)
@@ -436,7 +437,7 @@ void getLastCalDay()  // get the last calendar day used for reset daily counts)
    }
 }
 
-void getInitialDayRunning()   // Days the show has been running)
+void getDaysRunning()   // Days the show has been running)
 {
    myFile = SD.open(fileName4,FILE_READ);
    if (myFile)
@@ -946,10 +947,11 @@ void setup()
     Serial.println(" F");
   display.display();
 
-getInitialDailyTotal();  /* Daily total that is updated with every detection and save */
-getInitialDayRunning();  /* */
-getLastCalDay();
-getShowTotal();
+//on reboot, get totals saved on SD Card
+getDailyTotal();  /*Daily total that is updated with every detection*/
+getDaysRunning(); /*Needs to be reset 1st day of show*/
+getCalDay();  /*Saves Calendar Day*/
+getShowTotal();   /*Saves Show Total*/
 
 // Read Digital Pin States for debugging
 firstDetectorState = digitalRead (firstDetectorPin); //Read the current state of the FIRST IR beam receiver/detector
@@ -972,7 +974,7 @@ Serial.println(secondDetectorState);
 
 void loop()
 {
-  DateTime now = rtc.now();
+   DateTime now = rtc.now();
    tempF=((rtc.getTemperature()*9/5)+32);
    currentMillis = millis();
   
@@ -983,44 +985,54 @@ void loop()
       totalDailyCars = 0;
       updateDailyTotal();
    }
-     //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
-     if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))
-     {
-        WriteTotals();
-     }
+   //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
+   if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))
+   {
+       WriteTotals();
+   }
 
-    // Reset/Update Counts wwhen Day Changes
-  if (now.day() != lastCalDay)
-  {
-    currentDay=now.day();
-    updateCalDay();
-    totalDailyCars =0;
-    updateDailyTotal();
-    daysRunning++;
-    updateDaysRunning();
-
-  }
+   /* Reset Counts at Midnight when controller running 24/7 */
+   if ((now.hour() == 0) && (now.minute() == 0) && (now.second() == 1))
+   {
+      currentDay = now.day();
+      updateCalDay();
+      totalDailyCars = 0;
+      updateDailyTotal();
+      daysRunning++;
+      updateDaysRunning();
+   }
+   /* OR Reset/Update Counts wwhen Day Changes on reboot getting values from saved data */
+   if (now.day() != lastCalDay)
+   {
+      getCalDay();
+      currentDay=now.day();
+      updateCalDay();
+      totalDailyCars =0;
+      updateDailyTotal();
+      daysRunning++;
+      updateDaysRunning();
+   }
   
-  // non-blocking WiFi and MQTT Connectivity Checks
-  if (wifiMulti.run() == WL_CONNECTED)
-  {
-     // Check for MQTT connection only if wifi is connected
-     if (!mqtt_client.connected())
-     {
-       if (currentMillis - start_MqttMillis > mqtt_connectionCheckMillis)
-       {
+   // non-blocking WiFi and MQTT Connectivity Checks
+   if (wifiMulti.run() == WL_CONNECTED)
+   {
+      // Check for MQTT connection only if wifi is connected
+      if (!mqtt_client.connected())
+      {
+        if (currentMillis - start_MqttMillis > mqtt_connectionCheckMillis)
+        {
           Serial.print("hour = ");
           Serial.println(currentHour);
           Serial.println("Attempting MQTT Connection");
           MQTTreconnect();
           start_MqttMillis = currentMillis;
-      }   
-    } 
-    else
-    {
+        }   
+      } 
+      else
+      {
          //keep MQTT client connected when WiFi is connected
          mqtt_client.loop();
-    }
+      }
     } 
     else
     {
@@ -1032,10 +1044,7 @@ void loop()
        }
     }
      
-
-//      DateTime now = rtc.now();
       tempF=((rtc.getTemperature()*9/5)+32);
-
 
       /****** Print Day and Date 1st line  ******/
       display.clearDisplay();
@@ -1057,22 +1066,20 @@ void loop()
       currentHour = now.hour();
       if (currentHour <12)
       {
-               ampm ="AM";
+          ampm ="AM";
       }
       else
       {
-               ampm ="PM";
+          ampm ="PM";
       }
       if (currentHour > 12 )
       {
-        currentHour = now.hour() - 12;
+          currentHour = now.hour() - 12;
       }
       else
       {
-        currentHour = now.hour();
+          currentHour = now.hour();
       }
-
-
 
       /***** Display Time  and Temp Line 2 add leading 0 to Hours & display Hours *****/
 
@@ -1090,7 +1097,6 @@ void loop()
       }
       display.setCursor(14, line2);
       display.print(":");
-      
       if (now.minute() < 10)
       {
         display.setCursor(20, line2);
@@ -1104,7 +1110,6 @@ void loop()
       }
       display.setCursor(34, line2);
       display.print(":");
-      
       if (now.second() < 10)
       {
         display.setCursor(41, line2);
@@ -1116,7 +1121,6 @@ void loop()
         display.setCursor(41, line2);
         display.print(now.second(), DEC);   
       }
-
       // Display AM-PM
       display.setCursor(56, line2);
       display.print(ampm); 
@@ -1126,7 +1130,7 @@ void loop()
       display.print("Temp: " );
       display.println(tempF, 0);
 
-            // Display Temp
+      // Display Day Running & Grand Total
       display.setCursor(0, line3);
       display.print("Day #: " );
       display.print(daysRunning, 0);
@@ -1215,8 +1219,9 @@ Serial.println(secondDetectorState);
  if (secondDetectorState == LOW)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
    {
       if (detectorTrippedCount != 0)
-      digitalWrite(redArchPin, LOW);// Turn Red Arch Off
-
+      {
+         digitalWrite(redArchPin, LOW);// Turn Red Arch Off
+      }
       /* CAR DETECTED DEBUG */
  /*     
       Serial.print("Waiting to start Idle Pattern... ");
@@ -1227,13 +1232,10 @@ Serial.println(secondDetectorState);
       Serial.print(" secondDetectorState = ");
       Serial.println(secondDetectorState);
 */
-      
       if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
-        {
-        //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
-
-        playPattern();
-        }
+      {
+        playPattern();   //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
+      }
       else
       {
         digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
@@ -1249,7 +1251,7 @@ Serial.println(secondDetectorState);
   }
 
 
-/*-------- Reset the detector and button state to 0 for the next go-around of the loop ---------*/    
-previousSecondDetectorState = secondDetectorState; // Reset detector state
-//Repeat Loop
-}
+  /*-------- Reset the detector and button state to 0 for the next go-around of the loop ---------*/    
+  previousSecondDetectorState = secondDetectorState; // Reset detector state
+
+} /***** Repeat Loop *****/
