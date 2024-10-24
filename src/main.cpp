@@ -4,6 +4,9 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.10.23.4 Added update/reset check in loop for date changes. Created initSDCard()
+24.10.23.3 Added update/reset check in loop for date changes
+24.10.23.2 Updated totals, bug fixes, files ops comparrison to Gate counter 
 24.10.23.1 Updated totals, bug fixes, files ops comparrison to Gate counter 
 24.10.22.4 Testing Elegant OTA auto reboot
 24.10.22.3 Added & debugged mqtt keep alive timer
@@ -62,8 +65,8 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.10.23.2" // Firmware Version
-#define OTA_Title "Gate Counter" // OTA Title
+#define FWVersion "24.10.23.4" // Firmware Version
+#define OTA_Title "Car Counter" // OTA Title
 // **************************************************
 
 AsyncWebServer server(80);
@@ -150,7 +153,7 @@ unsigned int currentDay=1;
 unsigned int currentHour;
 unsigned int currentMin;
 unsigned int currentSec;
-int lastCalDay = 20;
+int lastCalDay = 0;
 int totalDailyCars = 0;
 int totalShowCars = 0;
 int connectionAttempts = 5;
@@ -191,7 +194,7 @@ unsigned int totalCars;
 int displayMode = 0;
 unsigned long displayModeMillis = 0;
 unsigned long dayMillis = 0;
-int daysRunning; // Number of days the show is running.
+int daysRunning=0; // Number of days the show is running.
 int alternateColorMode = 0;
 int patternMode = 0;
 unsigned long patternModeMillis = 0;
@@ -389,12 +392,13 @@ void getInitialDailyTotal()   // open DAILYTOT.txt to get initial dailyTotal val
   }
   else
   {
-    Serial.print(F("SD Card: Cannot open the file DailyTotal.TXT"));
+      Serial.print("SD Card: Cannot open the file: ");
+      Serial.println(fileName1);
   }
 }
 
 void getShowTotal()     // open ShowTot.txt to get totalCars for season
- {
+{
     myFile = SD.open(fileName2,FILE_READ);
     if (myFile)
     {
@@ -405,11 +409,31 @@ void getShowTotal()     // open ShowTot.txt to get totalCars for season
         Serial.println(totalShowCars);
       }
       myFile.close();
-    }
-    else
-    {
-      Serial.print(F("SD Card: Cannot open the file TOTAL.TXT"));
-    }
+  }
+  else
+  {
+      Serial.print("SD Card: Cannot open the file: ");
+      Serial.println(fileName2);
+  }
+}
+
+void getLastCalDay()  // get the last calendar day used for reset daily counts)
+{
+   myFile = SD.open(fileName3,FILE_READ);
+   if (myFile)
+   {
+     while (myFile.available()) {
+     lastCalDay = myFile.parseInt(); // read day Number
+     Serial.print(" Calendar Day = ");
+     Serial.println(lastCalDay);
+   }
+   myFile.close();
+   }
+   else
+   {
+      Serial.print("SD Card: Cannot open the file: ");
+     Serial.println(fileName3);
+   }
 }
 
 void getInitialDayRunning()   // Days the show has been running)
@@ -423,30 +447,15 @@ void getInitialDayRunning()   // Days the show has been running)
       Serial.println(daysRunning);
     }
     myFile.close();
-    }
-    else
-    {
-       Serial.print(F("SD Card: Cannot open the file Running.TXT"));
-    }
+  }
+  else
+  {
+      Serial.print("SD Card: Cannot open the file: ");
+      Serial.println(fileName4);
+  }
 } 
 
-void getLastCalDay()  // get the last calendar day used for reset daily counts)
- {
-    myFile = SD.open(fileName3,FILE_READ);
-    if (myFile)
-    {
-       while (myFile.available()) {
-       lastCalDay = myFile.parseInt(); // read day Number
-       Serial.print(" Calendar Day = ");
-       Serial.println(lastCalDay);
-    }
-    myFile.close();
-    }
-    else
-    {
-      Serial.print(F("SD Card: Cannot open the file Running.TXT"));
-    }
-} 
+ 
 
 /***** UPDATE TOTALS TO SD CARD *****/
 void HourlyTotals()
@@ -515,7 +524,7 @@ void updateCalDay()  /* -----Increment the grand total cars file ----- */
    }
    else
    {
-      Serial.print(F("SD Card: Cannot open the file ShowTot.TXT"));
+      Serial.print(F("SD Card: Cannot open the file CalDay.TXT"));
    }
 }
 
@@ -693,6 +702,51 @@ void beamCarDetect() // If a car is detected by a beam break, then increment the
 
 }
 
+// Init microSD card
+void initSDCard()
+{
+  if(!SD.begin(PIN_SPI_CS)){
+    Serial.println("Card Mount Failed");
+    //Serial.println(F("SD CARD FAILED, OR NOT PRESENT!"));
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0,line1);
+    display.println("Check SD Card");
+    display.display();
+    while (1); // stop the program and check SD Card
+    return;
+  }
+  uint8_t cardType = SD.cardType();
+
+  if(cardType == CARD_NONE){
+    Serial.println("No SD card attached");
+    return;
+  }
+
+  Serial.print("SD Card Type: ");
+  if(cardType == CARD_MMC){
+    Serial.println("MMC");
+  } else if(cardType == CARD_SD){
+    Serial.println("SDSC");
+  } else if(cardType == CARD_SDHC){
+    Serial.println("SDHC");
+  } else {
+    Serial.println("UNKNOWN");
+  }
+  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+
+  Serial.printf("SD Card Size: %lluMB\n", cardSize);
+  Serial.println(F("SD CARD INITIALIZED."));
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,line1);
+  //display.println("SD Card Ready");
+  display.printf("SD Card Size: %lluMB\n", cardSize);
+  display.display();
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -707,7 +761,10 @@ void setup()
   display.setTextSize(1);
   display.setCursor(0, line1);
   display.display();
+  
+  initSDCard();
 
+/*
   //Initialize SD Card
   if (!SD.begin(PIN_SPI_CS)) {
     Serial.println(F("SD CARD FAILED, OR NOT PRESENT!"));
@@ -727,65 +784,89 @@ void setup()
     display.setCursor(0,line1);
     display.println("SD Card Ready");
     display.display();
-
+*/
   //***** Check AND/OR Prep Files for use ******/ 
-      if (!SD.exists(fileName1)) {
+    if (!SD.exists(fileName1))
+    {
       Serial.println(F("DailyTot.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
       myFile2 = SD.open(fileName1, FILE_WRITE);
       myFile2.close();
-          // recheck if file is created or not & write Header
-   }
-      if (!SD.exists(fileName2)) {
+    }
+    else
+    {
+      Serial.print(fileName1);
+      Serial.println(F(" exists on SD Card."));
+    }
+    if (!SD.exists(fileName2))
+    {
       Serial.println(F("ShowTot.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
       myFile2 = SD.open(fileName2, FILE_WRITE);
       myFile2.close();
-          // recheck if file is created or not & write Header
-   }
+    }
+    else
+    {
+      Serial.print(fileName2);
+      Serial.println(F(" exists on SD Card."));
+    }
 
-      if (!SD.exists(fileName3)) {
+    if (!SD.exists(fileName3)) {
       Serial.println(F("CalDay.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
       myFile2 = SD.open(fileName3, FILE_WRITE);
       myFile2.close();
-          // recheck if file is created or not & write Header
-   }
+    }
+    else
+    {
+      Serial.print(fileName3);
+      Serial.println(F(" exists on SD Card."));
+    }
 
     if (!SD.exists(fileName4)) {
       Serial.println(F("RunDays.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
       myFile2 = SD.open(fileName4, FILE_WRITE);
       myFile2.close();
-          // recheck if file is created or not & write Header
-   }
+    }
+    else
+    {
+      Serial.print(fileName4);
+      Serial.println(F(" exists on SD Card."));
+    }
 
-    if (SD.exists(fileName5))  {
-      Serial.println(F("DailySummary.csv exists on SD Card."));
+    if (!SD.exists(fileName5))  { // DailySummary.csv
+      Serial.println(F("DailySummary.csv doesn't exist. Creating File..."));
       myFile = SD.open(fileName6, FILE_APPEND);
       myFile.println("Date, Temp, Hour1, Hour2, Hour3, Hour4, Total");
       myFile.close();
       Serial.println(F("Header Written to file DailySummary.csv"));
-    }else{
-      Serial.println(F("CarLog.csv doesn't exist on SD Card."));
+      myFile.close();
+    }
+    else
+    {
+      Serial.print(fileName5);
+      Serial.println(F(" exists on SD Card."));
     }
   
   if (!SD.exists(fileName6)) {
-    Serial.println(F("CarLog.csv doesn't exist. Creating CarLog.csv file..."));
+    Serial.println(F("CarLog.csv doesn't exist. Creating file..."));
     // create a new file by opening a new file and immediately close it
     myFile = SD.open("/CarLog.csv", FILE_WRITE);
     myFile.close();
-      // recheck if file is created or not & write Header
-  }
-    if (SD.exists("/CarLog.csv")){
-      Serial.println(F("CarLog.csv exists on SD Card."));
-      myFile = SD.open("/CarLog.csv", FILE_APPEND);
-      myFile.println("Date Time,Millis,Car,TotalDailyCars,Temp");
-      myFile.close();
-      Serial.println(F("Header Written to CarLog.csv"));
-    } else{
-      Serial.println(F("CarLog.csv doesn't exist on SD Card."));
+    // recheck if file is created write Header
+    myFile = SD.open("/CarLog.csv", FILE_APPEND);
+    myFile.println("Date Time,Millis,Car,TotalDailyCars,Temp");
+    myFile.close();
+    Serial.println(F("Header Written to CarLog.csv"));
+    myFile.close();
     }
+    else
+    {
+      Serial.print(fileName6);
+      Serial.println(F(" exists on SD Card."));
+    }
+
   // List of approved WiFi AP's
   WiFi.mode(WIFI_STA);  
   wifiMulti.addAP(secret_ssid_AP_1,secret_pass_AP_1);
@@ -819,7 +900,7 @@ void setup()
   }
   
   setup_wifi();
-  //espGateCounter.setCACert(root_ca);
+  //espCarCounter.setCACert(root_ca);
   mqtt_client.setServer(mqtt_server, mqtt_port);
   mqtt_client.setCallback(callback);
 
@@ -908,6 +989,18 @@ void loop()
         WriteTotals();
      }
 
+    // Reset/Update Counts wwhen Day Changes
+  if (now.day() != lastCalDay)
+  {
+    currentDay=now.day();
+    updateCalDay();
+    totalDailyCars =0;
+    updateDailyTotal();
+    daysRunning++;
+    updateDaysRunning();
+
+  }
+  
   // non-blocking WiFi and MQTT Connectivity Checks
   if (wifiMulti.run() == WL_CONNECTED)
   {
