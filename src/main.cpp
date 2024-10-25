@@ -4,6 +4,8 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.10.25.1 Turn arches on during show added to end of loop
+24.10.24.2 fixed publish dailytot on correct topic to keep gate counter in sync
 24.10.24.1 Added enable arches between 4:30 pm & 9:30 pm
 24.10.23.5 Bug fixes with missing {} clarified prodecure names, added reset at midnight
 24.10.23.4 Added update/reset check in loop for date changes. Created initSDCard()
@@ -67,7 +69,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.10.24.1" // Firmware Version
+#define FWVersion "24.10.24.2" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 // **************************************************
 
@@ -488,7 +490,7 @@ void HourlyTotals()
 void KeepMqttAlive()
 {
    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
-   mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
+   mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
    Serial.println("Keeping MQTT Alive");
    start_MqttMillis = currentMillis;
 }
@@ -1001,22 +1003,19 @@ void loop()
    tempF=((rtc.getTemperature()*9/5)+32);
    currentMillis = millis();
   
-   /***** IMPORTANT ***** Reset Car Counter at 4:55:00 pm ****/
+   /*****IMPORTANT***** Reset Car Counter at 4:55:00 pm ****/
    /* Only counting vehicles for show */
-   if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))
-   {
+   if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))  {
       totalDailyCars = 0;
       updateDailyTotal();
    }
    //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
-   if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))
-   {
+   if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))  {
        WriteTotals();
    }
 
    /* Reset Counts at Midnight when controller running 24/7 */
-   if ((now.hour() == 0) && (now.minute() == 0) && (now.second() == 1))
-   {
+   if ((now.hour() == 0) && (now.minute() == 0) && (now.second() == 1))  {
       currentDay = now.day();
       updateCalDay();
       totalDailyCars = 0;
@@ -1025,8 +1024,7 @@ void loop()
       updateDaysRunning();
    }
    /* OR Reset/Update Counts wwhen Day Changes on reboot getting values from saved data */
-   if (now.day() != lastCalDay)
-   {
+   if (now.day() != lastCalDay)  {
       getCalDay();
       currentDay=now.day();
       updateCalDay();
@@ -1258,14 +1256,14 @@ Serial.println(secondDetectorState);
       if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
       {
         lastSecondDetectorState=0; // 10/24/24??
-        enableArchesCheck();
-        if (enableArchesFlag){
+
+        if (enableArchesFlag == true){
            playPattern();   //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
         }
         else
         {
           digitalWrite(greenArchPin, LOW); // Turn Green Arch off
-           digitalWrite(redArchPin, LOW); // Turn Red Arch off
+          digitalWrite(redArchPin, LOW); // Turn Red Arch off
         }
       }
       else
@@ -1285,5 +1283,5 @@ Serial.println(secondDetectorState);
 
   /*-------- Reset the detector and button state to 0 for the next go-around of the loop ---------*/    
   lastSecondDetectorState = secondDetectorState; // Reset detector state
-
+  enableArchesCheck(); /*Turn arches on during show*/
 } /***** Repeat Loop *****/
