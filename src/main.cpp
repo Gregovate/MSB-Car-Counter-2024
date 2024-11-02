@@ -4,8 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
-24.10.29.1 Created average temp void (tempF) is now (aveTempF,1) 
-24.10.26.1 Publish secondDetectorState when car is counted
+24.11.2.1 Working Copy without hourly totals
 24.10.25.1 Turn arches on during show added to end of loop
 24.10.24.2 fixed publish dailytot on correct topic to keep gate counter in sync
 24.10.24.1 Added enable arches between 4:30 pm & 9:30 pm
@@ -71,7 +70,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.10.29.1" // Firmware Version
+#define FWVersion "24.11.2.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 // **************************************************
 
@@ -146,7 +145,6 @@ int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client conn
 #define MQTT_PUB_TOPIC7  "msb/traffic/enter/hour4"
 #define MQTT_PUB_TOPIC8  "msb/traffic/enter/DayTot"
 #define MQTT_PUB_TOPIC9  "msb/traffic/enter/ShoTot"
-#define MQTT_PUB_TOPIC10 "msb/traffic/enter/debug/beamSensorState"
 
 //const uint32_t connectTimeoutMs = 10000;
 uint16_t connectTimeOutPerAP=5000;
@@ -154,16 +152,16 @@ const char* ampm ="AM";
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = -21600;
 const int   daylightOffset_sec = 3600;
-//int16_t tempF;
-float tempF; // temp from rtc
-float aveTempF; // moving average temp calculated once per min
-unsigned int n=0; // used to calculate average temp
+int16_t tempF;
 
 // important time values
 unsigned int currentDay;
-unsigned int currentHour;
+unsigned int currentHr12;
+unsigned int currentHr24;
 unsigned int currentMin;
 unsigned int currentSec;
+unsigned int archOnSeconds = 59400; // seconds since midnight 16*3600 + 30*60 (4:30 pm)
+unsigned int archOffSeconds = 77400; // seconds sincce midnight 21*3600 + 30*60 (9:30 pm)
 
 int lastCalDay = 0;
 int totalDailyCars = 0;
@@ -213,6 +211,7 @@ unsigned long patternModeMillis = 0;
 
 
 File myFile; //used to write files to SD Card
+File myFile2; // writes hourly car data to file
 
 // **********FILE NAMES FOR SD CARD *********
 const String fileName1 = "/DailyTot.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
@@ -273,11 +272,7 @@ void setup_wifi()
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "Hi! This is The Car Counter.");
   });
-  server.on("/reset", HTTP_POST, [](AsyncWebServerRequest *request){
-    request->send(200,"text/plain","ok");
-    delay(2000);
-    ESP.restart();
-  });
+
   // You can also enable authentication by uncommenting the below line.
   // ElegantOTA.setAuth("admin", "password");
   ElegantOTA.setID(THIS_MQTT_CLIENT);  // Set Hardware ID
@@ -327,7 +322,7 @@ void MQTTreconnect()
       Serial.println("Waiting for Car...");
       // Once connected, publish an announcement…
       mqtt_client.publish(MQTT_PUB_TOPIC0, "Hello from Car Counter!");
-      mqtt_client.publish(MQTT_PUB_TOPIC1, String(aveTempF ,1).c_str());
+      mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
       // … and resubscribe
       mqtt_client.subscribe(MQTT_PUB_TOPIC0);
     } 
@@ -471,19 +466,19 @@ void getDaysRunning()   // Days the show has been running)
 /***** UPDATE TOTALS TO SD CARD *****/
 void HourlyTotals()
 {
-  if (currentHour == 18)
+  if (currentHr24 == 18)
   {
     carsHr1 = totalDailyCars;
   }
-  if (currentHour == 19)
+  if (currentHr24 == 19)
   {
     carsHr2 = totalDailyCars-carsHr1;
   }
-  if (currentHour == 20)
+  if (currentHr24 == 20)
   {
     carsHr3 = totalDailyCars-(carsHr1+carsHr2);
   }
-  if (currentHour == 21)
+  if (currentHr24 == 21)
   {
     carsHr4 = totalDailyCars;
   }
@@ -491,7 +486,7 @@ void HourlyTotals()
 
 void KeepMqttAlive()
 {
-   mqtt_client.publish(MQTT_PUB_TOPIC1, String(aveTempF ,1).c_str());
+   mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
    Serial.println("Keeping MQTT Alive");
    start_MqttMillis = currentMillis;
@@ -553,54 +548,38 @@ void updateDaysRunning()
   }
 }
 
-void averageTemp()
-{
-  /* if minutes are not in sync, reset*/
-  if (n == 0) 
-  {
-     n = 1;
-  } else if (n != currentMin ) {
-    n++;
-  } else {
-    n = currentMin;
-  }
-  tempF=((rtc.getTemperature()*9/5)+32);
-  //aveTempF = aveTempF * (n-1)/n + tempF/n;
-  aveTempF += (tempF - aveTempF) / n;
-}
-
 void WriteTotals()
 {
   DateTime now = rtc.now();
   char buf2[] = "YYYY-MM-DD hh:mm:ss";
   Serial.print(now.toString(buf2));
   Serial.print(", Temp = ");
-  Serial.print(aveTempF ,1);
+  Serial.print(tempF);
   Serial.print(", ");
 //  totalDailyCars ++;     
 //  totalDailyCars ;     
   Serial.print(totalDailyCars) ;  
   // open file for writing Car Data
-  myFile = SD.open(fileName5, FILE_APPEND);
+  myFile2 = SD.open(fileName5, FILE_APPEND);
   if (myFile) 
   {
-    myFile.print(now.toString(buf2));
-    myFile.print(", ");
-    myFile.print (aveTempF ,1); 
-    myFile.print(", "); 
-    myFile.print (carsHr1) ; 
-    myFile.print(", ");
-    myFile.println(carsHr2);
-    myFile.print(", ");
-    myFile.println(carsHr3);
-    myFile.print(", ");
-    myFile.println(carsHr4);
-    myFile.print(", ");
-    myFile.println(totalDailyCars);
-    myFile.close();
+    myFile2.print(now.toString(buf2));
+    myFile2.print(", ");
+    myFile2.print (tempF); 
+    myFile2.print(", "); 
+    myFile2.print (carsHr1) ; 
+    myFile2.print(", ");
+    myFile2.println(carsHr2);
+    myFile2.print(", ");
+    myFile2.println(carsHr3);
+    myFile2.print(", ");
+    myFile2.println(carsHr4);
+    myFile2.print(", ");
+    myFile2.println(totalDailyCars);
+    myFile2.close();
     Serial.println(F(" = Daily Summary Recorded SD Card."));
     // Publish Totals
-    mqtt_client.publish(MQTT_PUB_TOPIC1, String(aveTempF ,1).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
     mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC4, String(carsHr1).c_str());
@@ -687,8 +666,8 @@ void beamCarDetect() // If a car is detected by a beam break, then increment the
     detectorTrippedCount++;                // add 1 to the counter, this prevents the code from being run more than once after tripped for 3 seconds.
     Serial.print("Cars Today:  ");
     Serial.println(totalDailyCars);
-    digitalWrite(redArchPin, LOW);
-    digitalWrite(greenArchPin, HIGH);
+    digitalWrite(redArchPin, HIGH);
+    digitalWrite(greenArchPin, LOW);
     noCarTimer = millis();
 
 /*------Append to log file*/
@@ -696,7 +675,7 @@ void beamCarDetect() // If a car is detected by a beam break, then increment the
     char buf2[] = "YYYY-MM-DD hh:mm:ss";
     Serial.print(now.toString(buf2));
     Serial.print(", Temp = ");
-    Serial.print(aveTempF ,1);
+    Serial.print(tempF);
     Serial.print(", ");
     totalDailyCars ++;   
     totalShowCars ++;  
@@ -711,10 +690,10 @@ void beamCarDetect() // If a car is detected by a beam break, then increment the
        myFile.print(", 1 , "); 
        myFile.print (totalDailyCars) ; 
        myFile.print(", ");
-       myFile.println(aveTempF ,1);
+       myFile.println(tempF);
        myFile.close();
        Serial.println(F(" = CarLog Recorded SD Card."));
-       mqtt_client.publish(MQTT_PUB_TOPIC1, String(aveTempF ,1).c_str());
+       mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
        mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
        mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
     }
@@ -781,13 +760,6 @@ void setup()
   ElegantOTA.setAutoReboot(true);
   ElegantOTA.setFilesystemMode(true);
 
-  /* Initialize Time Variables */
-  DateTime now = rtc.now();
-  tempF=((rtc.getTemperature()*9/5)+32);
-  currentDay = now.day();
-  currentHour = now.hour();
-  currentMin = now.minute();
-
   //Initialize Display
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
@@ -826,8 +798,8 @@ void setup()
     {
       Serial.println(F("DailyTot.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName1, FILE_WRITE);
-      myFile.close();
+      myFile2 = SD.open(fileName1, FILE_WRITE);
+      myFile2.close();
     }
     else
     {
@@ -838,8 +810,8 @@ void setup()
     {
       Serial.println(F("ShowTot.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName2, FILE_WRITE);
-      myFile.close();
+      myFile2 = SD.open(fileName2, FILE_WRITE);
+      myFile2.close();
     }
     else
     {
@@ -850,8 +822,8 @@ void setup()
     if (!SD.exists(fileName3)) {
       Serial.println(F("CalDay.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName3, FILE_WRITE);
-      myFile.close();
+      myFile2 = SD.open(fileName3, FILE_WRITE);
+      myFile2.close();
     }
     else
     {
@@ -862,8 +834,8 @@ void setup()
     if (!SD.exists(fileName4)) {
       Serial.println(F("RunDays.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName4, FILE_WRITE);
-      myFile.close();
+      myFile2 = SD.open(fileName4, FILE_WRITE);
+      myFile2.close();
     }
     else
     {
@@ -899,13 +871,13 @@ void setup()
     myFile = SD.open(fileName6, FILE_APPEND);
     myFile.println("Date Time,Millis,Car,TotalDailyCars,Temp");
     myFile.close();
-    Serial.println(F("Header Written to CarLog.csv"));
-  }
-  else
-  {
+   Serial.println(F("Header Written to CarLog.csv"));
+    }
+    else
+    {
       Serial.print(fileName6);
       Serial.println(F(" exists on SD Card."));
-  }
+    }
 
   // List of approved WiFi AP's
   WiFi.mode(WIFI_STA);  
@@ -980,27 +952,27 @@ void setup()
   display.println("Count Cars");
 
   Serial.println  ("Initializing Car Counter");
-  Serial.print("Temperature: ");
-  //tempF=((rtc.getTemperature()*9/5)+32);
-  Serial.print(tempF ,1);
-  Serial.println(" F");
+    Serial.print("Temperature: ");
+    tempF=((rtc.getTemperature()*9/5)+32);
+    Serial.print(tempF);
+    Serial.println(" F");
   display.display();
 
-//on reboot, get totals saved on SD Card
-getDailyTotal();  /*Daily total that is updated with every detection*/
-getDaysRunning(); /*Needs to be reset 1st day of show*/
-getCalDay();  /*Saves Calendar Day*/
-getShowTotal();   /*Saves Show Total*/
+  //on reboot, get totals saved on SD Card
+  getDailyTotal();  /*Daily total that is updated with every detection*/
+  getDaysRunning(); /*Needs to be reset 1st day of show*/
+  getCalDay();  /*Saves Calendar Day*/
+  getShowTotal();   /*Saves Show Total*/
 
-// Read Digital Pin States for debugging
-firstDetectorState = digitalRead (firstDetectorPin); //Read the current state of the FIRST IR beam receiver/detector
-secondDetectorState = digitalRead (secondDetectorPin);
-digitalWrite(redArchPin, HIGH);
-digitalWrite(greenArchPin, HIGH);
-Serial.print("firstdetector State = ");
-Serial.print(firstDetectorState);
-Serial.print(" secondDetectorState = ");
-Serial.println(secondDetectorState);
+  // Read Digital Pin States for debugging
+  firstDetectorState = digitalRead (firstDetectorPin); //Read the current state of the FIRST IR beam receiver/detector
+  secondDetectorState = digitalRead (secondDetectorPin);
+  digitalWrite(redArchPin, HIGH);
+  digitalWrite(greenArchPin, HIGH);
+  Serial.print("firstdetector State = ");
+  Serial.print(firstDetectorState);
+  Serial.print(" secondDetectorState = ");
+  Serial.println(secondDetectorState);
 
   if (!MDNS.begin(THIS_MQTT_CLIENT))
   {
@@ -1015,7 +987,7 @@ void loop()
 {
    ElegantOTA.loop();
    DateTime now = rtc.now();
-   //tempF=((rtc.getTemperature()*9/5)+32);
+   tempF=((rtc.getTemperature()*9/5)+32);
    currentMillis = millis();
   
    /*****IMPORTANT***** Reset Car Counter at 4:55:00 pm ****/
@@ -1032,8 +1004,6 @@ void loop()
    /* Reset Counts at Midnight when controller running 24/7 */
    if ((now.hour() == 0) && (now.minute() == 0) && (now.second() == 1))  {
       currentDay = now.day();
-      currentHour = now.hour();
-      currentMin = now.minute();
       updateCalDay();
       totalDailyCars = 0;
       updateDailyTotal();
@@ -1050,12 +1020,7 @@ void loop()
       daysRunning++;
       updateDaysRunning();
    }
-   
-   /* Calculate Temperature Moving Average */
-   if (now.minute() != currentMin){
-      averageTemp();
-   } 
-
+  
    // non-blocking WiFi and MQTT Connectivity Checks
    if (wifiMulti.run() == WL_CONNECTED)
    {
@@ -1065,7 +1030,7 @@ void loop()
         if (currentMillis - start_MqttMillis > mqtt_connectionCheckMillis)
         {
           Serial.print("hour = ");
-          Serial.println(currentHour);
+          Serial.println(currentHr12);
           Serial.println("Attempting MQTT Connection");
           MQTTreconnect();
           start_MqttMillis = currentMillis;
@@ -1087,7 +1052,7 @@ void loop()
        }
     }
      
-//      tempF=((rtc.getTemperature()*9/5)+32);
+      tempF=((rtc.getTemperature()*9/5)+32);
 
       /****** Print Day and Date 1st line  ******/
       display.clearDisplay();
@@ -1099,15 +1064,15 @@ void loop()
       //  Display Date
       display.print(" ");
       //display.print(&timeinfo, "%b");         
-      display.print(months[now.month(), (DEC-1)]);
+      display.print(months[now.month(), (DEC)]);
       display.print(" ");
       display.print(now.day(), DEC);
       display.print(", ");
       display.println(now.year(), DEC);
 
       // Convert 24 hour clock to 12 hours
-      currentHour = now.hour();
-      if (currentHour <12)
+      currentHr24 = now.hour();
+      if (currentHr24 <12)
       {
           ampm ="AM";
       }
@@ -1115,28 +1080,30 @@ void loop()
       {
           ampm ="PM";
       }
-      if (currentHour > 12 )
+      if (currentHr24 > 12 )
       {
-          currentHour = now.hour() - 12;
+          currentHr12 = now.hour() - 12;
+          currentHr24 = now.hour();
       }
       else
       {
-          currentHour = now.hour();
+          currentHr12 = now.hour();
+          currentHr24 = now.hour();
       }
 
       /***** Display Time  and Temp Line 2 add leading 0 to Hours & display Hours *****/
 
       display.setTextSize(1);
-      if (currentHour < 10)
+      if (currentHr12 < 10)
       {
         display.setCursor(0, line2);
         display.print("0");
-        display.print(currentHour, DEC);
+        display.print(currentHr12, DEC);
       }
       else
       {
         display.setCursor(0, line2);
-        display.print(currentHour, DEC);
+        display.print(currentHr12, DEC);
       }
       display.setCursor(14, line2);
       display.print(":");
@@ -1206,93 +1173,73 @@ Serial.println(secondDetectorState);
 //***** DETECT CARS *****/
   firstDetectorState = digitalRead (firstDetectorPin); //Read the current state of the FIRST IR beam receiver/detector Tripped = 1
   secondDetectorState = digitalRead (secondDetectorPin); //Read the current state of the SECOND IR beam receiver/detector Tripped =1
-  if (firstDetectorState == HIGH)
-  {
-     firstDectorTripTime = millis();
-  }
-  if (secondDetectorState == HIGH)
-  {
-    secondDetectorTripTIme = millis();
-  }
-  if (firstDectorTripTime>secondDetectorTripTIme)
-  {
-    directionFlag =1;
-  } else {
-    directionFlag =-1;
-  }
 
-  // Bounce check, if the beam is broken start a timer and turn on only the green arch
+  // Bounce check, if the beam is broken start the timer and turn on only the green arch
   if (secondDetectorState == HIGH && lastSecondDetectorState == LOW && millis()- detectorMillis > 200) 
   {
     digitalWrite(redArchPin, LOW); // Turn Red Arch Off
     digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
     detectorMillis = millis();    // if the beam is broken remember the time 
     /* LOOP PIN STATE FOR DEBUG */
-    /*
     Serial.print("Bounce Check ... ");
-    digitalWrite(redArchPin, HIGH);
-    digitalWrite(greenArchPin, LOW);
+    digitalWrite(redArchPin, LOW);
+    digitalWrite(greenArchPin, HIGH);
     Serial.print("secondDetector State = ");
     Serial.print(secondDetectorState);
     Serial.print(" lastSecondDetectorState = ");
     Serial.println(lastSecondDetectorState);
-    */
   }
   
   // If the SECOND beam has been broken for more than 0.50 second (1000= 1 Second) & the FIRST beam is broken
   if (secondDetectorState == HIGH && ((millis() - detectorMillis) % 500) < 20 && millis() - detectorMillis > 500 && detectorTrippedCount == 0 && firstDetectorState == HIGH) 
-  {
-    carPresentFlag = 1; // when both detectors are high, set flag car is in detection zone. Then only watch Beam Sensor
-    carDetectedMillis = millis(); // Freeze time when car entered detection zone (use to calculate TimeToPass in millis
-    //***** CAR PASSED *****/
-    /*Call the subroutine that increments the car counter and appends the log with an entry for the 
-    vehicle when the IR beam is broken */
-
-    /* CAR DETECTED DEBUG */
-    Serial.print("Call to BEAM CAR DETECT ... ");
-    digitalWrite(redArchPin, LOW);
-    digitalWrite(greenArchPin, HIGH);
-    Serial.print("firstdetector State = ");
-    Serial.print(firstDetectorState);
-    Serial.print(" secondDetectorState = ");
-    Serial.println(secondDetectorState);
-    mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondDetectorState).c_str());  // publishes beamSensor State
-    beamCarDetect();  
-  }
-    
-  /*--------- Reset the counter if the beam is not broken --------- */    
- if (secondDetectorState == LOW)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
- {
-    if (detectorTrippedCount != 0)
     {
-       mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondDetectorState).c_str());  // publishes beamSensor State
-       digitalWrite(redArchPin, LOW);// Turn Red Arch Off
-    }
+      //***** CAR PASSED *****/
+      /*Call the subroutine that increments the car counter and appends the log with an entry for the 
+      vehicle when the IR beam is broken */
+ 
       /* CAR DETECTED DEBUG */
-      /*     
-      Serial.print("Waiting to start Idle Pattern... ");
+      Serial.print("Call to BEAM CAR DETECT ... ");
       digitalWrite(redArchPin, LOW);
       digitalWrite(greenArchPin, HIGH);
       Serial.print("firstdetector State = ");
       Serial.print(firstDetectorState);
       Serial.print(" secondDetectorState = ");
       Serial.println(secondDetectorState);
-      */
-    if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
-    {
-      playPattern();   //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
+
+      beamCarDetect();  
     }
-    else
-    {
-      digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
+    
+  
+  /*--------- Reset the counter if the beam is not broken --------- */    
+ if (secondDetectorState == LOW)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
+   {
+      if (detectorTrippedCount != 0)
+      digitalWrite(redArchPin, LOW);// Turn Red Arch Off
+      if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
+        {
+        //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
+        playPattern();
+        }
+      else
+      {
+        digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
+      }
+      detectorTrippedCount = 0;
     }
- detectorTrippedCount = 0;
- }
- //***** END OF CAR DETECTION *****/
+//***** END OF CAR DETECTION *****/
   
   //Added to kepp mqtt connection alive 10/11/24 gal
-  if  ((currentMillis - start_MqttMillis)> (mqttKeepAlive*1000))  {
+  if  ((currentMillis - start_MqttMillis)> (mqttKeepAlive*1000))
+  {
       KeepMqttAlive();
+      Serial.print("firstdetector State = ");
+      Serial.print(firstDetectorState);
+      Serial.print(" secondDetectorState = ");
+      Serial.print(secondDetectorState);
+      Serial.print(" Now Hour 12 = ");
+      Serial.print(currentHr12);
+      Serial.print(" Now Hour 24 = ");
+      Serial.println(now.hour());
   }
 
 
