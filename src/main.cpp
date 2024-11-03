@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.3.4 Changed output file names and time to pass millis in carlog
 24.11.3.3 dynamically created mqtt topic to publish totals and saving those totals to dayHour[24]
 24.11.3.2 replace myFile2 with myFile
 24.11.3.1 Changed Detector to Beam, re-wrote car detection logic, added MQTT publish Topic 10 beam state
@@ -73,7 +74,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.3.1" // Firmware Version
+#define FWVersion "24.11.3.4" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 500; // minimum millis needed to detect a car
 // **************************************************
@@ -170,7 +171,7 @@ unsigned int currentSec;
 
 int lastCalDay = 0; // Pervious day's calendar day used to reset running days
 int totalDailyCars = 0; // total cars counted per day
-int totalShowCars = 0; // total cars counted for season
+int totalShowCars = 0; // total cars counted for durning show
 int ignoreCars = 0; // cars that were counted before the show starts
 int connectionAttempts = 5;
 int carsHr1 =0; // total cars hour 1
@@ -220,8 +221,8 @@ unsigned long patternModeMillis = 0;
 File myFile; //used to write files to SD Card
 
 // **********FILE NAMES FOR SD CARD *********
-const String fileName1 = "/DailyTot.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
-const String fileName2 = "/ShowTot.txt";  // ShowTot.txt file to store season total counts
+const String fileName1 = "/DailyTotal.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
+const String fileName2 = "/ShowTotal.txt";  // ShowTot.txt file to store season total counts
 const String fileName3 = "/CalDay.txt"; // CalDay.txt file to store current day number
 const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
 const String fileName5 = "/DailySummary.csv"; // DailySummary.csv Stores Daily Totals by Hour and total
@@ -474,32 +475,11 @@ void getDaysRunning()   // Days the show has been running)
 /***** UPDATE TOTALS TO SD CARD *****/
 void HourlyTotals()
 {
- dayHour[currentHr24]= totalDailyCars;
-   strcpy (topic, topic_base_path);
-   strcat (topic, "hour");
-   strcat (topic, String(currentHr24).c_str());
-   strcat (topic,"/");
-   
-
- mqtt_client.publish(topic, String(totalDailyCars).c_str());
- /*
-  if (currentHr24 == 18)
-  {
-    carsHr1 = totalDailyCars;
-  }
-  if (currentHr24 == 19)
-  {
-    carsHr2 = totalDailyCars-carsHr1;
-  }
-  if (currentHr24 == 20)
-  {
-    carsHr3 = totalDailyCars-(carsHr1+carsHr2);
-  }
-  if (currentHr24 == 21)
-  {
-    carsHr4 = totalDailyCars;
-  }
-  */
+  dayHour[currentHr24]= totalDailyCars;
+  strcpy (topic, topic_base_path);
+  strcat (topic, "hour");
+  strcat (topic, String(currentHr24).c_str());
+  mqtt_client.publish(topic, String(totalDailyCars).c_str());
 }
 
 void KeepMqttAlive()
@@ -515,7 +495,7 @@ void updateDailyTotal()
   myFile = SD.open(fileName1,FILE_WRITE);
   if (myFile)
   {  // check for an open failure
-     myFile.print(totalDailyCars);
+     myFile.print(totalDailyCars-ignoreCars);
      myFile.close();
   }
   else
@@ -704,7 +684,7 @@ void beamCarDetect() // If a car is detected by a beam break, then increment the
     {
        myFile.print(now.toString(buf2));
        myFile.print(", ");
-       myFile.print (millis()-carDetectedMillis) ; 
+       myFile.print (TimeToPassMillis) ; 
        myFile.print(", 1 , "); 
        myFile.print (totalDailyCars) ; 
        myFile.print(", ");
@@ -790,29 +770,8 @@ void setup()
   display.display();
   
   //Initialize SD Card
-  initSDCard();
+  initSDCard();  // Initialize SD card and ready for Read/Write
 
-/*
-  //Initialize SD Card
-  if (!SD.begin(PIN_SPI_CS)) {
-    Serial.println(F("SD CARD FAILED, OR NOT PRESENT!"));
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-    display.setCursor(0,line1);
-    display.println("Check SD Card");
-    display.display();
-    while (1); // stop the program and check SD Card
-  }
-
-  Serial.println(F("SD CARD INITIALIZED."));
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-    display.setCursor(0,line1);
-    display.println("SD Card Ready");
-    display.display();
-*/
   //***** Check AND/OR Prep Files for use ******/ 
     if (!SD.exists(fileName1))
     {
@@ -889,7 +848,7 @@ void setup()
     myFile.close();
     // recheck if file is created write Header
     myFile = SD.open(fileName6, FILE_APPEND);
-    myFile.println("Date Time,Millis,Car,TotalDailyCars,Temp");
+    myFile.println("Date Time,TimeToPass,Car,TotalDailyCars,Temp");
     myFile.close();
    Serial.println(F("Header Written to CarLog.csv"));
     }
