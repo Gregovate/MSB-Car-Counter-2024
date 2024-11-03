@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.3.3 dynamically created mqtt topic to publish totals and saving those totals to dayHour[24]
 24.11.3.2 replace myFile2 with myFile
 24.11.3.1 Changed Detector to Beam, re-wrote car detection logic, added MQTT publish Topic 10 beam state
 24.11.2.1 Working Copy without hourly totals
@@ -138,6 +139,8 @@ int wifi_connect_attempts = 5;
 #define THIS_MQTT_CLIENT "espCarCounter" // Look at line 90 and set variable for WiFi Client secure & PubSubCLient 12/23/23
 int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client connected
 // Publishing Topics 
+char topic[60];
+#define topic_base_path  "msb/traffic/enter/"
 #define MQTT_PUB_TOPIC0  "msb/traffic/enter/hello"
 #define MQTT_PUB_TOPIC1  "msb/traffic/enter/temp"
 #define MQTT_PUB_TOPIC2  "msb/traffic/enter/time"
@@ -159,15 +162,16 @@ const int   daylightOffset_sec = 3600;
 int16_t tempF;
 
 // important time values
-unsigned int currentDay;
+unsigned int currentDay; // Current Calendar day
 unsigned int currentHr12; //Current Hour 12 Hour format
 unsigned int currentHr24; //Current Hour 24 Hour Format
 unsigned int currentMin;
 unsigned int currentSec;
 
-int lastCalDay = 0;
-int totalDailyCars = 0;
-int totalShowCars = 0;
+int lastCalDay = 0; // Pervious day's calendar day used to reset running days
+int totalDailyCars = 0; // total cars counted per day
+int totalShowCars = 0; // total cars counted for season
+int ignoreCars = 0; // cars that were counted before the show starts
 int connectionAttempts = 5;
 int carsHr1 =0; // total cars hour 1
 int carsHr2 =0; // total cars hour 2
@@ -226,7 +230,7 @@ const String fileName6 = "/CarLog.csv"; // CarLog.csv file to store all car coun
 
 char days[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 char months[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-
+int dayHour[24];
 
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
@@ -470,6 +474,15 @@ void getDaysRunning()   // Days the show has been running)
 /***** UPDATE TOTALS TO SD CARD *****/
 void HourlyTotals()
 {
+ dayHour[currentHr24]= totalDailyCars;
+   strcpy (topic, topic_base_path);
+   strcat (topic, "hour");
+   strcat (topic, String(currentHr24).c_str());
+   strcat (topic,"/");
+   
+
+ mqtt_client.publish(topic, String(totalDailyCars).c_str());
+ /*
   if (currentHr24 == 18)
   {
     carsHr1 = totalDailyCars;
@@ -486,13 +499,14 @@ void HourlyTotals()
   {
     carsHr4 = totalDailyCars;
   }
+  */
 }
 
 void KeepMqttAlive()
 {
    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
-   Serial.println("Keeping MQTT Alive");
+   Serial.println("MQTT Keep Alive");
    start_MqttMillis = currentMillis;
 }
 
@@ -507,7 +521,7 @@ void updateDailyTotal()
   else
   {
      Serial.print(F("SD Card: Cannot open the file:  DailyTot.txt"));
-  } 
+  }
 }
 
 void updateShowTotal()  /* -----Increment the grand total cars file ----- */
@@ -701,6 +715,7 @@ void beamCarDetect() // If a car is detected by a beam break, then increment the
        mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
        mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
        mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondBeamState).c_str());
+       start_MqttMillis = millis();
     }
     else
     {
@@ -998,7 +1013,7 @@ void loop()
    /*****IMPORTANT***** Reset Car Counter at 4:55:00 pm ****/
    /* Only counting vehicles for show */
    if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))  {
-      totalDailyCars = 0;
+      ignoreCars = totalDailyCars; // records number of cars counted before show starts
       updateDailyTotal();
    }
    //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
@@ -1145,7 +1160,7 @@ void loop()
 
       // Display Day Running & Grand Total
       display.setCursor(0, line3);
-      display.print("Day #: " );
+      display.print("Day " );
       display.print(daysRunning, 0);
       display.print(" Total: ");
       display.println(totalShowCars);
@@ -1189,7 +1204,7 @@ Serial.println(secondBeamState);
   }
   if (secondBeamState != lastSecondBeamState && secondBeamState == 1) // if 2nd beam switches to High set Timer
   {
-    secondBeamTripTime = millis();
+    secondBeamTripTime = millis(); // double check. may need a way to reset if there is a bounce 11/3/24
   }
   if (firstBeamState == 1 && secondBeamState == 1) /* Both Beams Blocked */
   {
