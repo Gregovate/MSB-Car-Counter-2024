@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.3.2 replace myFile2 with myFile
 24.11.3.1 Changed Detector to Beam, re-wrote car detection logic, added MQTT publish Topic 10 beam state
 24.11.2.1 Working Copy without hourly totals
 24.10.25.1 Turn arches on during show added to end of loop
@@ -213,7 +214,6 @@ unsigned long patternModeMillis = 0;
 
 
 File myFile; //used to write files to SD Card
-File myFile2; // writes hourly car data to file
 
 // **********FILE NAMES FOR SD CARD *********
 const String fileName1 = "/DailyTot.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
@@ -564,23 +564,23 @@ void WriteTotals()
 //  totalDailyCars ;     
   Serial.print(totalDailyCars) ;  
   // open file for writing Car Data
-  myFile2 = SD.open(fileName5, FILE_APPEND);
+  myFile = SD.open(fileName5, FILE_APPEND);
   if (myFile) 
   {
-    myFile2.print(now.toString(buf2));
-    myFile2.print(", ");
-    myFile2.print (tempF); 
-    myFile2.print(", "); 
-    myFile2.print (carsHr1) ; 
-    myFile2.print(", ");
-    myFile2.println(carsHr2);
-    myFile2.print(", ");
-    myFile2.println(carsHr3);
-    myFile2.print(", ");
-    myFile2.println(carsHr4);
-    myFile2.print(", ");
-    myFile2.println(totalDailyCars);
-    myFile2.close();
+    myFile.print(now.toString(buf2));
+    myFile.print(", ");
+    myFile.print (tempF); 
+    myFile.print(", "); 
+    myFile.print (carsHr1) ; 
+    myFile.print(", ");
+    myFile.println(carsHr2);
+    myFile.print(", ");
+    myFile.println(carsHr3);
+    myFile.print(", ");
+    myFile.println(carsHr4);
+    myFile.print(", ");
+    myFile.println(totalDailyCars);
+    myFile.close();
     Serial.println(F(" = Daily Summary Recorded SD Card."));
     // Publish Totals
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
@@ -803,8 +803,8 @@ void setup()
     {
       Serial.println(F("DailyTot.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile2 = SD.open(fileName1, FILE_WRITE);
-      myFile2.close();
+      myFile = SD.open(fileName1, FILE_WRITE);
+      myFile.close();
     }
     else
     {
@@ -815,8 +815,8 @@ void setup()
     {
       Serial.println(F("ShowTot.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile2 = SD.open(fileName2, FILE_WRITE);
-      myFile2.close();
+      myFile = SD.open(fileName2, FILE_WRITE);
+      myFile.close();
     }
     else
     {
@@ -827,8 +827,8 @@ void setup()
     if (!SD.exists(fileName3)) {
       Serial.println(F("CalDay.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile2 = SD.open(fileName3, FILE_WRITE);
-      myFile2.close();
+      myFile = SD.open(fileName3, FILE_WRITE);
+      myFile.close();
     }
     else
     {
@@ -839,8 +839,8 @@ void setup()
     if (!SD.exists(fileName4)) {
       Serial.println(F("RunDays.txt doesn't exist. Creating file..."));
       // create a new file by opening a new file and immediately close it
-      myFile2 = SD.open(fileName4, FILE_WRITE);
-      myFile2.close();
+      myFile = SD.open(fileName4, FILE_WRITE);
+      myFile.close();
     }
     else
     {
