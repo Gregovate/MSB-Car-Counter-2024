@@ -164,8 +164,6 @@ unsigned int currentHr24; //Current Hour 24 Hour Format
 unsigned int currentMin;
 unsigned int currentSec;
 
-
-
 int lastCalDay = 0;
 int totalDailyCars = 0;
 int totalShowCars = 0;
@@ -228,6 +226,8 @@ const String fileName6 = "/CarLog.csv"; // CarLog.csv file to store all car coun
 
 char days[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 char months[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
@@ -1075,7 +1075,7 @@ void loop()
       display.print(", ");
       display.println(now.year(), DEC);
 
-      // Convert 24 hour clock to 12 hours
+      // Convert 24 hour clock to 12 hours for display purposes
       currentHr24 = now.hour();
       if (currentHr24 <12)
       {
@@ -1176,7 +1176,6 @@ Serial.println(secondBeamState);
 
   firstBeamState = digitalRead (firstBeamPin); //Read the current state of the FIRST IR beam receiver/Beam Tripped = 1
   secondBeamState = digitalRead (secondBeamPin); //Read the current state of the SECOND IR beam receiver/Beam Tripped =1
-  lastSecondBeamState = 0;
 
 //***** DETECTING CARS *****/
   /* Sense Vehicle & Count Cars Entering
@@ -1200,17 +1199,23 @@ Serial.println(secondBeamState);
       carDetectedMillis = firstBeamTripTime;    
     }
       // Used for debugging
+      /*
       DateTime now = rtc.now();
       char buf3[] = "YYYY-MM-DD hh:mm:ss"; //time of day when detector was tripped
       Serial.print("Detector Triggered = ");
       Serial.print(now.toString(buf3));
-      Serial.print(", beamSensorState = ");
+      Serial.print(", secondBeamSensorState = ");
       Serial.print(secondBeamState);
-//      Serial.print(", TimeToPass = ");
-//      Serial.print(millis() - carDetectedMillis);
+      Serial.print(", firstBeamTripTime = ");
+      Serial.print(firstBeamTripTime);
+      Serial.print(", secondBeamTripTime = ");
+      Serial.print(secondBeamTripTime);
+      Serial.print(millis() - carDetectedMillis);
       Serial.print(", Car Number Being Counted = ");         
       Serial.println (totalDailyCars+1) ;  //add 1 to total daily cars so car being detected is synced
+      */
       mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondBeamState).c_str());  // publishes beamSensor State goes HIGH
+
       while (carPresentFlag == 1) // Car in detection zone, Turn on RED arch
       {
         secondBeamState = digitalRead(secondBeamPin); 
@@ -1228,58 +1233,21 @@ Serial.println(secondBeamState);
       } // end of Car in detection zone (while loop)
   } /* End if when both Beam Sensors are HIGH */
   /***** END OF CAR DETECTION *****/
-
-  // Bounce check, if the beam is broken start the timer and turn on only the green arch
- // if (secondBeamState == HIGH && lastSecondBeamState == LOW && millis()- bothBeamHighMillis > 200) 
- // {
- //   digitalWrite(redArchPin, LOW); // Turn Red Arch Off
- //   digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
- //   bothBeamHighMillis = millis();    // if the beam is broken remember the time 
- //   /* LOOP PIN STATE FOR DEBUG */
- //   Serial.print("Bounce Check ... ");
- //   digitalWrite(redArchPin, LOW);
- //   digitalWrite(greenArchPin, HIGH);
- //   Serial.print("secondBeam State = ");
- //   Serial.print(secondBeamState);
- //   Serial.print(" lastSecondBeamState = ");
-  //  Serial.println(lastSecondBeamState);
- // }
-  
-
-  // If the SECOND beam has been broken for more than 0.50 second (1000= 1 Second) & the FIRST beam is broken
-//  if (secondBeamState == HIGH && ((millis() - bothBeamHighMillis) % 500) < 20 && millis() - bothBeamHighMillis > 500 && BeamTrippedCount == 0 && firstBeamState == HIGH) 
-//    {
-//      //***** CAR PASSED *****/
-//      /*Call the subroutine that increments the car counter and appends the log with an entry for the 
-//      vehicle when the IR beam is broken */
-// 
-//      /* CAR DETECTED DEBUG */
-//      Serial.print("Call to BEAM CAR DETECT ... ");
-//      digitalWrite(redArchPin, LOW);
-//      digitalWrite(greenArchPin, HIGH);
-//      Serial.print("firstBeam State = ");
-//      Serial.print(firstBeamState);
-//      Serial.print(" secondBeamState = ");
-//      Serial.println(secondBeamState);
-//      beamCarDetect();  
-//    }
-    
   
   /*--------- Reset the counter if the beam is not broken --------- */    
 if (secondBeamState == LOW)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
 {
-  digitalWrite(redArchPin, LOW);// Turn Red Arch Off
   if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
   {
     playPattern(); //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
   }
   else
   {
+    // ready to count next car
+    digitalWrite(redArchPin, LOW);// Turn Red Arch Off
     digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
   }
 }
-
-  
   //Added to kepp mqtt connection alive 10/11/24 gal
   if  ((currentMillis - start_MqttMillis) > (mqttKeepAlive*1000))
   {
