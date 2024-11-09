@@ -4,7 +4,8 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
-12.11.4.1 Exclude Christmas eve from Days Running, Changed name of Void to write daily totals, added config for showTime
+24.11.9.1 Bugfix when both timers on for less than 500 ms
+24.11.4.1 Exclude Christmas eve from Days Running, Changed name of Void to write daily totals, added config for showTime
 24.11.3.4 Changed output file names and time to pass millis in carlog
 24.11.3.3 dynamically created mqtt topic to publish totals and saving those totals to dayHour[24]
 24.11.3.2 replace myFile2 with myFile
@@ -1211,6 +1212,13 @@ Serial.println(secondBeamState);
     {
       carPresentFlag = 1;  // set Car Present Flag
       carDetectedMillis = firstBeamTripTime;    // if a car is in the detection zone, freeze time when first detected
+      mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondBeamState).c_str());  // publishes beamSensor State goes HIGH
+    }
+    else
+    {
+     firstBeamState = digitalRead (firstBeamPin);
+     secondBeamState = digitalRead (secondBeamPin);
+     carPresentFlag = 0;
     }
       // DEBUG CODE
       /*
@@ -1228,7 +1236,7 @@ Serial.println(secondBeamState);
       Serial.print(", Car Number Being Counted = ");         
       Serial.println (totalDailyCars+1) ;  //add 1 to total daily cars so car being detected is synced
       */
-      mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondBeamState).c_str());  // publishes beamSensor State goes HIGH
+      
 
       while (carPresentFlag == 1) // Car in detection zone, Turn on RED arch
       {
