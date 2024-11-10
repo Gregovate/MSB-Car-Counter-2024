@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.10.1 fixed endless loop when second beam tripped. Mis formatting issues
 24.11.9.1 Bugfix when both timers on for less than 500 ms
 24.11.4.1 Exclude Christmas eve from Days Running, Changed name of Void to write daily totals, added config for showTime
 24.11.3.4 Changed output file names and time to pass millis in carlog
@@ -76,7 +77,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.4.1" // Firmware Version
+#define FWVersion "24.11.10.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 500; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -761,6 +762,7 @@ void initSDCard()
   display.display();
 }
 
+/******  BEGIN SETUP ******/
 void setup()
 {
   Serial.begin(115200);
@@ -780,83 +782,90 @@ void setup()
   initSDCard();  // Initialize SD card and ready for Read/Write
 
   //***** Check AND/OR Prep Files for use ******/ 
-    if (!SD.exists(fileName1))
-    {
-      Serial.println(F("DailyTot.txt doesn't exist. Creating file..."));
-      // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName1, FILE_WRITE);
-      myFile.close();
-    }
-    else
-    {
-      Serial.print(fileName1);
-      Serial.println(F(" exists on SD Card."));
-    }
-    if (!SD.exists(fileName2))
-    {
-      Serial.println(F("ShowTot.txt doesn't exist. Creating file..."));
-      // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName2, FILE_WRITE);
-      myFile.close();
-    }
-    else
-    {
-      Serial.print(fileName2);
-      Serial.println(F(" exists on SD Card."));
-    }
-
-    if (!SD.exists(fileName3)) {
-      Serial.println(F("CalDay.txt doesn't exist. Creating file..."));
-      // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName3, FILE_WRITE);
-      myFile.close();
-    }
-    else
-    {
-      Serial.print(fileName3);
-      Serial.println(F(" exists on SD Card."));
-    }
-
-    if (!SD.exists(fileName4)) {
-      Serial.println(F("RunDays.txt doesn't exist. Creating file..."));
-      // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName4, FILE_WRITE);
-      myFile.close();
-    }
-    else
-    {
-      Serial.print(fileName4);
-      Serial.println(F(" exists on SD Card."));
-    }
-
-    if (!SD.exists(fileName5))
-    { 
-      Serial.println(F("DailySummary.csv doesn't exist. Creating File..."));
+  if (!SD.exists(fileName1))
+  {
+    Serial.print(fileName1);
+    Serial.println(F(" doesn't exist. Creating file..."));
     // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName5, FILE_WRITE);
-      myFile.close();     
-      // recheck if file is created & write Header
-      myFile = SD.open(fileName5, FILE_APPEND);
-      myFile.print("Date, Temp,");
-      for (int i = 0; i<=24; i++)
-      {
-        myFile.print("Hour ");
-        myFile.print(i);
-        myFile.print(", ");
-      } 
-      myFile.println(", Total");
-      myFile.close();
-      Serial.println(F("Header Written to file DailySummary.csv"));
-      myFile.close();
-    }
-    else
+    myFile = SD.open(fileName1, FILE_WRITE);
+    myFile.close();
+  }
+  else
+  {
+    Serial.print(fileName1);
+    Serial.println(F(" exists on SD Card."));
+  }
+  if (!SD.exists(fileName2))
+  {
+    Serial.print(fileName2);
+    Serial.println(F(" doesn't exist. Creating file..."));
+    // create a new file by opening a new file and immediately close it
+    myFile = SD.open(fileName2, FILE_WRITE);
+    myFile.close();
+  }
+  else
+  {
+    Serial.print(fileName2);
+    Serial.println(F(" exists on SD Card."));
+  }
+
+  if (!SD.exists(fileName3)) {
+    Serial.print(fileName3);
+    Serial.println(F(" doesn't exist. Creating file..."));
+    // create a new file by opening a new file and immediately close it
+    myFile = SD.open(fileName3, FILE_WRITE);
+    myFile.close();
+  }
+  else
+  {
+    Serial.print(fileName3);
+    Serial.println(F(" exists on SD Card."));
+  }
+
+  if (!SD.exists(fileName4)) {
+    Serial.print(fileName4);
+    Serial.println(F(" doesn't exist. Creating file..."));
+    // create a new file by opening a new file and immediately close it
+    myFile = SD.open(fileName4, FILE_WRITE);
+    myFile.close();
+  }
+  else
+  {
+    Serial.print(fileName4);
+    Serial.println(F(" exists on SD Card."));
+  }
+
+  if (!SD.exists(fileName5))
+  { 
+    Serial.print(fileName5);
+    Serial.println(F(" doesn't exist. Creating file..."));
+    // create a new file by opening a new file and immediately close it
+    myFile = SD.open(fileName5, FILE_WRITE);
+    myFile.close();     
+    // recheck if file is created & write Header
+    myFile = SD.open(fileName5, FILE_APPEND);
+    myFile.print("Date, Temp,");
+    for (int i = 0; i<=24; i++)
     {
-      Serial.print(fileName5);
-      Serial.println(F(" exists on SD Card."));
-    }
+      myFile.print("Hour ");
+      myFile.print(i);
+      myFile.print(", ");
+    } 
+    myFile.println(", Total");
+    myFile.close();
+    Serial.print(F("Header Written to "));
+    Serial.println(fileName5);
+  }
+  else
+  {
+    Serial.print(fileName5);
+    Serial.println(F(" exists on SD Card."));
+  }
   
-  if (!SD.exists(fileName6)) {
-    Serial.println(F("CarLog.csv doesn't exist. Creating file..."));
+  if (!SD.exists(fileName6))
+  {
+    Serial.print(fileName6);
+    Serial.println(F(" doesn't exist. Creating file..."));
     // create a new file by opening a new file and immediately close it
     myFile = SD.open(fileName6, FILE_WRITE);
     myFile.close();
@@ -864,32 +873,34 @@ void setup()
     myFile = SD.open(fileName6, FILE_APPEND);
     myFile.println("Date Time,TimeToPass,Car,TotalDailyCars,Temp");
     myFile.close();
-   Serial.println(F("Header Written to CarLog.csv"));
-    }
-    else
-    {
-      Serial.print(fileName6);
-      Serial.println(F(" exists on SD Card."));
-    }
+    Serial.print(F("Header Written to "));
+    Serial.println(fileName6);
+  }
+  else
+  {
+    Serial.print(fileName6);
+    Serial.println(F(" exists on SD Card."));
+  }
 
-    if (!SD.exists(fileName7))
-    { 
-      Serial.println(F("ShowSummary.csv doesn't exist. Creating File..."));
+  if (!SD.exists(fileName7))
+  { 
+    Serial.print(fileName7);
+    Serial.println(F(" doesn't exist. Creating file..."));
     // create a new file by opening a new file and immediately close it
-      myFile = SD.open(fileName5, FILE_WRITE);
-      myFile.close();     
-      // recheck if file is created & write Header
-      myFile = SD.open(fileName5, FILE_APPEND);
-      myFile.println("Date, Temp, Hour 18, Hour 19, Hour 20, Hour 21, Total");
-      myFile.close();
-      Serial.println(F("Header Written to file ShowSummary.csv"));
-      myFile.close();
-    }
-    else
-    {
-      Serial.print(fileName7);
-      Serial.println(F(" exists on SD Card."));
-    }
+    myFile = SD.open(fileName5, FILE_WRITE);
+    myFile.close();     
+    // recheck if file is created & write Header
+    myFile = SD.open(fileName5, FILE_APPEND);
+    myFile.println("Date, Temp, Hour 18, Hour 19, Hour 20, Hour 21, Total");
+    myFile.close();
+    Serial.print(F("Header Written to "));
+    Serial.println(fileName7);
+  }
+  else
+  {
+    Serial.print(fileName7);
+    Serial.println(F(" exists on SD Card."));
+  }
 
   // List of approved WiFi AP's
   WiFi.mode(WIFI_STA);  
@@ -995,7 +1006,7 @@ void setup()
   }
   delay(3000);
   start_MqttMillis = millis();
-} //***** END SETUP ******/
+} /***** END SETUP ******/
 
 void loop()
 {
@@ -1012,187 +1023,190 @@ void loop()
     ignoreCars = totalDailyCars; // records number of cars counted before show starts 11/3/24
     updateDailyTotal();
   }
-   //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
-   if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))  {
-       WriteEOSTotals();
-   }
+    //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
+    if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))  {
+        WriteEOSTotals();
+  }
 
-   /* Reset Counts at Midnight when controller running 24/7 */
-   if ((now.hour() == 0) && (now.minute() == 0) && (now.second() == 1))  {
-      currentDay = now.day(); // Write new calendar day 1 second past midnight
-      updateCalDay();
-      totalDailyCars = 0;  // reset count to 0 at 1 seond past midnight
-      ignoreCars = 0; // reset cars entering before show starts
-      updateDailyTotal();
-      if (now.month() != 12 && now.day() != 24) // do not increment days running when closed on Christmas Eve
-      {
-        daysRunning++; 
-        updateDaysRunning();
-      }   }
-   /* OR Reset/Update Counts when Day Changes on reboot getting values from saved data */
-   if (now.day() != lastCalDay)  {
-      getCalDay();
-      currentDay=now.day();
-      updateCalDay();
-      totalDailyCars =0;
-      ignoreCars = 0;
-      updateDailyTotal();
-      if (now.month() != 12 && now.day() != 24) // do not include days running when closed on Christmas Eve
-      {
-        daysRunning++; 
-        updateDaysRunning();
-      }
-   }
+  /* Reset Counts at Midnight when controller running 24/7 */
+  if ((now.hour() == 0) && (now.minute() == 0) && (now.second() == 1))
+  {
+    currentDay = now.day(); // Write new calendar day 1 second past midnight
+    updateCalDay();
+    totalDailyCars = 0;  // reset count to 0 at 1 seond past midnight
+    ignoreCars = 0; // reset cars entering before show starts
+    updateDailyTotal();
+    if (now.month() != 12 && now.day() != 24) // do not increment days running when closed on Christmas Eve
+    {
+      daysRunning++; 
+      updateDaysRunning();
+    }  
+  }
+ 
+  /* OR Reset/Update Counts when Day Changes on reboot getting values from saved data */
+  if (now.day() != lastCalDay)
+  {
+    getCalDay();
+    currentDay=now.day();
+    updateCalDay();
+    totalDailyCars =0;
+    ignoreCars = 0;
+    updateDailyTotal();
+    if (now.month() != 12 && now.day() != 24) // do not include days running when closed on Christmas Eve
+    {
+      daysRunning++; 
+      updateDaysRunning();
+    }
+  }
   
-   // non-blocking WiFi and MQTT Connectivity Checks
-   if (wifiMulti.run() == WL_CONNECTED)
-   {
-      // Check for MQTT connection only if wifi is connected
-      if (!mqtt_client.connected())
-      {
-        Serial.print("hour = ");
-        Serial.println(currentHr12);
-        Serial.println("Attempting MQTT Connection");
-        MQTTreconnect();
-        start_MqttMillis = currentMillis;  
-      } 
-      else
-      {
-         //keep MQTT client connected when WiFi is connected
-         mqtt_client.loop();
-      }
+  // non-blocking WiFi and MQTT Connectivity Checks
+  if (wifiMulti.run() == WL_CONNECTED)
+  {
+    // Check for MQTT connection only if wifi is connected
+    if (!mqtt_client.connected())
+    {
+      Serial.print("hour = ");
+      Serial.println(currentHr12);
+      Serial.println("Attempting MQTT Connection");
+      MQTTreconnect();
+      start_MqttMillis = currentMillis;  
     } 
     else
     {
-       // Reconnect WiFi if lost, non blocking
-       if ((currentMillis - start_WiFiMillis) > wifi_connectioncheckMillis)
-       {
-          setup_wifi();
-          start_WiFiMillis = currentMillis;
-       }
+        //keep MQTT client connected when WiFi is connected
+        mqtt_client.loop();
     }
+  } 
+  else
+  {
+    // Reconnect WiFi if lost, non blocking
+    if ((currentMillis - start_WiFiMillis) > wifi_connectioncheckMillis)
+    {
+      setup_wifi();
+      start_WiFiMillis = currentMillis;
+    }
+  }
      
-      tempF=((rtc.getTemperature()*9/5)+32);
+  tempF=((rtc.getTemperature()*9/5)+32);
 
-      /****** Print Day and Date 1st line  ******/
-      display.clearDisplay();
-      display.setTextSize(1);
-      display.setCursor(0, line1);
-      //  display Day of Week
-      display.print(days[now.dayOfTheWeek()]);
+  /****** Print Day and Date 1st line  ******/
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, line1);
+  //  display Day of Week
+  display.print(days[now.dayOfTheWeek()]);
 
-      //  Display Date
-      display.print(" ");
-      //display.print(&timeinfo, "%b");         
-      display.print(months[now.month(), (DEC)]);
-      display.print(" ");
-      display.print(now.day(), DEC);
-      display.print(", ");
-      display.println(now.year(), DEC);
+  //  Display Date
+  display.print(" ");
+  //display.print(&timeinfo, "%b");         
+  display.print(months[now.month(), (DEC)]);
+  display.print(" ");
+  display.print(now.day(), DEC);
+  display.print(", ");
+  display.println(now.year(), DEC);
 
-      // Convert 24 hour clock to 12 hours for display purposes
-      currentHr24 = now.hour();
-      if (currentHr24 <12)
-      {
-          ampm ="AM";
-      }
-      else
-      {
-          ampm ="PM";
-      }
-      if (currentHr24 > 12 )
-      {
-          currentHr12 = now.hour() - 12;
-      }
-      else
-      {
-          currentHr12 = now.hour();
-      }
+  // Convert 24 hour clock to 12 hours for display purposes
+  currentHr24 = now.hour();
+  if (currentHr24 <12)
+  {
+      ampm ="AM";
+  }
+  else
+  {
+      ampm ="PM";
+  }
+  if (currentHr24 > 12 )
+  {
+      currentHr12 = now.hour() - 12;
+  }
+  else
+  {
+      currentHr12 = now.hour();
+  }
 
-      /***** Display Time  and Temp Line 2 add leading 0 to Hours & display Hours *****/
+  /***** Display Time  and Temp Line 2 add leading 0 to Hours & display Hours *****/
 
-      display.setTextSize(1);
-      if (currentHr12 < 10)
-      {
-        display.setCursor(0, line2);
-        display.print("0");
-        display.print(currentHr12, DEC);
-      }
-      else
-      {
-        display.setCursor(0, line2);
-        display.print(currentHr12, DEC);
-      }
-      display.setCursor(14, line2);
-      display.print(":");
-      if (now.minute() < 10)
-      {
-        display.setCursor(20, line2);
-        display.print("0");
-        display.print(now.minute(), DEC);
-      }
-      else
-      {
-        display.setCursor(21, line2);
-        display.print(now.minute(), DEC);
-      }
-      display.setCursor(34, line2);
-      display.print(":");
-      if (now.second() < 10)
-      {
-        display.setCursor(41, line2);
-        display.print("0");
-        display.print(now.second(), DEC);
-      }
-      else
-      {
-        display.setCursor(41, line2);
-        display.print(now.second(), DEC);   
-      }
-      // Display AM-PM
-      display.setCursor(56, line2);
-      display.print(ampm); 
+  display.setTextSize(1);
+  if (currentHr12 < 10)
+  {
+    display.setCursor(0, line2);
+    display.print("0");
+    display.print(currentHr12, DEC);
+  }
+  else
+  {
+    display.setCursor(0, line2);
+    display.print(currentHr12, DEC);
+  }
+  display.setCursor(14, line2);
+  display.print(":");
+  if (now.minute() < 10)
+  {
+    display.setCursor(20, line2);
+    display.print("0");
+    display.print(now.minute(), DEC);
+  }
+  else
+  {
+    display.setCursor(21, line2);
+    display.print(now.minute(), DEC);
+  }
+  display.setCursor(34, line2);
+  display.print(":");
+  if (now.second() < 10)
+  {
+    display.setCursor(41, line2);
+    display.print("0");
+    display.print(now.second(), DEC);
+  }
+  else
+  {
+    display.setCursor(41, line2);
+    display.print(now.second(), DEC);   
+  }
+  // Display AM-PM
+  display.setCursor(56, line2);
+  display.print(ampm); 
 
-      // Display Temp
-      display.setCursor(73, line2);
-      display.print("Temp: " );
-      display.println(tempF, 0);
+  // Display Temp
+  display.setCursor(73, line2);
+  display.print("Temp: " );
+  display.println(tempF, 0);
 
-      // Display Day Running & Grand Total
-      display.setCursor(0, line3);
-      display.print("Day " );
-      display.print(daysRunning, 0);
-      display.print(" Total: ");
-      display.println(totalShowCars);
+  // Display Day Running & Grand Total
+  display.setCursor(0, line3);
+  display.print("Day " );
+  display.print(daysRunning, 0);
+  display.print(" Total: ");
+  display.println(totalShowCars);
 
-      // Display Car Count
-      display.setTextSize(2);
-      display.setCursor(0, line5);
-      display.print("Cars: ");
-      display.println(totalDailyCars);
+  // Display Car Count
+  display.setTextSize(2);
+  display.setCursor(0, line5);
+  display.print("Cars: ");
+  display.println(totalDailyCars);
 
-      display.display();
+  display.display();
 
-      //Save Hourly Totals
-      if (now.minute()==0 && now.second()==0)
-      {
-        HourlyTotals();
-      }
+  //Save Hourly Totals
+  if (now.minute()==0 && now.second()==0)
+  {
+    HourlyTotals();
+  }
 
-/* LOOP PIN STATE FOR DEBUG 
-digitalWrite(redArchPin, HIGH);
-digitalWrite(greenArchPin, HIGH);
-Serial.print("firstBeam State = ");
-Serial.print(firstBeamState);
-Serial.print(" secondBeamState = ");
-Serial.println(secondBeamState);
-*/
-
+  /* LOOP PIN STATE FOR DEBUG 
+  digitalWrite(redArchPin, HIGH);
+  digitalWrite(greenArchPin, HIGH);
+  Serial.print("firstBeam State = ");
+  Serial.print(firstBeamState);
+  Serial.print(" secondBeamState = ");
+  Serial.println(secondBeamState);
+  */
 
   firstBeamState = digitalRead (firstBeamPin); //Read the current state of the FIRST IR beam receiver/Beam Tripped = 1
   secondBeamState = digitalRead (secondBeamPin); //Read the current state of the SECOND IR beam receiver/Beam Tripped =1
 
-//***** DETECTING CARS *****/
+  //***** DETECTING CARS *****/
   /* Sense Vehicle & Count Cars Entering
   Both sensors HIGH when vehicle sensed, Normally both normally open (LOW)
   Both Sensors need to be active to start sensing vehicle for detect millis
@@ -1220,55 +1234,54 @@ Serial.println(secondBeamState);
      secondBeamState = digitalRead (secondBeamPin);
      carPresentFlag = 0;
     }
-      // DEBUG CODE
-      /*
-      DateTime now = rtc.now();
-      char buf3[] = "YYYY-MM-DD hh:mm:ss"; //time of day when detector was tripped
-      Serial.print("Detector Triggered = ");
-      Serial.print(now.toString(buf3));
-      Serial.print(", secondBeamSensorState = ");
-      Serial.print(secondBeamState);
-      Serial.print(", firstBeamTripTime = ");
-      Serial.print(firstBeamTripTime);
-      Serial.print(", secondBeamTripTime = ");
-      Serial.print(secondBeamTripTime);
-      Serial.print(millis() - carDetectedMillis);
-      Serial.print(", Car Number Being Counted = ");         
-      Serial.println (totalDailyCars+1) ;  //add 1 to total daily cars so car being detected is synced
-      */
-      
+  
+    /* DEBUG HELPERS
+    DateTime now = rtc.now();
+    char buf3[] = "YYYY-MM-DD hh:mm:ss"; //time of day when detector was tripped
+    Serial.print("Detector Triggered = ");
+    Serial.print(now.toString(buf3));
+    Serial.print(", secondBeamSensorState = ");
+    Serial.print(secondBeamState);
+    Serial.print(", firstBeamTripTime = ");
+    Serial.print(firstBeamTripTime);
+    Serial.print(", secondBeamTripTime = ");
+    Serial.print(secondBeamTripTime);
+    Serial.print(millis() - carDetectedMillis);
+    Serial.print(", Car Number Being Counted = ");         
+    Serial.println (totalDailyCars+1) ;  //add 1 to total daily cars so car being detected is synced
+    */
 
-      while (carPresentFlag == 1) // Car in detection zone, Turn on RED arch
+    while (carPresentFlag == 1) // Car in detection zone, Turn on RED arch
+    {
+      secondBeamState = digitalRead(secondBeamPin); 
+      digitalWrite(redArchPin, HIGH); // Turn on Red Arch
+      digitalWrite(greenArchPin, LOW); // Turn Off Green Arch
+      if (secondBeamState == 0)  /* when second sensor goes low, Car has passed */
       {
-        secondBeamState = digitalRead(secondBeamPin); 
-        digitalWrite(redArchPin, HIGH); // Turn on Red Arch
-        digitalWrite(greenArchPin, LOW); // Turn Off Green Arch
-        if (secondBeamState == 0)  /* when second sensor goes low, Car has passed */
-        {
-          carPresentFlag = 0; // Car has exited detection zone. Turn On Green Arch
-          TimeToPassMillis = millis() - carDetectedMillis; // Record time to Pass
-          digitalWrite(redArchPin, LOW); // Turn off Red Arch
-          digitalWrite(greenArchPin, HIGH); // Turn On Green Arch
-          beamCarDetect(); //count car and update files
-        }
-      } // end of Car in detection zone (while loop)
+        carPresentFlag = 0; // Car has exited detection zone. Turn On Green Arch
+        TimeToPassMillis = millis() - carDetectedMillis; // Record time to Pass
+        digitalWrite(redArchPin, LOW); // Turn off Red Arch
+        digitalWrite(greenArchPin, HIGH); // Turn On Green Arch
+        beamCarDetect(); //count car and update files
+      } // end of car passed check
+    } // end of Car in detection zone (while loop)
   } /* End if when both Beam Sensors are HIGH */
   /***** END OF CAR DETECTION *****/
   
   /*--------- Reset the counter if the beam is not broken --------- */    
-if (secondBeamState == LOW)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
-{
-  if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
+  if (secondBeamState == LOW)  //Check to see if the beam is not broken, this prevents the green arch from never turning off)
   {
-    playPattern(); //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
+    if(millis() - noCarTimer >= 30000) // If the beam hasn't been broken by a vehicle for over 30 seconds then start a pattern on the arches.
+    {
+      playPattern(); //***** PLAY PATTERN WHEN NO CARS PRESENT *****/
+    }
+    else
+    {
+      // reset arches and ready to count next car
+      digitalWrite(redArchPin, LOW);// Turn Red Arch Off
+      digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
+    }
   }
-  else
-  {
-    // reset arches and ready to count next car
-    digitalWrite(redArchPin, LOW);// Turn Red Arch Off
-    digitalWrite(greenArchPin, HIGH); // Turn Green Arch On
-  }
-}
   //Added to kepp mqtt connection alive 10/11/24 gal
   if  ((currentMillis - start_MqttMillis) > (mqttKeepAlive*1000))
   {
@@ -1284,8 +1297,8 @@ if (secondBeamState == LOW)  //Check to see if the beam is not broken, this prev
       Serial.println(now.hour());
       */
   }
-lastFirstBeamState = firstBeamState;
-lastSecondBeamState = secondBeamState;
+  lastFirstBeamState = firstBeamState;
+  lastSecondBeamState = secondBeamState;
 
 
 } /***** Repeat Loop *****/
