@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.13.1 Added mqtt_client.loop() to while loop
 24.11.10.1 fixed endless loop when second beam tripped. Mis formatting issues
 24.11.9.1 Bugfix when both timers on for less than 500 ms
 24.11.4.1 Exclude Christmas eve from Days Running, Changed name of Void to write daily totals, added config for showTime
@@ -77,7 +78,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.10.1" // Firmware Version
+#define FWVersion "24.11.13.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 500; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -152,10 +153,10 @@ char topic[60];
 #define MQTT_PUB_TOPIC1  "msb/traffic/CarCounter/temp"
 #define MQTT_PUB_TOPIC2  "msb/traffic/CarCounter/time"
 #define MQTT_PUB_TOPIC3  "msb/traffic/CarCounter/count"
-#define MQTT_PUB_TOPIC4  "msb/traffic/CarCounter/hour1"
-#define MQTT_PUB_TOPIC5  "msb/traffic/CarCounter/hour2"
-#define MQTT_PUB_TOPIC6  "msb/traffic/CarCounter/hour3"
-#define MQTT_PUB_TOPIC7  "msb/traffic/CarCounter/hour4"
+#define MQTT_PUB_TOPIC4  "msb/traffic/CarCounter/hour18"
+#define MQTT_PUB_TOPIC5  "msb/traffic/CarCounter/hour19"
+#define MQTT_PUB_TOPIC6  "msb/traffic/CarCounter/hour20"
+#define MQTT_PUB_TOPIC7  "msb/traffic/CarCounter/hour21"
 #define MQTT_PUB_TOPIC8  "msb/traffic/CarCounter/DayTot"
 #define MQTT_PUB_TOPIC9  "msb/traffic/CarCounter/ShoTot"
 #define MQTT_PUB_TOPIC10 "msb/traffic/CarCounter/debug/beamSensorState"
@@ -1022,6 +1023,7 @@ void loop()
   if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))  {
     ignoreCars = totalDailyCars; // records number of cars counted before show starts 11/3/24
     updateDailyTotal();
+    totalDailyCars = 0; //Reset count to 0 before show starts
   }
     //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
     if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))  {
@@ -1264,6 +1266,7 @@ void loop()
         digitalWrite(greenArchPin, HIGH); // Turn On Green Arch
         beamCarDetect(); //count car and update files
       } // end of car passed check
+      mqtt_client.loop(); // Keep MQTT Active when car takes long time to pass
     } // end of Car in detection zone (while loop)
   } /* End if when both Beam Sensors are HIGH */
   /***** END OF CAR DETECTION *****/
