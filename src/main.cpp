@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.15.1 Updated MQTT Topics, File structures, aligned with Gate Counter
 24.11.13.1 Added mqtt_client.loop() to while loop
 24.11.10.1 fixed endless loop when second beam tripped. Mis formatting issues
 24.11.9.1 Bugfix when both timers on for less than 500 ms
@@ -78,7 +79,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.13.1" // Firmware Version
+#define FWVersion "24.11.15.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 500; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -148,18 +149,19 @@ int wifi_connect_attempts = 5;
 int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client connected
 // Publishing Topics 
 char topic[60];
+char topicBase[60];
 #define topic_base_path  "msb/traffic/CarCounter"
 #define MQTT_PUB_TOPIC0  "msb/traffic/CarCounter/hello"
 #define MQTT_PUB_TOPIC1  "msb/traffic/CarCounter/temp"
 #define MQTT_PUB_TOPIC2  "msb/traffic/CarCounter/time"
 #define MQTT_PUB_TOPIC3  "msb/traffic/CarCounter/count"
-#define MQTT_PUB_TOPIC4  "msb/traffic/CarCounter/hour18"
-#define MQTT_PUB_TOPIC5  "msb/traffic/CarCounter/hour19"
-#define MQTT_PUB_TOPIC6  "msb/traffic/CarCounter/hour20"
-#define MQTT_PUB_TOPIC7  "msb/traffic/CarCounter/hour21"
-#define MQTT_PUB_TOPIC8  "msb/traffic/CarCounter/DayTot"
-#define MQTT_PUB_TOPIC9  "msb/traffic/CarCounter/ShoTot"
-#define MQTT_PUB_TOPIC10 "msb/traffic/CarCounter/debug/beamSensorState"
+#define MQTT_PUB_TOPIC4  "msb/traffic/CarCounter/Cars_18"
+#define MQTT_PUB_TOPIC5  "msb/traffic/CarCounter/Cars_19"
+#define MQTT_PUB_TOPIC6  "msb/traffic/CarCounter/Cars_20"
+#define MQTT_PUB_TOPIC7  "msb/traffic/CarCounter/Cars_21"
+#define MQTT_PUB_TOPIC8  "msb/traffic/CarCounter/EnterTotal"
+#define MQTT_PUB_TOPIC9  "msb/traffic/CarCounter/ShowTotal"
+#define MQTT_PUB_TOPIC10 "msb/traffic/CarCounter/secondBeamSensorState"
 
 //const uint32_t connectTimeoutMs = 10000;
 uint16_t connectTimeOutPerAP=5000;
@@ -177,14 +179,13 @@ unsigned int currentMin;
 unsigned int currentSec;
 unsigned int currentTimeMinute; // for converting clock time hh:mm to clock time mm
 
-
-
 int lastCalDay = 0; // Pervious day's calendar day used to reset running days
 int totalDailyCars = 0; // total cars counted per day 24/7 Needed for debugging
 int totalShowCars = 0; // total cars counted for durning show hours open (4:55 pm to 9:10 pm)
 int totalSeasonCars = 0; // total cars counted for season (Black Friday thru New Year's Eve)
 int ignoreCars = 0; // cars that were counted before the show starts (used to start traffic counts at 0 at 4:55 pm)
 int connectionAttempts = 5; // number of WiFi or MQTT Connection Attempts
+int carsBeforeShow = 0; // Total Cars before show starts
 int carsHr18 =0; // total cars 1st hour ending 18:00 (4:55 pm to 6:00 pm)
 int carsHr19=0; // total cars 2nd hour ending 19:00 (6:00 pm to 7:00 pm)
 int carsHr20=0; // total cars 3rd hour ending 20:00 (7:00 pm to 8:00 pm)
@@ -203,13 +204,8 @@ unsigned long start_WiFiMillis; // for keep Alive Timer
 
 int firstBeamState = 0;  // Holds the current state of the FIRST IR receiver/Beam
 int secondBeamState = 0;  // Holds the current state of the SECOND IR receiver/Beam
-
 int lastFirstBeamState = 0; // Holds the previous state of the FIRST IR receiver/Beam
 int lastSecondBeamState =0; // Holds the previous state of the SECOND IR receiver/Beam
-
-
-//int BeamState;  // was used for interface between ESP32 and UNO 2023
-//int lastBeamState = 0; // was used for interface between ESP32 and UNO 2023
 
 unsigned long bothBeamHighMillis = 0;
 int BeamTrippedCount = 0;
@@ -223,23 +219,21 @@ int alternateColorMode = 0;
 int patternMode = 0;
 unsigned long patternModeMillis = 0;
 
-
 File myFile; //used to write files to SD Card
 
 // **********FILE NAMES FOR SD CARD *********
-const String fileName1 = "/DailyTotal.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
+const String fileName1 = "/EnterTotal.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
 const String fileName2 = "/ShowTotal.txt";  // ShowTot.txt file to store season total counts
 const String fileName3 = "/CalDay.txt"; // CalDay.txt file to store current day number
 const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
-const String fileName5 = "/DailySummary.csv"; // DailySummary.csv Stores Daily Totals by Hour and total
-const String fileName6 = "/CarLog.csv"; // CarLog.csv file to store all car counts for season (was MASTER.CSV)
-const String fileName7 = "/ShowSummary.csv"; // Shows summary of counts during show (4:55pm to 9:10pm)
+const String fileName5 = "/EnterSummary.csv"; // DailySummary.csv Stores Daily Totals by Hour and total
+const String fileName6 = "/EnterLog.csv"; // CarLog.csv file to store all car counts for season (was MASTER.CSV)
+//const String fileName7 = "/ShowSummary.csv"; // Shows summary of counts during show (4:55pm to 9:10pm)
 
 char days[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 char months[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 int dayHour[24]; // Array for Daily total cars per hour
 int showHour[5]; // Array for Show total cars per hour starting at 4:55 pm and ending at 9:10 pm
-
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
@@ -302,7 +296,6 @@ void setup_wifi()
   delay(5000);
 }  // END WiFi Setup
 
-
 void callback(char* topic, byte* payload, unsigned int length)
 {
   Serial.print("Message arrived [");
@@ -314,7 +307,6 @@ void callback(char* topic, byte* payload, unsigned int length)
   }
    Serial.println();
 }
-
 
 void MQTTreconnect()
 {
@@ -353,9 +345,8 @@ void MQTTreconnect()
   }  //END while
 } // END MQTT Reconnect
 
-
-
-void SetLocalTime() {
+void SetLocalTime()
+{
   struct tm timeinfo;
   if(!getLocalTime(&timeinfo)){
     Serial.println("Failed to obtain time. Using Compiled Date");
@@ -407,32 +398,32 @@ void getDailyTotal()   // open DAILYTOT.txt to get initial dailyTotal value
      Serial.print(" Daily cars from file = ");
      Serial.println(totalDailyCars);
     }
-  myFile.close();
+    myFile.close();
   }
   else
   {
-      Serial.print("SD Card: Cannot open the file: ");
-      Serial.println(fileName1);
+    Serial.print("SD Card: Cannot open the file: ");
+    Serial.println(fileName1);
   }
 }
 
 void getShowTotal()     // open ShowTot.txt to get total Cars for season
 {
-    myFile = SD.open(fileName2,FILE_READ);
-    if (myFile)
+  myFile = SD.open(fileName2,FILE_READ);
+  if (myFile)
+  {
+    while (myFile.available())
     {
-      while (myFile.available())
-      {
-        totalShowCars = myFile.parseInt(); // read total
-        Serial.print(" Total cars from file = ");
-        Serial.println(totalShowCars);
-      }
-      myFile.close();
+      totalShowCars = myFile.parseInt(); // read total
+      Serial.print(" Total cars from file = ");
+      Serial.println(totalShowCars);
+    }
+    myFile.close();
   }
   else
   {
-      Serial.print("SD Card: Cannot open the file: ");
-      Serial.println(fileName2);
+    Serial.print("SD Card: Cannot open the file: ");
+    Serial.println(fileName2);
   }
 }
 
@@ -445,45 +436,46 @@ void getCalDay()  // get the last calendar day used for reset daily counts)
      lastCalDay = myFile.parseInt(); // read day Number
      Serial.print(" Calendar Day = ");
      Serial.println(lastCalDay);
-   }
+     }
    myFile.close();
    }
    else
    {
-      Serial.print("SD Card: Cannot open the file: ");
-     Serial.println(fileName3);
+    Serial.print("SD Card: Cannot open the file: ");
+    Serial.println(fileName3);
    }
 }
 
 void getDaysRunning()   // Days the show has been running)
 {
-   myFile = SD.open(fileName4,FILE_READ);
-   if (myFile)
-   {
-      while (myFile.available()) {
-      daysRunning = myFile.parseInt(); // read day Number
-      Serial.print(" Days Running = ");
-      Serial.println(daysRunning);
+  myFile = SD.open(fileName4,FILE_READ);
+  if (myFile)
+  {
+    while (myFile.available()) {
+    daysRunning = myFile.parseInt(); // read day Number
+    Serial.print(" Days Running = ");
+    Serial.println(daysRunning);
     }
     myFile.close();
   }
   else
   {
-      Serial.print("SD Card: Cannot open the file: ");
-      Serial.println(fileName4);
+    Serial.print("SD Card: Cannot open the file: ");
+    Serial.println(fileName4);
   }
 } 
-
- 
 
 /***** UPDATE TOTALS TO SD CARD *****/
 void HourlyTotals()
 {
+  char hourPad[6];
+  sprintf(hourPad,"%02d", currentHr24);
   dayHour[currentHr24]= totalDailyCars; //write daily total cars to array each hour
-  strcpy (topic, topic_base_path);
-  strcat (topic, "/daily/hour/");
-  strcat (topic, String(currentHr24).c_str());
-  mqtt_client.publish(topic, String(totalDailyCars).c_str()); // publish counts
+  strcpy (topicBase, topic_base_path);
+  strcat (topicBase, "/daily/hour/");
+  //strcat (topicBase, String(currentHr24).c_str());
+  strcat (topicBase, hourPad);
+  mqtt_client.publish(topicBase, String(totalDailyCars).c_str()); // publish counts
 }
 
 void KeepMqttAlive()
@@ -504,10 +496,10 @@ void updateDailyTotal()
   }
   else
   {
-     Serial.print(F("SD Card: Cannot open the file:  DailyTot.txt"));
+    Serial.print(F("SD Card: Cannot open the file: "));
+    Serial.println(fileName1);
   }
 }
-
 
 void updateShowTotal()  /* -----Increment the grand total cars file for season  CHECK ----- */
 {  
@@ -520,7 +512,8 @@ void updateShowTotal()  /* -----Increment the grand total cars file for season  
   }
   else
   {
-    Serial.print(F("SD Card: Cannot open the file ShowTot.TXT"));
+    Serial.print(F("SD Card: Cannot open the file: "));
+    Serial.println(fileName2);
   }
 }
 
@@ -534,7 +527,8 @@ void updateCalDay()  /* -----write calendar day 1 seond past midnight to file --
    }
    else
    {
-      Serial.print(F("SD Card: Cannot open the file CalDay.TXT"));
+    Serial.print(F("SD Card: Cannot open the file: "));
+    Serial.println(fileName3);
    }
 }
 
@@ -548,20 +542,20 @@ void updateDaysRunning()
   }
   else
   {
-    Serial.print(F("SD Card: Cannot open the file RunDays.txt"));
+    Serial.print(F("SD Card: Cannot open the file: "));
+    Serial.println(fileName4);
   }
 }
 
-void WriteEOSTotals() // Write totals daily at end of show (EOS Totals)
+void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
 {
   DateTime now = rtc.now();
+  tempF = ((rtc.getTemperature()*9/5)+32);
   char buf2[] = "YYYY-MM-DD hh:mm:ss";
   Serial.print(now.toString(buf2));
   Serial.print(", Temp = ");
   Serial.print(tempF);
   Serial.print(", ");
-//  totalDailyCars ++;     
-//  totalDailyCars ;     
   Serial.print(totalDailyCars) ;  
   // open file for writing Car Data
   myFile = SD.open(fileName5, FILE_APPEND);
@@ -570,6 +564,8 @@ void WriteEOSTotals() // Write totals daily at end of show (EOS Totals)
     myFile.print(now.toString(buf2));
     myFile.print(", ");
     myFile.print (tempF); 
+    myFile.print(", "); 
+    myFile.print (carsBeforeShow) ; 
     myFile.print(", "); 
     myFile.print (carsHr18) ; 
     myFile.print(", ");
@@ -595,7 +591,8 @@ void WriteEOSTotals() // Write totals daily at end of show (EOS Totals)
   }
   else
   {
-    Serial.print(F("SD Card: Issue encountered while attempting to open the file CarCount.csv"));
+    Serial.print(F("SD Card: Cannot open the file: "));
+    Serial.println(fileName5);
   }
 }
 /***** END OF FILE UPDATES *****/
@@ -666,57 +663,55 @@ void playPattern() // Flash an alternating pattern on the arches (called if a ca
 void beamCarDetect() // If a car is counted, then increment the counter by 1 and add an entry to the carlog.csv log file on the SD card
 {
 
-//    digitalWrite (countSuccessPin, HIGH);
-    BeamTrippedCount++;                // add 1 to the counter, this prevents the code from being run more than once after tripped for 3 seconds.
-    Serial.print("Cars Today:  ");
-    Serial.println(totalDailyCars);
-    digitalWrite(redArchPin, HIGH);
-    digitalWrite(greenArchPin, LOW);
-    noCarTimer = millis();
+  //    digitalWrite (countSuccessPin, HIGH);
+  BeamTrippedCount++;                // add 1 to the counter, this prevents the code from being run more than once after tripped for 3 seconds.
+  Serial.print("Cars Today:  ");
+  Serial.println(totalDailyCars);
+  digitalWrite(redArchPin, HIGH);
+  digitalWrite(greenArchPin, LOW);
+  noCarTimer = millis();
 
 /*------Append to log file*/
-    DateTime now = rtc.now();
-    char buf2[] = "YYYY-MM-DD hh:mm:ss";
-    Serial.print(now.toString(buf2));
-    Serial.print(", Temp = ");
-    Serial.print(tempF);
-    Serial.print(", ");
-    totalDailyCars ++;   // increase Count for Every car going through car counter regardless of time
-    if (showTime == true)
-    {
-    totalShowCars ++;    // increase Count only for cars entering between 4:55 pm and 9:10 pm.
-    }
-    Serial.print(totalDailyCars) ;  
-    // open file for writing Car Data
-    myFile = SD.open(fileName6, FILE_APPEND); //Carlog.csv
-    if (myFile)
-    {
-       myFile.print(now.toString(buf2));
-       myFile.print(", ");
-       myFile.print (TimeToPassMillis) ; 
-       myFile.print(", 1 , "); 
-       myFile.print (totalDailyCars) ; 
-       myFile.print(", ");
-       myFile.println(tempF);
-       myFile.close();
-       Serial.println(F(" = CarLog Recorded SD Card."));
-       mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
-       mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
-       mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
-       mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondBeamState).c_str());
-       start_MqttMillis = millis();
-    }
-    else
-    {
-      Serial.print(F("SD Card: Issue encountered while attempting to open the file CarCount.csv"));
-    }
-
-
-  updateDailyTotal(); //update total daily count in event of power failure
-  updateShowTotal(); // update show total count in event of power failure
+  DateTime now = rtc.now();
+  char buf2[] = "YYYY-MM-DD hh:mm:ss";
+  Serial.print(now.toString(buf2));
+  Serial.print(", Temp = ");
+  Serial.print(tempF);
+  Serial.print(", ");
+  totalDailyCars ++;   // increase Count for Every car going through car counter regardless of time
+  updateDailyTotal();  // Update Daily Total on SD Card to retain numbers with reboot
+  if (showTime == true)
+  {
+    totalShowCars ++;   // increase Show Count only when show is open
+    updateShowTotal();  // update show total count in event of power failure during show hours
+  }
+  Serial.print(totalDailyCars) ;  
+  // open file for writing Car Data
+  myFile = SD.open(fileName6, FILE_APPEND); //Carlog.csv
+  if (myFile)
+  {
+    myFile.print(now.toString(buf2));
+    myFile.print(", ");
+    myFile.print (TimeToPassMillis) ; 
+    myFile.print(", 1 , "); 
+    myFile.print (totalDailyCars) ; 
+    myFile.print(", ");
+    myFile.println(tempF);
+    myFile.close();
+    Serial.println(F(" = CarLog Recorded SD Card."));
+    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
+    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondBeamState).c_str());
+    start_MqttMillis = millis();
+  }
+  else
+  {
+    Serial.print(F("SD Card: Cannot open the file: "));
+    Serial.println(fileName6);
+  }
 
 } /* END Beam Car Detect*/
-
 
 // Init microSD card
 void initSDCard()
@@ -835,7 +830,26 @@ void setup()
     Serial.print(fileName4);
     Serial.println(F(" exists on SD Card."));
   }
-
+  if (!SD.exists(fileName5))
+  {
+    Serial.print(fileName5);
+    Serial.println(F(" doesn't exist. Creating file..."));
+    // create a new file by opening a new file and immediately close it
+    myFile = SD.open(fileName5, FILE_WRITE);
+    myFile.close();
+    // recheck if file is created & write Header
+    myFile = SD.open(fileName5, FILE_APPEND);
+    myFile.println("Date,Temp,Before18,Hour18,Hour18,Hour20,Hour21,Total");
+    myFile.close();
+    Serial.print(F("Header Written to "));
+    Serial.println(fileName5);
+  }
+  else
+  {
+    Serial.print(fileName5);
+    Serial.println(F(" exists on SD Card."));
+  }  
+/*
   if (!SD.exists(fileName5))
   { 
     Serial.print(fileName5);
@@ -862,7 +876,7 @@ void setup()
     Serial.print(fileName5);
     Serial.println(F(" exists on SD Card."));
   }
-  
+*/  
   if (!SD.exists(fileName6))
   {
     Serial.print(fileName6);
@@ -872,7 +886,7 @@ void setup()
     myFile.close();
     // recheck if file is created write Header
     myFile = SD.open(fileName6, FILE_APPEND);
-    myFile.println("Date Time,TimeToPass,Car,TotalDailyCars,Temp");
+    myFile.println("Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
     myFile.close();
     Serial.print(F("Header Written to "));
     Serial.println(fileName6);
@@ -882,16 +896,16 @@ void setup()
     Serial.print(fileName6);
     Serial.println(F(" exists on SD Card."));
   }
-
+/*
   if (!SD.exists(fileName7))
   { 
     Serial.print(fileName7);
     Serial.println(F(" doesn't exist. Creating file..."));
     // create a new file by opening a new file and immediately close it
-    myFile = SD.open(fileName5, FILE_WRITE);
+    myFile = SD.open(fileName7, FILE_WRITE);
     myFile.close();     
     // recheck if file is created & write Header
-    myFile = SD.open(fileName5, FILE_APPEND);
+    myFile = SD.open(fileName7, FILE_APPEND);
     myFile.println("Date, Temp, Hour 18, Hour 19, Hour 20, Hour 21, Total");
     myFile.close();
     Serial.print(F("Header Written to "));
@@ -902,7 +916,7 @@ void setup()
     Serial.print(fileName7);
     Serial.println(F(" exists on SD Card."));
   }
-
+*/
   // List of approved WiFi AP's
   WiFi.mode(WIFI_STA);  
   wifiMulti.addAP(secret_ssid_AP_1,secret_pass_AP_1);
@@ -1020,14 +1034,15 @@ void loop()
 
   /*****IMPORTANT***** Reset Car Counter at 4:55:00 pm ****/
   /* Only counting vehicles for show */
-  if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))  {
-    ignoreCars = totalDailyCars; // records number of cars counted before show starts 11/3/24
+  if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))  
+  {
+    carsBeforeShow = totalDailyCars; // records number of cars counted before show starts 11/3/24
     updateDailyTotal();
     totalDailyCars = 0; //Reset count to 0 before show starts
   }
     //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
     if ((now.hour() == 21) && (now.minute() == 10) && (now.second() == 0))  {
-        WriteEOSTotals();
+        WriteDailySummary();
   }
 
   /* Reset Counts at Midnight when controller running 24/7 */
@@ -1061,6 +1076,12 @@ void loop()
     }
   }
   
+  //Save Hourly Totals
+  if (now.minute()==0 && now.second()==0)
+  {
+    HourlyTotals();
+  }
+
   // non-blocking WiFi and MQTT Connectivity Checks
   if (wifiMulti.run() == WL_CONNECTED)
   {
@@ -1190,11 +1211,7 @@ void loop()
 
   display.display();
 
-  //Save Hourly Totals
-  if (now.minute()==0 && now.second()==0)
-  {
-    HourlyTotals();
-  }
+
 
   /* LOOP PIN STATE FOR DEBUG 
   digitalWrite(redArchPin, HIGH);
