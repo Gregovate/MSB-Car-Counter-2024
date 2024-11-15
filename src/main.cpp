@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.15.2 Cleaned up Data Files on SD Card. Archived old data set new start date
 24.11.15.1 Updated MQTT Topics, File structures, aligned with Gate Counter
 24.11.13.1 Added mqtt_client.loop() to while loop
 24.11.10.1 fixed endless loop when second beam tripped. Mis formatting issues
@@ -79,7 +80,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.15.1" // Firmware Version
+#define FWVersion "24.11.15.2" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 500; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -226,8 +227,8 @@ const String fileName1 = "/EnterTotal.txt"; // DailyTot.txt file to store daily 
 const String fileName2 = "/ShowTotal.txt";  // ShowTot.txt file to store season total counts
 const String fileName3 = "/CalDay.txt"; // CalDay.txt file to store current day number
 const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
-const String fileName5 = "/EnterSummary.csv"; // DailySummary.csv Stores Daily Totals by Hour and total
-const String fileName6 = "/EnterLog.csv"; // CarLog.csv file to store all car counts for season (was MASTER.CSV)
+const String fileName5 = "/EnterSummary.csv"; // EnterSummary.csv Stores Daily Totals by Hour and total
+const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car counts for season (was MASTER.CSV)
 //const String fileName7 = "/ShowSummary.csv"; // Shows summary of counts during show (4:55pm to 9:10pm)
 
 char days[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
@@ -660,7 +661,7 @@ void playPattern() // Flash an alternating pattern on the arches (called if a ca
   }
 }
 
-void beamCarDetect() // If a car is counted, then increment the counter by 1 and add an entry to the carlog.csv log file on the SD card
+void beamCarDetect() // If a car is counted, then increment the counter by 1 and add an entry to the Enterlog.csv log file on the SD card
 {
 
   //    digitalWrite (countSuccessPin, HIGH);
@@ -687,7 +688,7 @@ void beamCarDetect() // If a car is counted, then increment the counter by 1 and
   }
   Serial.print(totalDailyCars) ;  
   // open file for writing Car Data
-  myFile = SD.open(fileName6, FILE_APPEND); //Carlog.csv
+  myFile = SD.open(fileName6, FILE_APPEND); //Enterlog.csv
   if (myFile)
   {
     myFile.print(now.toString(buf2));
@@ -698,7 +699,7 @@ void beamCarDetect() // If a car is counted, then increment the counter by 1 and
     myFile.print(", ");
     myFile.println(tempF);
     myFile.close();
-    Serial.println(F(" = CarLog Recorded SD Card."));
+    Serial.println(F(" = Car Logged to SD Card."));
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
     mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
@@ -1096,8 +1097,8 @@ void loop()
     } 
     else
     {
-        //keep MQTT client connected when WiFi is connected
-        mqtt_client.loop();
+      //keep MQTT client connected when WiFi is connected
+      mqtt_client.loop();
     }
   } 
   else
@@ -1210,8 +1211,6 @@ void loop()
   display.println(totalDailyCars);
 
   display.display();
-
-
 
   /* LOOP PIN STATE FOR DEBUG 
   digitalWrite(redArchPin, HIGH);
