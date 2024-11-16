@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.16.1 Trying reset for 2nd beam timer, Fixed serial print logging
 24.11.15.3 Fixed show minutes to report cars during show, increase car detect millis to 750
 24.11.15.2 Cleaned up Data Files on SD Card. Archived old data set new start date
 24.11.15.1 Updated MQTT Topics, File structures, aligned with Gate Counter
@@ -81,7 +82,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.15.3" // Firmware Version
+#define FWVersion "24.11.16.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -667,11 +668,7 @@ void playPattern() // Flash an alternating pattern on the arches (called if a ca
 
 void beamCarDetect() // If a car is counted, then increment the counter by 1 and add an entry to the Enterlog.csv log file on the SD card
 {
-
-  //    digitalWrite (countSuccessPin, HIGH);
-  BeamTrippedCount++;                // add 1 to the counter, this prevents the code from being run more than once after tripped for 3 seconds.
-  Serial.print("Cars Today:  ");
-  Serial.println(totalDailyCars);
+  /* COUNT SUCCESS */
   digitalWrite(redArchPin, HIGH);
   digitalWrite(greenArchPin, LOW);
   noCarTimer = millis();
@@ -703,7 +700,9 @@ void beamCarDetect() // If a car is counted, then increment the counter by 1 and
     myFile.print(", ");
     myFile.println(tempF);
     myFile.close();
-    Serial.println(F(" = Car Logged to SD Card."));
+    Serial.print(F(" Car "));
+    Serial.print(totalDailyCars);
+    Serial.println(F(" Logged to SD Card."));
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
     mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
@@ -1248,12 +1247,7 @@ void loop()
   {
     secondBeamTripTime = millis(); // double check. may need a way to reset if there is a bounce 11/3/24
   }
-/*
-  else
-  {
-    secondBeamTripTime = millis(); // reset second beam trip time if it bounces 11/15/24
-  }
-*/
+
   if (firstBeamState == 1 && secondBeamState == 1) /* Both Beams Blocked */
   {
     if (millis()-secondBeamTripTime  >= carDetectMillis) // if second beam is blocked for x millis
@@ -1266,7 +1260,10 @@ void loop()
     {
      firstBeamState = digitalRead (firstBeamPin);
      secondBeamState = digitalRead (secondBeamPin);
-     //secondBeamTripTime = millis(); // reset second beam trip time if it bounces 11/15/24
+       if (secondBeamState != lastSecondBeamState && secondBeamState == 0)
+       {
+         secondBeamTripTime = millis(); // reset second beam trip time if it bounces 11/16/24
+       }
      carPresentFlag = 0;
     }
   
@@ -1322,16 +1319,6 @@ void loop()
   if  ((currentMillis - start_MqttMillis) > (mqttKeepAlive*1000))
   {
       KeepMqttAlive();
-      /* DEBUG CODE
-      Serial.print("firstBeam State = ");
-      Serial.print(firstBeamState);
-      Serial.print(" secondBeamState = ");
-      Serial.print(secondBeamState);
-      Serial.print(" Now Hour 12 = ");
-      Serial.print(currentHr12);
-      Serial.print(" Now Hour 24 = ");
-      Serial.println(now.hour());
-      */
   }
   lastFirstBeamState = firstBeamState;
   lastSecondBeamState = secondBeamState;
