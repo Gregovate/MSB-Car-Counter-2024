@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.15.3 Fixed show minutes to report cars during show, increase car detect millis to 750
 24.11.15.2 Cleaned up Data Files on SD Card. Archived old data set new start date
 24.11.15.1 Updated MQTT Topics, File structures, aligned with Gate Counter
 24.11.13.1 Added mqtt_client.loop() to while loop
@@ -80,9 +81,9 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.15.2" // Firmware Version
+#define FWVersion "24.11.15.3" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
-unsigned int carDetectMillis = 500; // minimum millis for secondBeam to be broken needed to detect a car
+unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
 unsigned int showEndTime =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
 // **************************************************
@@ -508,8 +509,11 @@ void updateShowTotal()  /* -----Increment the grand total cars file for season  
    if (myFile) 
    {
       //myFile.print(totalShowCars-ignoreCars); // only count cars between 4:55 pm and 9:10 pm
-      myFile.print(totalShowCars-ignoreCars); // only count cars between 4:55 pm and 9:10 pm
+      myFile.print(totalShowCars); // only count cars between 4:55 pm and 9:10 pm
       myFile.close();
+      Serial.print(F("Updating Show Total "));
+      Serial.print(totalShowCars);
+      Serial.print(F(" Car # "));
   }
   else
   {
@@ -1030,9 +1034,15 @@ void loop()
   DateTime now = rtc.now();
   tempF=((rtc.getTemperature()*9/5)+32);
   currentMillis = millis();
-
-  showTime = (currentTimeMinute >= showStartTime && currentTimeMinute <= showEndTime); // show is running and save counts
-
+  currentTimeMinute = now.hour()*60 + now.minute();
+  if (currentTimeMinute >= showStartTime && currentTimeMinute <= showEndTime)
+  {
+    showTime = true;
+  } // show is running and save counts
+  else
+  {
+    showTime = false;
+  }
   /*****IMPORTANT***** Reset Car Counter at 4:55:00 pm ****/
   /* Only counting vehicles for show */
   if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))  
@@ -1238,6 +1248,12 @@ void loop()
   {
     secondBeamTripTime = millis(); // double check. may need a way to reset if there is a bounce 11/3/24
   }
+/*
+  else
+  {
+    secondBeamTripTime = millis(); // reset second beam trip time if it bounces 11/15/24
+  }
+*/
   if (firstBeamState == 1 && secondBeamState == 1) /* Both Beams Blocked */
   {
     if (millis()-secondBeamTripTime  >= carDetectMillis) // if second beam is blocked for x millis
@@ -1250,6 +1266,7 @@ void loop()
     {
      firstBeamState = digitalRead (firstBeamPin);
      secondBeamState = digitalRead (secondBeamPin);
+     //secondBeamTripTime = millis(); // reset second beam trip time if it bounces 11/15/24
      carPresentFlag = 0;
     }
   
