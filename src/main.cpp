@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.16.2 Added Time to Pass topic. Write totals not working.
 24.11.16.1 Trying reset for 2nd beam timer, Fixed serial print logging
 24.11.15.3 Fixed show minutes to report cars during show, increase car detect millis to 750
 24.11.15.2 Cleaned up Data Files on SD Card. Archived old data set new start date
@@ -165,6 +166,7 @@ char topicBase[60];
 #define MQTT_PUB_TOPIC8  "msb/traffic/CarCounter/EnterTotal"
 #define MQTT_PUB_TOPIC9  "msb/traffic/CarCounter/ShowTotal"
 #define MQTT_PUB_TOPIC10 "msb/traffic/CarCounter/secondBeamSensorState"
+#define MQTT_PUB_TOPIC11 "msb/traffic/CarCounter/TTP"
 
 //const uint32_t connectTimeoutMs = 10000;
 uint16_t connectTimeOutPerAP=5000;
@@ -175,14 +177,14 @@ const int   daylightOffset_sec = 3600;
 int16_t tempF;
 
 // important time values
-unsigned int currentDay; // Current Calendar day
+unsigned int DayOfMonth; // Current Calendar day
 unsigned int currentHr12; //Current Hour 12 Hour format
 unsigned int currentHr24; //Current Hour 24 Hour Format
 unsigned int currentMin;
 unsigned int currentSec;
 unsigned int currentTimeMinute; // for converting clock time hh:mm to clock time mm
 
-int lastCalDay = 0; // Pervious day's calendar day used to reset running days
+int lastDayOfMonth = 0; // Pervious day's calendar day used to reset running days
 int totalDailyCars = 0; // total cars counted per day 24/7 Needed for debugging
 int totalShowCars = 0; // total cars counted for durning show hours open (4:55 pm to 9:10 pm)
 int totalSeasonCars = 0; // total cars counted for season (Black Friday thru New Year's Eve)
@@ -227,7 +229,7 @@ File myFile; //used to write files to SD Card
 // **********FILE NAMES FOR SD CARD *********
 const String fileName1 = "/EnterTotal.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
 const String fileName2 = "/ShowTotal.txt";  // ShowTot.txt file to store season total counts
-const String fileName3 = "/CalDay.txt"; // CalDay.txt file to store current day number
+const String fileName3 = "/DayOfMonth.txt"; // DayOfMonth.txt file to store current day number
 const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
 const String fileName5 = "/EnterSummary.csv"; // EnterSummary.csv Stores Daily Totals by Hour and total
 const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car counts for season (was MASTER.CSV)
@@ -418,7 +420,7 @@ void getShowTotal()     // open ShowTot.txt to get total Cars for season
     while (myFile.available())
     {
       totalShowCars = myFile.parseInt(); // read total
-      Serial.print(" Total cars from file = ");
+      Serial.print(" Total Show cars from file = ");
       Serial.println(totalShowCars);
     }
     myFile.close();
@@ -430,15 +432,15 @@ void getShowTotal()     // open ShowTot.txt to get total Cars for season
   }
 }
 
-void getCalDay()  // get the last calendar day used for reset daily counts)
+void getDayOfMonth()  // get the last calendar day used for reset daily counts)
 {
    myFile = SD.open(fileName3,FILE_READ);
    if (myFile)
    {
      while (myFile.available()) {
-     lastCalDay = myFile.parseInt(); // read day Number
+     lastDayOfMonth = myFile.parseInt(); // read day Number
      Serial.print(" Calendar Day = ");
-     Serial.println(lastCalDay);
+     Serial.println(lastDayOfMonth);
      }
    myFile.close();
    }
@@ -523,12 +525,12 @@ void updateShowTotal()  /* -----Increment the grand total cars file for season  
   }
 }
 
-void updateCalDay()  /* -----write calendar day 1 seond past midnight to file ----- */
+void updateDayOfMonth()  /* -----write calendar day 1 seond past midnight to file ----- */
 {
    myFile = SD.open(fileName3,FILE_WRITE);
    if (myFile)
    {
-      myFile.print(currentDay);
+      myFile.print(DayOfMonth);
       myFile.close();
    }
    else
@@ -707,6 +709,7 @@ void beamCarDetect() // If a car is counted, then increment the counter by 1 and
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
     mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC10, String(secondBeamState).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC11, String(TimeToPassMillis).c_str());
     start_MqttMillis = millis();
   }
   else
@@ -1004,9 +1007,11 @@ void setup()
 
   //on reboot, get totals saved on SD Card
   getDailyTotal();  /*Daily total that is updated with every detection*/
-  getDaysRunning(); /*Needs to be reset 1st day of show*/
-  getCalDay();  /*Saves Calendar Day*/
   getShowTotal();   /*Saves Show Total*/
+  getDayOfMonth();  /*Saves Calendar Day*/ 
+  getDaysRunning(); /*Needs to be reset 1st day of show*/
+
+ 
 
   // Read Digital Pin States for debugging
   firstBeamState = digitalRead (firstBeamPin); //Read the current state of the FIRST IR beam receiver/Beam
@@ -1058,24 +1063,27 @@ void loop()
   /* Reset Counts at Midnight when controller running 24/7 */
   if ((now.hour() == 0) && (now.minute() == 0) && (now.second() == 1))
   {
-    currentDay = now.day(); // Write new calendar day 1 second past midnight
-    updateCalDay();
+    DayOfMonth = now.day(); // Write new calendar day 1 second past midnight
+    updateDayOfMonth();
     totalDailyCars = 0;  // reset count to 0 at 1 seond past midnight
     ignoreCars = 0; // reset cars entering before show starts
     updateDailyTotal();
     if (now.month() != 12 && now.day() != 24) // do not increment days running when closed on Christmas Eve
     {
-      daysRunning++; 
-      updateDaysRunning();
+      if (lastDayOfMonth != DayOfMonth)
+      {
+        daysRunning++; 
+        updateDaysRunning();
+      }
     }  
   }
  
   /* OR Reset/Update Counts when Day Changes on reboot getting values from saved data */
-  if (now.day() != lastCalDay)
+  if (now.day() != lastDayOfMonth)
   {
-    getCalDay();
-    currentDay=now.day();
-    updateCalDay();
+    getDayOfMonth();
+    DayOfMonth=now.day();
+    updateDayOfMonth();
     totalDailyCars =0;
     ignoreCars = 0;
     updateDailyTotal();
