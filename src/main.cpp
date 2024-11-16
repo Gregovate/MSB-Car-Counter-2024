@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.16.3 Changed write daily summar printing dayHour array
 24.11.16.2 Added Time to Pass topic. Write totals not working.
 24.11.16.1 Trying reset for 2nd beam timer, Fixed serial print logging
 24.11.15.3 Fixed show minutes to report cars during show, increase car detect millis to 750
@@ -83,7 +84,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.16.1" // Firmware Version
+#define FWVersion "24.11.16.3" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -573,15 +574,11 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
     myFile.print(", ");
     myFile.print (tempF); 
     myFile.print(", "); 
-    myFile.print (carsBeforeShow) ; 
-    myFile.print(", "); 
-    myFile.print (carsHr18) ; 
-    myFile.print(", ");
-    myFile.println(carsHr19);
-    myFile.print(", ");
-    myFile.println(carsHr20);
-    myFile.print(", ");
-    myFile.println(carsHr21);
+     for (int i = 0; i<=24; i++)
+    {
+      myFile.print(dayHour[i]);
+      myFile.print(", ");
+    }    
     myFile.print(", ");
     myFile.println(totalDailyCars);
     myFile.close();
@@ -846,7 +843,7 @@ void setup()
     myFile.close();
     // recheck if file is created & write Header
     myFile = SD.open(fileName5, FILE_APPEND);
-    myFile.println("Date,Temp,Before18,Hour18,Hour18,Hour20,Hour21,Total");
+    myFile.println("Date,Temp,Hour-17,Hour-18,Hour-19,Hour-20,Hour-21,Total");
     myFile.close();
     Serial.print(F("Header Written to "));
     Serial.println(fileName5);
