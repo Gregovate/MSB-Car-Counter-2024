@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.16.4 16.3 didn't write daily summary. Changed that code for test 11.17
 24.11.16.3 Changed write daily summar printing dayHour array
 24.11.16.2 Added Time to Pass topic. Write totals not working.
 24.11.16.1 Trying reset for 2nd beam timer, Fixed serial print logging
@@ -84,7 +85,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.16.3" // Firmware Version
+#define FWVersion "24.11.16.4" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -165,6 +166,7 @@ char topicBase[60];
 #define MQTT_PUB_TOPIC6  "msb/traffic/CarCounter/Cars_20"
 #define MQTT_PUB_TOPIC7  "msb/traffic/CarCounter/Cars_21"
 #define MQTT_PUB_TOPIC8  "msb/traffic/CarCounter/EnterTotal"
+
 #define MQTT_PUB_TOPIC9  "msb/traffic/CarCounter/ShowTotal"
 #define MQTT_PUB_TOPIC10 "msb/traffic/CarCounter/secondBeamSensorState"
 #define MQTT_PUB_TOPIC11 "msb/traffic/CarCounter/TTP"
@@ -472,7 +474,7 @@ void getDaysRunning()   // Days the show has been running)
 } 
 
 /***** UPDATE TOTALS TO SD CARD *****/
-void HourlyTotals()
+void updateHourlyTotals()
 {
   char hourPad[6];
   sprintf(hourPad,"%02d", currentHr24);
@@ -574,11 +576,11 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
     myFile.print(", ");
     myFile.print (tempF); 
     myFile.print(", "); 
-     for (int i = 0; i<=24; i++)
-    {
-      myFile.print(dayHour[i]);
-      myFile.print(", ");
-    }    
+    for (int i = 16; i<=21; i++)
+      {
+        myFile.print(dayHour[i]);
+        myFile.print(", ");
+      }    
     myFile.print(", ");
     myFile.println(totalDailyCars);
     myFile.close();
@@ -1050,6 +1052,7 @@ void loop()
   {
     carsBeforeShow = totalDailyCars; // records number of cars counted before show starts 11/3/24
     updateDailyTotal();
+    updateHourlyTotals();
     totalDailyCars = 0; //Reset count to 0 before show starts
   }
     //Write Totals at 9:10:00 pm. Gate should close at 9 PM. Allow for any cars in line to come in
@@ -1094,7 +1097,7 @@ void loop()
   //Save Hourly Totals
   if (now.minute()==0 && now.second()==0)
   {
-    HourlyTotals();
+    updateHourlyTotals();
   }
 
   // non-blocking WiFi and MQTT Connectivity Checks
