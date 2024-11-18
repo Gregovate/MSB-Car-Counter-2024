@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.18.1 Added method to update counts using MQTT, Added additional topics for Show Totals, days running
 24.11.16.4 16.3 didn't write daily summary. Changed that code for test 11.17
 24.11.16.3 Changed write daily summar printing dayHour array
 24.11.16.2 Added Time to Pass topic. Write totals not working.
@@ -85,7 +86,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.16.4" // Firmware Version
+#define FWVersion "24.11.18.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -166,10 +167,17 @@ char topicBase[60];
 #define MQTT_PUB_TOPIC6  "msb/traffic/CarCounter/Cars_20"
 #define MQTT_PUB_TOPIC7  "msb/traffic/CarCounter/Cars_21"
 #define MQTT_PUB_TOPIC8  "msb/traffic/CarCounter/EnterTotal"
-
 #define MQTT_PUB_TOPIC9  "msb/traffic/CarCounter/ShowTotal"
 #define MQTT_PUB_TOPIC10 "msb/traffic/CarCounter/secondBeamSensorState"
 #define MQTT_PUB_TOPIC11 "msb/traffic/CarCounter/TTP"
+#define MQTT_PUB_TOPIC12 "msb/traffic/CarCounter/DaysRunning"
+
+// Subscribing Topics (to reset values)
+#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
+#define MQTT_SUB_TOPIC1  "msb/traffic/CarCounter/resetDailyCount"
+#define MQTT_SUB_TOPIC2  "msb/traffic/CarCounter/resetShowCount"
+#define MQTT_SUB_TOPIC3  "msb/traffic/CarCounter/resetDayOfMonth"
+#define MQTT_SUB_TOPIC4  "msb/traffic/CarCounter/resetDaysRunning"
 
 //const uint32_t connectTimeoutMs = 10000;
 uint16_t connectTimeOutPerAP=5000;
@@ -304,17 +312,6 @@ void setup_wifi()
   delay(5000);
 }  // END WiFi Setup
 
-void callback(char* topic, byte* payload, unsigned int length)
-{
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++)
-  {
-    Serial.print((char)payload[i]);
-  }
-   Serial.println();
-}
 
 void MQTTreconnect()
 {
@@ -328,7 +325,7 @@ void MQTTreconnect()
     {
       display.setTextSize(1);
       display.setTextColor(WHITE);
-      display.setCursor(0,line5);
+      display.setCursor(0,0);
       display.println("MQTT Connect");
       display.display();
       Serial.println("connected!");
@@ -346,11 +343,15 @@ void MQTTreconnect()
       Serial.println(" try again in 5 seconds");
       display.setTextSize(1);
       display.setTextColor(WHITE);
-      display.setCursor(0,line4);
+      display.setCursor(0,line5);
       display.println("MQTT Error");
       display.display();
     }
   }  //END while
+  mqtt_client.subscribe(MQTT_SUB_TOPIC0);
+  mqtt_client.subscribe(MQTT_SUB_TOPIC1);
+  mqtt_client.subscribe(MQTT_SUB_TOPIC2);
+  mqtt_client.subscribe(MQTT_SUB_TOPIC3);
 } // END MQTT Reconnect
 
 void SetLocalTime()
@@ -405,6 +406,7 @@ void getDailyTotal()   // open DAILYTOT.txt to get initial dailyTotal value
      totalDailyCars = myFile.parseInt(); // read total
      Serial.print(" Daily cars from file = ");
      Serial.println(totalDailyCars);
+     mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
     }
     myFile.close();
   }
@@ -425,6 +427,7 @@ void getShowTotal()     // open ShowTot.txt to get total Cars for season
       totalShowCars = myFile.parseInt(); // read total
       Serial.print(" Total Show cars from file = ");
       Serial.println(totalShowCars);
+     mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
     }
     myFile.close();
   }
@@ -461,6 +464,7 @@ void getDaysRunning()   // Days the show has been running)
   {
     while (myFile.available()) {
     daysRunning = myFile.parseInt(); // read day Number
+    mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
     Serial.print(" Days Running = ");
     Serial.println(daysRunning);
     }
@@ -490,6 +494,8 @@ void KeepMqttAlive()
 {
    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
+   mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
+   mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
    //Serial.println("MQTT Keep Alive");
    start_MqttMillis = currentMillis;
 }
@@ -501,6 +507,7 @@ void updateDailyTotal()
   {  // check for an open failure
      myFile.print(totalDailyCars);
      myFile.close();
+    mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
   }
   else
   {
@@ -517,6 +524,7 @@ void updateShowTotal()  /* -----Increment the grand total cars file for season  
       //myFile.print(totalShowCars-ignoreCars); // only count cars between 4:55 pm and 9:10 pm
       myFile.print(totalShowCars); // only count cars between 4:55 pm and 9:10 pm
       myFile.close();
+      mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
       Serial.print(F("Updating Show Total "));
       Serial.print(totalShowCars);
       Serial.print(F(" Car # "));
@@ -535,6 +543,7 @@ void updateDayOfMonth()  /* -----write calendar day 1 seond past midnight to fil
    {
       myFile.print(DayOfMonth);
       myFile.close();
+      mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
    }
    else
    {
@@ -550,6 +559,7 @@ void updateDaysRunning()
   {
     myFile.print(daysRunning);
     myFile.close();
+    mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
   }
   else
   {
@@ -763,6 +773,59 @@ void initSDCard()
   display.printf("SD Card Size: %lluMB\n", cardSize);
   display.display();
 }
+
+/*** MQTT CALLBACK TOPICS ****/
+void callback(char* topic, byte* payload, unsigned int length)
+{
+  /*
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i = 0; i < length; i++)
+  {
+    Serial.print((char)payload[i]);
+  }
+  payload[length] = '\0';
+  */
+
+  /* Topic used to manually reset Enter Daily Cars */
+  if (strcmp(topic, MQTT_SUB_TOPIC1) == 0)
+  {
+    totalDailyCars = atoi((char *)payload);
+    updateDailyTotal();
+    Serial.println(F(" Car Counter Updated"));
+  }
+
+  /* Topic used to manually reset Total Show Cars */
+  if (strcmp(topic, MQTT_SUB_TOPIC2) == 0)
+  {
+    totalShowCars = atoi((char *)payload);
+    updateShowTotal();
+    Serial.println(F(" Show Counter Updated"));
+  }  
+
+  /* Topic used to manually reset Calendar Day */
+  if (strcmp(topic, MQTT_SUB_TOPIC3) == 0)
+  {
+    DayOfMonth = atoi((char *)payload);
+    updateDayOfMonth();
+    Serial.println(F(" Calendar Day of Month Updated"));
+  }  
+
+  /* Topic used to manually reset Days Running */
+  if (strcmp(topic, MQTT_SUB_TOPIC4) == 0)
+  {
+    daysRunning = atoi((char *)payload);
+    updateDaysRunning();
+    Serial.println(F(" Days Running Updated"));
+  }  
+  
+  //  Serial.println(carCountCars); 
+
+   //Serial.println();
+} /***** END OF CALLBACK TOPICS *****/
+
+
 
 /******  BEGIN SETUP ******/
 void setup()
