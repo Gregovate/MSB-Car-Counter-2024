@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.22.2 Removed Alarm...until figured out
 24.11.22.1 Added MQTT Message and Alarm if 2nd beam gets stuck
 24.11.21.1 Added MQTT Messages for Reset and Daily Summary File Updates
 24.11.19.1 Added boolean to print daily summary once
@@ -89,7 +90,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.22.1" // Firmware Version
+#define FWVersion "24.11.22.2" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -337,7 +338,7 @@ void MQTTreconnect()
       Serial.println("connected!");
       Serial.println("Waiting for Car...");
       // Once connected, publish an announcement…
-      mqtt_client.publish(MQTT_PUB_TOPIC0, "Hello from Car Counter!");
+      mqtt_client.publish(MQTT_PUB_TOPIC0, "Car Counter ONLINE!");
       mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
       // … and resubscribe
       mqtt_client.subscribe(MQTT_PUB_TOPIC0);
@@ -721,6 +722,7 @@ void beamCarDetect() // If a car is counted, then increment the counter by 1 and
     Serial.print(F(" Car "));
     Serial.print(totalDailyCars);
     Serial.println(F(" Logged to SD Card."));
+    mqtt_client.publish(MQTT_PUB_TOPIC0, "Car Counter Working");
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
     mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
@@ -831,14 +833,16 @@ void callback(char* topic, byte* payload, unsigned int length)
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Days Running Updated");
   }  
 
-  /* Topic used to change car counter timeout*/  
+ /*
+  // Topic used to change car counter timeout  
   if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)
   {
     carCounterTimeout = atoi((char *)payload);
     Serial.println(F(" Car Counter Timeout Updated"));
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Car Counter Timeout Updated");
   }  
-  
+ */ 
+
   //  Serial.println(carCountCars); 
 
    //Serial.println();
@@ -1342,7 +1346,15 @@ void loop()
   {
     secondBeamTripTime = millis(); // double check. may need a way to reset if there is a bounce 11/3/24
   }
+/*
+        // Added to detect car counter problem with blocked sensor 
+      if (millis()-secondBeamTripTime >= carCounterTimeout ); // default time for car counter alarm in millis
+      {
+        mqtt_client.publish(MQTT_PUB_TOPIC0, "Check Car Counter!");
+        Serial.println(millis()-secondBeamTripTime);
 
+      }  
+*/
   if (firstBeamState == 1 && secondBeamState == 1) /* Both Beams Blocked */
   {
     if (millis()-secondBeamTripTime  >= carDetectMillis) // if second beam is blocked for x millis
@@ -1384,12 +1396,16 @@ void loop()
       digitalWrite(redArchPin, HIGH); // Turn on Red Arch
       digitalWrite(greenArchPin, LOW); // Turn Off Green Arch
       TimeToPassMillis = millis() - carDetectedMillis; // Record time to Pass  
-      /* Added to detect car counter problem with blocked sensor */
-      if (TimeToPassMillis = 120000)
+      /*
+      // Added to detect car counter problem with blocked sensor 
+      if (TimeToPassMillis >= carCounterTimeout && secondBeamState == 1); // default time for car counter alarm in millis
       {
         mqtt_client.publish(MQTT_PUB_TOPIC0, "Check Car Counter!");
+        Serial.println(millis()-secondBeamTripTime);
+        carPresentFlag = 0;
         break;
       }    
+      */
       if (secondBeamState == 0)  /* when second sensor goes low, Car has passed */
       {
         carPresentFlag = 0; // Car has exited detection zone. Turn On Green Arch
