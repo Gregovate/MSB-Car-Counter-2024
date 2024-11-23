@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.23.1 Alarm added after 1 minute will count car when cleared
 24.11.22.2 Removed Alarm...until figured out
 24.11.22.1 Added MQTT Message and Alarm if 2nd beam gets stuck
 24.11.21.1 Added MQTT Messages for Reset and Daily Summary File Updates
@@ -90,7 +91,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.22.2" // Firmware Version
+#define FWVersion "24.11.23.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -213,7 +214,7 @@ int carsHr19=0; // total cars 2nd hour ending 19:00 (6:00 pm to 7:00 pm)
 int carsHr20=0; // total cars 3rd hour ending 20:00 (7:00 pm to 8:00 pm)
 int carsHr21 =0; // total cars 4th hour ending 21:00 (8:00 pm to 9:10 pm)
 int carPresentFlag; // Flag used to detect car in detection zone
-int carCounterTimeout = 120000; // default time for car counter alarm in millis
+int carCounterTimeout = 60000; // default time for car counter alarm in millis
 
 unsigned long currentMillis; // Comparrison time holder
 unsigned long carDetectedMillis;  // Grab the ime when sensor 1st trips
@@ -833,7 +834,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Days Running Updated");
   }  
 
- /*
+ 
   // Topic used to change car counter timeout  
   if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)
   {
@@ -841,7 +842,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     Serial.println(F(" Car Counter Timeout Updated"));
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Car Counter Timeout Updated");
   }  
- */ 
+ 
 
   //  Serial.println(carCountCars); 
 
@@ -1396,16 +1397,20 @@ void loop()
       digitalWrite(redArchPin, HIGH); // Turn on Red Arch
       digitalWrite(greenArchPin, LOW); // Turn Off Green Arch
       TimeToPassMillis = millis() - carDetectedMillis; // Record time to Pass  
-      /*
+
       // Added to detect car counter problem with blocked sensor 
-      if (TimeToPassMillis >= carCounterTimeout && secondBeamState == 1); // default time for car counter alarm in millis
+      if (TimeToPassMillis == carCounterTimeout ) // default time for car counter alarm in millis
       {
         mqtt_client.publish(MQTT_PUB_TOPIC0, "Check Car Counter!");
-        Serial.println(millis()-secondBeamTripTime);
-        carPresentFlag = 0;
-        break;
+        Serial.print(TimeToPassMillis);
+         Serial.print("\t");
+          Serial.print(carCounterTimeout);
+          Serial.print("\t");
+          Serial.println(carPresentFlag);
+         carPresentFlag = 0;
+        //break;
       }    
-      */
+      
       if (secondBeamState == 0)  /* when second sensor goes low, Car has passed */
       {
         carPresentFlag = 0; // Car has exited detection zone. Turn On Green Arch
