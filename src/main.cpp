@@ -4,6 +4,8 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.24.2 Fixed Update fields for MQTT to be able to reset remotely
+24.11.24.1 Changed field order for DailySummary Headers and Data. Appears working for Run-Walk
 24.11.23.1 Alarm added after 1 minute will count car when cleared
 24.11.22.2 Removed Alarm...until figured out
 24.11.22.1 Added MQTT Message and Alarm if 2nd beam gets stuck
@@ -91,7 +93,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.23.1" // Firmware Version
+#define FWVersion "24.11.24.2" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -179,12 +181,13 @@ char topicBase[60];
 #define MQTT_PUB_TOPIC12 "msb/traffic/CarCounter/DaysRunning"
 
 // Subscribing Topics (to reset values)
-#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
+//#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
 #define MQTT_SUB_TOPIC1  "msb/traffic/CarCounter/resetDailyCount"
 #define MQTT_SUB_TOPIC2  "msb/traffic/CarCounter/resetShowCount"
 #define MQTT_SUB_TOPIC3  "msb/traffic/CarCounter/resetDayOfMonth"
 #define MQTT_SUB_TOPIC4  "msb/traffic/CarCounter/resetDaysRunning"
 #define MQTT_SUB_TOPIC5  "msb/traffic/CarCounter/carCounterTimeout"
+#define MQTT_SUB_TOPIC6  "msb/traffic/CarCounter/resetCalendarDay"
 
 //const uint32_t connectTimeoutMs = 10000;
 uint16_t connectTimeOutPerAP=5000;
@@ -356,10 +359,13 @@ void MQTTreconnect()
       display.display();
     }
   }  //END while
-  mqtt_client.subscribe(MQTT_SUB_TOPIC0);
+ // mqtt_client.subscribe(MQTT_SUB_TOPIC0);
   mqtt_client.subscribe(MQTT_SUB_TOPIC1);
   mqtt_client.subscribe(MQTT_SUB_TOPIC2);
   mqtt_client.subscribe(MQTT_SUB_TOPIC3);
+  mqtt_client.subscribe(MQTT_SUB_TOPIC4);
+  mqtt_client.subscribe(MQTT_SUB_TOPIC5);
+  mqtt_client.subscribe(MQTT_SUB_TOPIC6); 
 } // END MQTT Reconnect
 
 void SetLocalTime()
@@ -591,15 +597,14 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
   if (myFile) 
   {
     myFile.print(now.toString(buf2));
-    myFile.print(", ");
-    myFile.print (tempF); 
+
     myFile.print(", "); 
     for (int i = 16; i<=21; i++)
       {
         myFile.print(dayHour[i]);
         myFile.print(", ");
       }    
-    myFile.println(totalDailyCars);
+    myFile.println(tempF);
     myFile.close();
     Serial.println(F(" = Daily Summary Recorded SD Card."));
     // Publish Totals
@@ -787,7 +792,7 @@ void initSDCard()
 /*** MQTT CALLBACK TOPICS ****/
 void callback(char* topic, byte* payload, unsigned int length)
 {
-  /*
+  
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
@@ -796,7 +801,8 @@ void callback(char* topic, byte* payload, unsigned int length)
     Serial.print((char)payload[i]);
   }
   payload[length] = '\0';
-  */
+  Serial.println();
+  
 
   /* Topic used to manually reset Enter Daily Cars */
   if (strcmp(topic, MQTT_SUB_TOPIC1) == 0)
@@ -839,10 +845,18 @@ void callback(char* topic, byte* payload, unsigned int length)
   if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)
   {
     carCounterTimeout = atoi((char *)payload);
-    Serial.println(F(" Car Counter Timeout Updated"));
+    Serial.println(F(" Car Counter Alarm Timer Updated"));
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Car Counter Timeout Updated");
   }  
  
+   /* Topic used to manually reset Days Running */
+  if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)
+  {
+    DayOfMonth = atoi((char *)payload);
+    updateDayOfMonth();
+    Serial.println(F(" Days of Month Updated"));
+    mqtt_client.publish(MQTT_PUB_TOPIC0, "Calendar Day of Month Updated");
+  } 
 
   //  Serial.println(carCountCars); 
 
@@ -932,7 +946,7 @@ void setup()
     myFile.close();
     // recheck if file is created & write Header
     myFile = SD.open(fileName5, FILE_APPEND);
-    myFile.println("Date,Temp,Hour-17,Hour-18,Hour-19,Hour-20,Hour-21,Total");
+    myFile.println("Date,Hour-17,Hour-18,Hour-19,Hour-20,Hour-21,Total,Temp");
     myFile.close();
     Serial.print(F("Header Written to "));
     Serial.println(fileName5);
@@ -942,34 +956,7 @@ void setup()
     Serial.print(fileName5);
     Serial.println(F(" exists on SD Card."));
   }  
-/*
-  if (!SD.exists(fileName5))
-  { 
-    Serial.print(fileName5);
-    Serial.println(F(" doesn't exist. Creating file..."));
-    // create a new file by opening a new file and immediately close it
-    myFile = SD.open(fileName5, FILE_WRITE);
-    myFile.close();     
-    // recheck if file is created & write Header
-    myFile = SD.open(fileName5, FILE_APPEND);
-    myFile.print("Date, Temp,");
-    for (int i = 0; i<=24; i++)
-    {
-      myFile.print("Hour ");
-      myFile.print(i);
-      myFile.print(", ");
-    } 
-    myFile.println(", Total");
-    myFile.close();
-    Serial.print(F("Header Written to "));
-    Serial.println(fileName5);
-  }
-  else
-  {
-    Serial.print(fileName5);
-    Serial.println(F(" exists on SD Card."));
-  }
-*/  
+ 
   if (!SD.exists(fileName6))
   {
     Serial.print(fileName6);
@@ -1347,15 +1334,7 @@ void loop()
   {
     secondBeamTripTime = millis(); // double check. may need a way to reset if there is a bounce 11/3/24
   }
-/*
-        // Added to detect car counter problem with blocked sensor 
-      if (millis()-secondBeamTripTime >= carCounterTimeout ); // default time for car counter alarm in millis
-      {
-        mqtt_client.publish(MQTT_PUB_TOPIC0, "Check Car Counter!");
-        Serial.println(millis()-secondBeamTripTime);
 
-      }  
-*/
   if (firstBeamState == 1 && secondBeamState == 1) /* Both Beams Blocked */
   {
     if (millis()-secondBeamTripTime  >= carDetectMillis) // if second beam is blocked for x millis
@@ -1402,13 +1381,14 @@ void loop()
       if (TimeToPassMillis == carCounterTimeout ) // default time for car counter alarm in millis
       {
         mqtt_client.publish(MQTT_PUB_TOPIC0, "Check Car Counter!");
+        /*
         Serial.print(TimeToPassMillis);
-         Serial.print("\t");
-          Serial.print(carCounterTimeout);
-          Serial.print("\t");
-          Serial.println(carPresentFlag);
-         carPresentFlag = 0;
-        //break;
+        Serial.print("\t");
+        Serial.print(carCounterTimeout);
+        Serial.print("\t");
+        Serial.println(carPresentFlag);
+        */
+        carPresentFlag = 0;
       }    
       
       if (secondBeamState == 0)  /* when second sensor goes low, Car has passed */
