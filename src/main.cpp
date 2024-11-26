@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.26.3 added days running to keepMQTTAlive
 24.11.26.2 Changed Update to days running since they were doubling on date change
 24.11.26.1 Removed running days from keepMQTT alive
 24.11.25.1 Cleaned up MQTT Topics
@@ -96,7 +97,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.26.2" // Firmware Version
+#define FWVersion "24.11.26.3" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -511,6 +512,7 @@ void KeepMqttAlive()
    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
+   mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
    //Serial.println("MQTT Keep Alive");
    start_MqttMillis = millis();
 }
