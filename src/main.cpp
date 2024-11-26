@@ -4,6 +4,8 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.26.2 Changed Update to days running since they were doubling on date change
+24.11.26.1 Removed running days from keepMQTT alive
 24.11.25.1 Cleaned up MQTT Topics
 24.11.24.2 Fixed Update fields for MQTT to be able to reset remotely
 24.11.24.1 Changed field order for DailySummary Headers and Data. Appears working for Run-Walk
@@ -94,7 +96,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.25.1" // Firmware Version
+#define FWVersion "24.11.26.2" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -206,10 +208,10 @@ unsigned int currentMin;
 unsigned int currentSec;
 unsigned int currentTimeMinute; // for converting clock time hh:mm to clock time mm
 
-int lastDayOfMonth = 0; // Pervious day's calendar day used to reset running days
-int totalDailyCars = 0; // total cars counted per day 24/7 Needed for debugging
-int totalShowCars = 0; // total cars counted for durning show hours open (4:55 pm to 9:10 pm)
-int totalSeasonCars = 0; // total cars counted for season (Black Friday thru New Year's Eve)
+int lastDayOfMonth; // Pervious day's calendar day used to reset running days
+int totalDailyCars; // total cars counted per day 24/7 Needed for debugging
+int totalShowCars; // total cars counted for durning show hours open (4:55 pm to 9:10 pm)
+int totalSeasonCars; // total cars counted for season (Black Friday thru New Year's Eve)
 int connectionAttempts = 5; // number of WiFi or MQTT Connection Attempts
 int carsBeforeShow = 0; // Total Cars before show starts
 int carsHr18 =0; // total cars 1st hour ending 18:00 (4:55 pm to 6:00 pm)
@@ -463,7 +465,6 @@ void getDayOfMonth()  // get the last calendar day used for reset daily counts)
      Serial.println(lastDayOfMonth);
      }
    myFile.close();
-   mqtt_client.publish(MQTT_PUB_TOPIC8, String(lastDayOfMonth).c_str());
    }
    else
    {
@@ -510,9 +511,8 @@ void KeepMqttAlive()
    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
-   mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
    //Serial.println("MQTT Keep Alive");
-   start_MqttMillis = currentMillis;
+   start_MqttMillis = millis();
 }
 
 void updateDailyTotal()
@@ -1062,7 +1062,7 @@ void setup()
   //on reboot, get totals saved on SD Card
   getDailyTotal();  /*Daily total that is updated with every detection*/
   getShowTotal();   /*Saves Show Total*/
-  getDayOfMonth();  /*Saves Calendar Day*/ 
+  getDayOfMonth();  /* Get Last Calendar Day*/ 
   getDaysRunning(); /*Needs to be reset 1st day of show*/
 
    // Read Digital Pin States for debugging
@@ -1129,6 +1129,7 @@ void loop()
       {
         daysRunning++; 
         updateDaysRunning();
+        getDayOfMonth();
       }
     }  
   }
@@ -1136,15 +1137,15 @@ void loop()
   /* OR Reset/Update Counts when Day Changes on reboot getting values from saved data */
   if (now.day() != lastDayOfMonth)
   {
-    getDayOfMonth();
     DayOfMonth=now.day();
     updateDayOfMonth();
-    totalDailyCars =0;
+    totalDailyCars = 0;
     updateDailyTotal();
     if (now.month() != 12 && now.day() != 24) // do not include days running when closed on Christmas Eve
     {
       daysRunning++; 
       updateDaysRunning();
+      getDayOfMonth();
     }
   }
   
@@ -1164,7 +1165,7 @@ void loop()
       Serial.println(currentHr12);
       Serial.println("Attempting MQTT Connection");
       MQTTreconnect();
-      start_MqttMillis = currentMillis;  
+      start_MqttMillis = millis();  
     } 
     else
     {
@@ -1394,7 +1395,7 @@ void loop()
     }
   }
   //Added to kepp mqtt connection alive 10/11/24 gal
-  if  ((currentMillis - start_MqttMillis) > (mqttKeepAlive*1000))
+  if  ((millis() - start_MqttMillis) > (mqttKeepAlive*1000))
   {
       KeepMqttAlive();
   }
