@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.25.1 Cleaned up MQTT Topics
 24.11.24.2 Fixed Update fields for MQTT to be able to reset remotely
 24.11.24.1 Changed field order for DailySummary Headers and Data. Appears working for Run-Walk
 24.11.23.1 Alarm added after 1 minute will count car when cleared
@@ -93,7 +94,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.24.2" // Firmware Version
+#define FWVersion "24.11.25.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -169,12 +170,12 @@ char topicBase[60];
 #define MQTT_PUB_TOPIC0  "msb/traffic/CarCounter/hello"
 #define MQTT_PUB_TOPIC1  "msb/traffic/CarCounter/temp"
 #define MQTT_PUB_TOPIC2  "msb/traffic/CarCounter/time"
-#define MQTT_PUB_TOPIC3  "msb/traffic/CarCounter/count"
+#define MQTT_PUB_TOPIC3  "msb/traffic/CarCounter/EnterTotal"
 #define MQTT_PUB_TOPIC4  "msb/traffic/CarCounter/Cars_18"
 #define MQTT_PUB_TOPIC5  "msb/traffic/CarCounter/Cars_19"
 #define MQTT_PUB_TOPIC6  "msb/traffic/CarCounter/Cars_20"
 #define MQTT_PUB_TOPIC7  "msb/traffic/CarCounter/Cars_21"
-#define MQTT_PUB_TOPIC8  "msb/traffic/CarCounter/EnterTotal"
+#define MQTT_PUB_TOPIC8  "msb/traffic/CarCounter/DayOfMonth"
 #define MQTT_PUB_TOPIC9  "msb/traffic/CarCounter/ShowTotal"
 #define MQTT_PUB_TOPIC10 "msb/traffic/CarCounter/secondBeamSensorState"
 #define MQTT_PUB_TOPIC11 "msb/traffic/CarCounter/TTP"
@@ -187,7 +188,7 @@ char topicBase[60];
 #define MQTT_SUB_TOPIC3  "msb/traffic/CarCounter/resetDayOfMonth"
 #define MQTT_SUB_TOPIC4  "msb/traffic/CarCounter/resetDaysRunning"
 #define MQTT_SUB_TOPIC5  "msb/traffic/CarCounter/carCounterTimeout"
-#define MQTT_SUB_TOPIC6  "msb/traffic/CarCounter/resetCalendarDay"
+
 
 //const uint32_t connectTimeoutMs = 10000;
 uint16_t connectTimeOutPerAP=5000;
@@ -209,7 +210,6 @@ int lastDayOfMonth = 0; // Pervious day's calendar day used to reset running day
 int totalDailyCars = 0; // total cars counted per day 24/7 Needed for debugging
 int totalShowCars = 0; // total cars counted for durning show hours open (4:55 pm to 9:10 pm)
 int totalSeasonCars = 0; // total cars counted for season (Black Friday thru New Year's Eve)
-int ignoreCars = 0; // cars that were counted before the show starts (used to start traffic counts at 0 at 4:55 pm)
 int connectionAttempts = 5; // number of WiFi or MQTT Connection Attempts
 int carsBeforeShow = 0; // Total Cars before show starts
 int carsHr18 =0; // total cars 1st hour ending 18:00 (4:55 pm to 6:00 pm)
@@ -365,7 +365,7 @@ void MQTTreconnect()
   mqtt_client.subscribe(MQTT_SUB_TOPIC3);
   mqtt_client.subscribe(MQTT_SUB_TOPIC4);
   mqtt_client.subscribe(MQTT_SUB_TOPIC5);
-  mqtt_client.subscribe(MQTT_SUB_TOPIC6); 
+
 } // END MQTT Reconnect
 
 void SetLocalTime()
@@ -420,9 +420,9 @@ void getDailyTotal()   // open DAILYTOT.txt to get initial dailyTotal value
      totalDailyCars = myFile.parseInt(); // read total
      Serial.print(" Daily cars from file = ");
      Serial.println(totalDailyCars);
-     mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
     }
     myFile.close();
+    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
   }
   else
   {
@@ -441,9 +441,9 @@ void getShowTotal()     // open ShowTot.txt to get total Cars for season
       totalShowCars = myFile.parseInt(); // read total
       Serial.print(" Total Show cars from file = ");
       Serial.println(totalShowCars);
-     mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
     }
     myFile.close();
+    mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
   }
   else
   {
@@ -463,6 +463,7 @@ void getDayOfMonth()  // get the last calendar day used for reset daily counts)
      Serial.println(lastDayOfMonth);
      }
    myFile.close();
+   mqtt_client.publish(MQTT_PUB_TOPIC8, String(lastDayOfMonth).c_str());
    }
    else
    {
@@ -478,11 +479,11 @@ void getDaysRunning()   // Days the show has been running)
   {
     while (myFile.available()) {
     daysRunning = myFile.parseInt(); // read day Number
-    mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
     Serial.print(" Days Running = ");
     Serial.println(daysRunning);
     }
     myFile.close();
+    mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
   }
   else
   {
@@ -507,7 +508,7 @@ void updateHourlyTotals()
 void KeepMqttAlive()
 {
    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
-   mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
+   mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
    //Serial.println("MQTT Keep Alive");
@@ -521,7 +522,7 @@ void updateDailyTotal()
   {  // check for an open failure
      myFile.print(totalDailyCars);
      myFile.close();
-    mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
   }
   else
   {
@@ -535,7 +536,6 @@ void updateShowTotal()  /* -----Increment the grand total cars file for season  
    myFile = SD.open(fileName2,FILE_WRITE);
    if (myFile) 
    {
-      //myFile.print(totalShowCars-ignoreCars); // only count cars between 4:55 pm and 9:10 pm
       myFile.print(totalShowCars); // only count cars between 4:55 pm and 9:10 pm
       myFile.close();
       mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
@@ -557,7 +557,7 @@ void updateDayOfMonth()  /* -----write calendar day 1 seond past midnight to fil
    {
       myFile.print(DayOfMonth);
       myFile.close();
-      mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
+      mqtt_client.publish(MQTT_PUB_TOPIC8, String(DayOfMonth).c_str());
    }
    else
    {
@@ -610,12 +610,12 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
     // Publish Totals
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
-    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
+//    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC4, String(carsHr18).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC5, String(carsHr19).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC6, String(carsHr20).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC7, String(carsHr21).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC8, String(totalDailyCars).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Enter Summary File Updated");
     hasRun = true;
@@ -839,7 +839,6 @@ void callback(char* topic, byte* payload, unsigned int length)
     Serial.println(F(" Days Running Updated"));
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Days Running Updated");
   }  
-
  
   // Topic used to change car counter timeout  
   if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)
@@ -849,21 +848,8 @@ void callback(char* topic, byte* payload, unsigned int length)
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Car Counter Timeout Updated");
   }  
  
-   /* Topic used to manually reset Days Running */
-  if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)
-  {
-    DayOfMonth = atoi((char *)payload);
-    updateDayOfMonth();
-    Serial.println(F(" Days of Month Updated"));
-    mqtt_client.publish(MQTT_PUB_TOPIC0, "Calendar Day of Month Updated");
-  } 
 
-  //  Serial.println(carCountCars); 
-
-   //Serial.println();
 } /***** END OF CALLBACK TOPICS *****/
-
-
 
 /******  BEGIN SETUP ******/
 void setup()
@@ -1052,24 +1038,19 @@ void setup()
   
   /* Set Input Pins Beam Pins set to pulldown 10/22/24 GAL undefined before
   Beam Pins LOW when no car is present and go HIGH when beam is broken */
-
-  firstBeamState = 0;
-  secondBeamState = 0;
-  lastFirstBeamState = 0;
-  lastSecondBeamState = 0;
-  digitalWrite(redArchPin, HIGH);
-  digitalWrite(greenArchPin, HIGH);
   pinMode(firstBeamPin, INPUT_PULLDOWN);
   pinMode(secondBeamPin, INPUT_PULLDOWN);
   pinMode(redArchPin, OUTPUT);
   pinMode(greenArchPin, OUTPUT);
+  digitalWrite(redArchPin, HIGH);
+  digitalWrite(greenArchPin, HIGH);
  
   display.clearDisplay();
   display.setTextColor(WHITE);
   display.setTextSize(2);
   display.setCursor(0, line3);
-  display.println(" Ready To");
-  display.println("Count Cars");
+  display.println(" Starting");
+  display.println("Car Counter");
 
   Serial.println  ("Initializing Car Counter");
     Serial.print("Temperature: ");
@@ -1084,13 +1065,9 @@ void setup()
   getDayOfMonth();  /*Saves Calendar Day*/ 
   getDaysRunning(); /*Needs to be reset 1st day of show*/
 
- 
-
-  // Read Digital Pin States for debugging
+   // Read Digital Pin States for debugging
   firstBeamState = digitalRead (firstBeamPin); //Read the current state of the FIRST IR beam receiver/Beam
   secondBeamState = digitalRead (secondBeamPin);
-  digitalWrite(redArchPin, HIGH);
-  digitalWrite(greenArchPin, HIGH);
   Serial.print("firstBeam State = ");
   Serial.print(firstBeamState);
   Serial.print(" secondBeamState = ");
@@ -1144,7 +1121,6 @@ void loop()
     DayOfMonth = now.day(); // Write new calendar day 1 second past midnight
     updateDayOfMonth();
     totalDailyCars = 0;  // reset count to 0 at 1 seond past midnight
-    ignoreCars = 0; // reset cars entering before show starts
     updateDailyTotal();
     hasRun = false; // reset flag for next day summary
     if (now.month() != 12 && now.day() != 24) // do not increment days running when closed on Christmas Eve
@@ -1164,7 +1140,6 @@ void loop()
     DayOfMonth=now.day();
     updateDayOfMonth();
     totalDailyCars =0;
-    ignoreCars = 0;
     updateDailyTotal();
     if (now.month() != 12 && now.day() != 24) // do not include days running when closed on Christmas Eve
     {
@@ -1393,8 +1368,8 @@ void loop()
       
       if (secondBeamState == 0)  /* when second sensor goes low, Car has passed */
       {
-        carPresentFlag = 0; // Car has exited detection zone. Turn On Green Arch
         TimeToPassMillis = millis() - carDetectedMillis; // Record time to Pass
+        carPresentFlag = 0; // Car has exited detection zone. Turn On Green Arch
         digitalWrite(redArchPin, LOW); // Turn off Red Arch
         digitalWrite(greenArchPin, HIGH); // Turn On Green Arch
         beamCarDetect(); //count car and update files
@@ -1425,6 +1400,4 @@ void loop()
   }
   lastFirstBeamState = firstBeamState;
   lastSecondBeamState = secondBeamState;
-
-
 } /***** Repeat Loop *****/
