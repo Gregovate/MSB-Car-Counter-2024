@@ -4,6 +4,8 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.27.3 changed reset counts to 5:00 pm and publish Array index daily total
+24.11.27.2 changed tempF from int16_t to int
 24.11.27.1 moved publishing days running to MQTT Connect. Changed delay after wifi connect from 5 sec to 1 sec
 24.11.26.3 added days running to keepMQTTAlive
 24.11.26.2 Changed Update to days running since they were doubling on date change
@@ -98,7 +100,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.27.1" // Firmware Version
+#define FWVersion "24.11.27.3" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -200,7 +202,7 @@ const char* ampm ="AM";
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = -21600;
 const int   daylightOffset_sec = 3600;
-int16_t tempF;
+float tempF;
 
 // important time values
 unsigned int DayOfMonth; // Current Calendar day
@@ -216,10 +218,10 @@ int totalShowCars; // total cars counted for durning show hours open (4:55 pm to
 int totalSeasonCars; // total cars counted for season (Black Friday thru New Year's Eve)
 int connectionAttempts = 5; // number of WiFi or MQTT Connection Attempts
 int carsBeforeShow = 0; // Total Cars before show starts
-int carsHr18 =0; // total cars 1st hour ending 18:00 (4:55 pm to 6:00 pm)
-int carsHr19=0; // total cars 2nd hour ending 19:00 (6:00 pm to 7:00 pm)
-int carsHr20=0; // total cars 3rd hour ending 20:00 (7:00 pm to 8:00 pm)
-int carsHr21 =0; // total cars 4th hour ending 21:00 (8:00 pm to 9:10 pm)
+int carsHr18; // total cars 1st hour ending 18:00 (4:55 pm to 6:00 pm)
+int carsHr19; // total cars 2nd hour ending 19:00 (6:00 pm to 7:00 pm)
+int carsHr20; // total cars 3rd hour ending 20:00 (7:00 pm to 8:00 pm)
+int carsHr21; // total cars 4th hour ending 21:00 (8:00 pm to 9:10 pm)
 int carPresentFlag; // Flag used to detect car in detection zone
 int carCounterTimeout = 60000; // default time for car counter alarm in millis
 
@@ -610,10 +612,10 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
     // Publish Totals
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
-    mqtt_client.publish(MQTT_PUB_TOPIC4, String(carsHr18).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC5, String(carsHr19).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC6, String(carsHr20).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC7, String(carsHr21).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC4, String(dayHour[18]).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC5, String(dayHour[19]).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC6, String(dayHour[20]).c_str());
+    mqtt_client.publish(MQTT_PUB_TOPIC7, String(dayHour[21]).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC0, "Enter Summary File Updated");
@@ -1094,9 +1096,9 @@ void loop()
   {
     showTime = false;
   }
-  /*****IMPORTANT***** Reset Car Counter at 4:55:00 pm ****/
+  /*****IMPORTANT***** Reset Car Counter at 5:00:00 pm ****/
   /* Only counting vehicles for show */
-  if ((now.hour() == 16) && (now.minute() == 55) && (now.second() == 0))  
+  if ((now.hour() == 17) && (now.minute() == 0) && (now.second() == 0))  
   {
     carsBeforeShow = totalDailyCars; // records number of cars counted before show starts 11/3/24
     updateDailyTotal();
