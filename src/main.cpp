@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.27.1 moved publishing days running to MQTT Connect. Changed delay after wifi connect from 5 sec to 1 sec
 24.11.26.3 added days running to keepMQTTAlive
 24.11.26.2 Changed Update to days running since they were doubling on date change
 24.11.26.1 Removed running days from keepMQTT alive
@@ -97,7 +98,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.26.3" // Firmware Version
+#define FWVersion "24.11.27.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -323,7 +324,7 @@ void setup_wifi()
   ElegantOTA.onEnd(onOTAEnd);
   server.begin();
   Serial.println("HTTP server started");
-  delay(5000);
+  delay(1000);
 }  // END WiFi Setup
 
 
@@ -347,6 +348,7 @@ void MQTTreconnect()
       // Once connected, publish an announcement…
       mqtt_client.publish(MQTT_PUB_TOPIC0, "Car Counter ONLINE!");
       mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
+      mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
       // … and resubscribe
       mqtt_client.subscribe(MQTT_PUB_TOPIC0);
     } 
@@ -368,7 +370,6 @@ void MQTTreconnect()
   mqtt_client.subscribe(MQTT_SUB_TOPIC3);
   mqtt_client.subscribe(MQTT_SUB_TOPIC4);
   mqtt_client.subscribe(MQTT_SUB_TOPIC5);
-
 } // END MQTT Reconnect
 
 void SetLocalTime()
@@ -411,7 +412,7 @@ void SetLocalTime()
   strftime(timeStringBuff, sizeof(timeStringBuff), "%Y-%m-%d %H:%M:%S", &timeinfo);
   Serial.println(timeStringBuff);
   rtc.adjust(DateTime(timeStringBuff));
-}
+} // end SetLocalTime
 
 // =========== GET SAVED SETUP FROM SD CARD ==========
 void getDailyTotal()   // open DAILYTOT.txt to get initial dailyTotal value
@@ -432,7 +433,7 @@ void getDailyTotal()   // open DAILYTOT.txt to get initial dailyTotal value
     Serial.print("SD Card: Cannot open the file: ");
     Serial.println(fileName1);
   }
-}
+} // end getDailyTotal
 
 void getShowTotal()     // open ShowTot.txt to get total Cars for season
 {
@@ -453,7 +454,7 @@ void getShowTotal()     // open ShowTot.txt to get total Cars for season
     Serial.print("SD Card: Cannot open the file: ");
     Serial.println(fileName2);
   }
-}
+}  // end getShowTotal
 
 void getDayOfMonth()  // get the last calendar day used for reset daily counts)
 {
@@ -512,8 +513,6 @@ void KeepMqttAlive()
    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
    mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
-   mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
-   //Serial.println("MQTT Keep Alive");
    start_MqttMillis = millis();
 }
 
@@ -599,7 +598,6 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
   if (myFile) 
   {
     myFile.print(now.toString(buf2));
-
     myFile.print(", "); 
     for (int i = 16; i<=21; i++)
       {
@@ -612,7 +610,6 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
     // Publish Totals
     mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
-//    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC4, String(carsHr18).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC5, String(carsHr19).c_str());
     mqtt_client.publish(MQTT_PUB_TOPIC6, String(carsHr20).c_str());
@@ -629,8 +626,6 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
   }
 }
 /***** END OF FILE UPDATES *****/
-
-
 
 /***** IDLE STUFF  *****/
 void playPattern() // Flash an alternating pattern on the arches (called if a car hasn't been detected for over 30 seconds)
@@ -794,7 +789,7 @@ void initSDCard()
 /*** MQTT CALLBACK TOPICS ****/
 void callback(char* topic, byte* payload, unsigned int length)
 {
-  
+ /* 
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
@@ -804,7 +799,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   }
   payload[length] = '\0';
   Serial.println();
-  
+  */
 
   /* Topic used to manually reset Enter Daily Cars */
   if (strcmp(topic, MQTT_SUB_TOPIC1) == 0)
@@ -1080,7 +1075,7 @@ void setup()
      Serial.println("Error starting mDNS");
      return;
   }
-  delay(3000);
+  delay(1000);
   start_MqttMillis = millis();
 } /***** END SETUP ******/
 
