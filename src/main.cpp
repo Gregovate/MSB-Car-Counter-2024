@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.11.27.4 moved MQTT updated outside file checks. Changed tempF to Float
 24.11.27.3 changed reset counts to 5:00 pm and publish Array index daily total
 24.11.27.2 changed tempF from int16_t to int
 24.11.27.1 moved publishing days running to MQTT Connect. Changed delay after wifi connect from 5 sec to 1 sec
@@ -100,7 +101,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.11.27.3" // Firmware Version
+#define FWVersion "24.11.27.4" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -525,13 +526,14 @@ void updateDailyTotal()
   {  // check for an open failure
      myFile.print(totalDailyCars);
      myFile.close();
-    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
+    
   }
   else
   {
     Serial.print(F("SD Card: Cannot open the file: "));
     Serial.println(fileName1);
   }
+  mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
 }
 
 void updateShowTotal()  /* -----Increment the grand total cars file for season  CHECK ----- */
@@ -541,7 +543,6 @@ void updateShowTotal()  /* -----Increment the grand total cars file for season  
    {
       myFile.print(totalShowCars); // only count cars between 4:55 pm and 9:10 pm
       myFile.close();
-      mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
       Serial.print(F("Updating Show Total "));
       Serial.print(totalShowCars);
       Serial.print(F(" Car # "));
@@ -551,6 +552,7 @@ void updateShowTotal()  /* -----Increment the grand total cars file for season  
     Serial.print(F("SD Card: Cannot open the file: "));
     Serial.println(fileName2);
   }
+  mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());  
 }
 
 void updateDayOfMonth()  /* -----write calendar day 1 seond past midnight to file ----- */
@@ -560,13 +562,14 @@ void updateDayOfMonth()  /* -----write calendar day 1 seond past midnight to fil
    {
       myFile.print(DayOfMonth);
       myFile.close();
-      mqtt_client.publish(MQTT_PUB_TOPIC8, String(DayOfMonth).c_str());
+      
    }
    else
    {
     Serial.print(F("SD Card: Cannot open the file: "));
     Serial.println(fileName3);
    }
+   mqtt_client.publish(MQTT_PUB_TOPIC8, String(DayOfMonth).c_str());
 }
 
 void updateDaysRunning()
@@ -576,13 +579,13 @@ void updateDaysRunning()
   {
     myFile.print(daysRunning);
     myFile.close();
-    mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
   }
   else
   {
     Serial.print(F("SD Card: Cannot open the file: "));
     Serial.println(fileName4);
   }
+  mqtt_client.publish(MQTT_PUB_TOPIC12, String(daysRunning).c_str());
 }
 
 void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
@@ -609,23 +612,23 @@ void WriteDailySummary() // Write totals daily at end of show (EOS Totals)
     myFile.println(tempF);
     myFile.close();
     Serial.println(F(" = Daily Summary Recorded SD Card."));
-    // Publish Totals
-    mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
-    mqtt_client.publish(MQTT_PUB_TOPIC4, String(dayHour[18]).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC5, String(dayHour[19]).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC6, String(dayHour[20]).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC7, String(dayHour[21]).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
-    mqtt_client.publish(MQTT_PUB_TOPIC0, "Enter Summary File Updated");
-    hasRun = true;
   }
   else
   {
     Serial.print(F("SD Card: Cannot open the file: "));
     Serial.println(fileName5);
   }
+    // Publish Totals
+  mqtt_client.publish(MQTT_PUB_TOPIC1, String(tempF).c_str());
+  mqtt_client.publish(MQTT_PUB_TOPIC2, now.toString(buf2));
+  mqtt_client.publish(MQTT_PUB_TOPIC4, String(dayHour[18]).c_str());
+  mqtt_client.publish(MQTT_PUB_TOPIC5, String(dayHour[19]).c_str());
+  mqtt_client.publish(MQTT_PUB_TOPIC6, String(dayHour[20]).c_str());
+  mqtt_client.publish(MQTT_PUB_TOPIC7, String(dayHour[21]).c_str());
+  mqtt_client.publish(MQTT_PUB_TOPIC3, String(totalDailyCars).c_str());
+  mqtt_client.publish(MQTT_PUB_TOPIC9, String(totalShowCars).c_str());
+  mqtt_client.publish(MQTT_PUB_TOPIC0, "Enter Summary File Updated");
+  hasRun = true;
 }
 /***** END OF FILE UPDATES *****/
 
