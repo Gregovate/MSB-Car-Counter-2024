@@ -102,12 +102,14 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.12.03.1" // Firmware Version
+#define FWVersion "24.12.3.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int carDetectMillis = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
 unsigned int showEndTime =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
 // **************************************************
+
+
 
 AsyncWebServer server(80);
 
@@ -251,7 +253,6 @@ unsigned int totalCars;
 int displayMode = 0;
 unsigned long displayModeMillis = 0;
 unsigned long dayMillis = 0;
-int daysRunning=0; // Number of days the show is running.
 int alternateColorMode = 0;
 int patternMode = 0;
 unsigned long patternModeMillis = 0;
