@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.04.3 added debounce to sensors for snow and changed stage machine debug messages. Increased waitDuration to 950ms
 24.12.04.2 added queue to store unpublished MQTT Messages if MQTT server not connected.
 24.12.04.1 Significant changes. Added State Machine for PlayPattern & Car Detection
 24.12.03.1 Changed defines for MQTT Topics. Changed InitSD and removed duplicate file creation
@@ -105,9 +106,9 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.12.04.2" // Firmware Version
+#define FWVersion "24.12.04.3" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
-unsigned int waitDuration = 750; // minimum millis for secondBeam to be broken needed to detect a car
+unsigned int waitDuration = 950; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
 unsigned int showEndTime =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
 // **************************************************
@@ -185,7 +186,13 @@ int secondBeamState;  // Holds the current state of the SECOND IR receiver/Beam
 int prevFirstBeamState = -1; // Holds the previous state of the FIRST IR receiver/Beam
 int prevSecondBeamState = -1; // Holds the previous state of the SECOND IR receiver/Beam 
 int carQueueCount = 0;  // Track how many cars are in the detection zone
-// Threshold to determine if the detection is due to a car or person
+
+// Variables for debouncing first and second beams
+unsigned long firstBeamLastChangeTime = 0;
+unsigned long secondBeamLastChangeTime = 0;
+int stableFirstBeamState = LOW;
+int stableSecondBeamState = LOW;
+const unsigned long DEBOUNCE_TIME = 200; // Debounce time in milliseconds for snow conditions
 
 
 AsyncWebServer server(80);
@@ -822,32 +829,51 @@ void beamCarDetect() {
 /** State Machine to Detect and Count Cars */
 void detectCar() {
     unsigned long currentMillis = millis();
-    firstBeamState = digitalRead(firstBeamPin);
-    secondBeamState = digitalRead(secondBeamPin);
+    // Read the current state of the beams
+    int currentFirstBeamState = digitalRead(firstBeamPin);
+    int currentSecondBeamState = digitalRead(secondBeamPin);
 
-    // Publish beam state changes only when they change
-    if (firstBeamState != prevFirstBeamState) {
-        publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(firstBeamState));
-        prevFirstBeamState = firstBeamState;
+    // Debouncing logic for the first beam
+    if (currentFirstBeamState != stableFirstBeamState) {
+        if (currentMillis - firstBeamLastChangeTime >= DEBOUNCE_TIME) {
+            stableFirstBeamState = currentFirstBeamState;
+            firstBeamLastChangeTime = currentMillis;
+
+            // Only publish if the state changes after debounce
+            publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(stableFirstBeamState));
+        }
+    } else {
+        // Reset debounce timer if the state is stable
+        firstBeamLastChangeTime = currentMillis;
     }
-    if (secondBeamState != prevSecondBeamState) {
-        publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(secondBeamState));
-        prevSecondBeamState = secondBeamState;
+
+    // Debouncing logic for the second beam
+    if (currentSecondBeamState != stableSecondBeamState) {
+        if (currentMillis - secondBeamLastChangeTime >= DEBOUNCE_TIME) {
+            stableSecondBeamState = currentSecondBeamState;
+            secondBeamLastChangeTime = currentMillis;
+
+            // Only publish if the state changes after debounce
+            publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(stableSecondBeamState));
+        }
+    } else {
+        // Reset debounce timer if the state is stable
+        secondBeamLastChangeTime = currentMillis;
     }
 
     // Handle detection states
     switch (currentCarDetectState) {
         case WAITING_FOR_CAR:
-            if (firstBeamState == 1) {
+            if (stableFirstBeamState == 1) {
                 firstBeamTripTime = currentMillis; // Set the time when the first beam is tripped
                 currentCarDetectState = FIRST_BEAM_BROKEN;
-                publishMQTT(MQTT_DEBUG_LOG, "FIRST_BEAM_BROKEN");
+                publishMQTT(MQTT_DEBUG_LOG, "First Beam High");
                 digitalWrite(greenArchPin, HIGH); // Turn on green arch
             }
             break;
 
         case FIRST_BEAM_BROKEN:
-            if (secondBeamState == 1) {
+            if (stableSecondBeamState == 1) {
                 // Both beams have been tripped, measure time for validation
                 unsigned long timeBeamsHigh = currentMillis - firstBeamTripTime;
 
@@ -855,7 +881,7 @@ void detectCar() {
                     bothBeamsHighTime = currentMillis; // Set the time when both beams are confirmed to be high
                     carPresentFlag = true;
                     currentCarDetectState = BOTH_BEAMS_BROKEN;
-                    publishMQTT(MQTT_DEBUG_LOG, "BOTH_BEAMS_BROKEN - CAR DETECTED");
+                    publishMQTT(MQTT_DEBUG_LOG, "Both Beams HIGH, Car Detected!");
                     digitalWrite(greenArchPin, LOW);  // Turn off green arch
                     digitalWrite(redArchPin, HIGH);   // Turn on red arch
                  }
@@ -863,7 +889,7 @@ void detectCar() {
             } else if (firstBeamState == 0) {
                 // If the first beam is cleared before the second beam is triggered, reset
                 currentCarDetectState = WAITING_FOR_CAR;
-                publishMQTT(MQTT_DEBUG_LOG, "CAR_BACKED_OUT_RESET");
+                publishMQTT(MQTT_DEBUG_LOG, "Reset Waiting for Car");
                 digitalWrite(greenArchPin, HIGH); // Turn on green arch
             }
             break;
@@ -875,7 +901,7 @@ void detectCar() {
             }         
             if (secondBeamState == 0 && carPresentFlag) {
                 currentCarDetectState = CAR_DETECTED;
-                publishMQTT(MQTT_DEBUG_LOG, "SECOND_BEAM_LOW - CAR PASSED THROUGH");
+                publishMQTT(MQTT_DEBUG_LOG, "Beam 2 Low-Car Passed Through");
             }
             break;
 
@@ -884,7 +910,7 @@ void detectCar() {
                 beamCarDetect(); // Count the car and update files
                 unsigned long timeToPass = currentMillis - firstBeamTripTime;
                 publishMQTT(MQTT_PUB_TTP, String(timeToPass));
-                publishMQTT(MQTT_DEBUG_LOG, "CAR COUNTED SUCCESSFULLY!");
+                publishMQTT(MQTT_DEBUG_LOG, "Car Counted Successfully!!");
                 carPresentFlag = false;
 
                 // Update lights on successful detection
@@ -898,7 +924,7 @@ void detectCar() {
 
                 // Reset to waiting for a new car
                 currentCarDetectState = WAITING_FOR_CAR;
-                publishMQTT(MQTT_DEBUG_LOG, "WAITING_FOR_CAR");
+                publishMQTT(MQTT_DEBUG_LOG, "Waiting for Car");
             }
             break;
     }
