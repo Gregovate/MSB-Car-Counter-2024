@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.04.2 added queue to store unpublished MQTT Messages if MQTT server not connected.
 24.12.04.1 Significant changes. Added State Machine for PlayPattern & Car Detection
 24.12.03.1 Changed defines for MQTT Topics. Changed InitSD and removed duplicate file creation
 24.11.27.4 moved MQTT updated outside file checks. Changed tempF to Float
@@ -93,6 +94,7 @@ D23 - MOSI
 #include <ESPmDNS.h>
 #include <ESPAsyncWebServer.h>
 #include <ElegantOTAPro.h>
+#include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
 #define firstBeamPin 33
@@ -103,7 +105,7 @@ D23 - MOSI
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.12.04.1" // Firmware Version
+#define FWVersion "24.12.04.2" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 unsigned int waitDuration = 750; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
@@ -398,13 +400,32 @@ void setup_wifi()  {
     delay(1000);
 }  // END WiFi Setup
 
+std::queue<String> publishQueue;
+
 void publishMQTT(const char *topic, const String &message) {
     if (mqtt_client.connected()) {
         mqtt_client.publish(topic, message.c_str());
     } else {
-        Serial.printf("MQTT not connected. Failed to publish: %s -> %s\n", topic, message.c_str());
+        Serial.printf("MQTT not connected. Adding to queue: %s -> %s\n", topic, message.c_str());
+        publishQueue.push(String(topic) + "|" + message);  // Add message to queue
+    }
+    start_MqttMillis = millis();
+}
+
+void publishQueuedMessages() {
+    while (!publishQueue.empty() && mqtt_client.connected()) {
+        String data = publishQueue.front();
+        publishQueue.pop();
+        
+        int delimiterPos = data.indexOf('|');
+        if (delimiterPos != -1) {
+            String topic = data.substring(0, delimiterPos);
+            String message = data.substring(delimiterPos + 1);
+            mqtt_client.publish(topic.c_str(), message.c_str());
+        }
     }
 }
+
 
 void KeepMqttAlive()  {
    publishMQTT(MQTT_PUB_TEMP, String(tempF));
@@ -1017,8 +1038,7 @@ void setup() {
   display.setCursor(0, line1);
   display.display();
   
-  //Initialize SD Card
-  initSDCard();  // Initialize SD card and ready for Read/Write
+
 
     // List of approved WiFi AP's
   WiFi.mode(WIFI_STA);  
@@ -1092,7 +1112,8 @@ void setup() {
   Serial.print(tempF);
   Serial.println(" F");
   display.display();
-
+  //Initialize SD Card
+  initSDCard();  // Initialize SD card and ready for Read/Write
   //on reboot, get totals saved on SD Card
   getDailyTotal();  /*Daily total that is updated with every detection*/
   getShowTotal();   /*Saves Show Total*/
@@ -1293,6 +1314,9 @@ void loop() {
     }
 
   //Added to kepp mqtt connection alive 10/11/24 gal
+  if (mqtt_client.connected()) {
+        publishQueuedMessages();  // Publish any messages that were queued during a disconnected state
+    }
   if  ((millis() - start_MqttMillis) > (mqttKeepAlive*1000)) {
       KeepMqttAlive();
   }
