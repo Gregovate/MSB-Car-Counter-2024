@@ -4,6 +4,9 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.04.6 Afternoon logic added back in good and stable. Had time to add back 50ms debounce for snow conditions. Traffic too light to stress test
+24.12.04.5 Removed Sensor Bounce Logic due to time constraints. Going back to afternoon logic.
+24.12.04.4 Added MQTT_SUB_TOPIC6 to change beam sensor duration on the fly
 24.12.04.3 added debounce to sensors for snow and changed stage machine debug messages. Increased waitDuration to 950ms
 24.12.04.2 added queue to store unpublished MQTT Messages if MQTT server not connected.
 24.12.04.1 Significant changes. Added State Machine for PlayPattern & Car Detection
@@ -98,16 +101,20 @@ D23 - MOSI
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
+#define FWVersion "24.12.04.6" // Firmware Version
+#define OTA_Title "Car Counter" // OTA Title
+#define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
 #define secondBeamPin 32
 #define redArchPin 25
 #define greenArchPin 26
 #define PIN_SPI_CS 5 // The ESP32 pin GPIO5
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
-#define FWVersion "24.12.04.3" // Firmware Version
-#define OTA_Title "Car Counter" // OTA Title
+
 unsigned int waitDuration = 950; // minimum millis for secondBeam to be broken needed to detect a car
 unsigned int showStartTime = 16*60 + 55; // Show (counting) starts at 4:55 pm
 unsigned int showEndTime =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
@@ -145,6 +152,7 @@ char topicBase[60];
 #define MQTT_SUB_TOPIC3  "msb/traffic/CarCounter/resetDayOfMonth"
 #define MQTT_SUB_TOPIC4  "msb/traffic/CarCounter/resetDaysRunning"
 #define MQTT_SUB_TOPIC5  "msb/traffic/CarCounter/carCounterTimeout"
+#define MQTT_SUB_TOPIC6  "msb/traffic/CarCounter/waitDuration"
 
 
 /** State Machine Enum to represent the different states of the play pattern */
@@ -185,15 +193,14 @@ int firstBeamState;  // Holds the current state of the FIRST IR receiver/Beam
 int secondBeamState;  // Holds the current state of the SECOND IR receiver/Beam
 int prevFirstBeamState = -1; // Holds the previous state of the FIRST IR receiver/Beam
 int prevSecondBeamState = -1; // Holds the previous state of the SECOND IR receiver/Beam 
-int carQueueCount = 0;  // Track how many cars are in the detection zone
 
-// Variables for debouncing first and second beams
-unsigned long firstBeamLastChangeTime = 0;
-unsigned long secondBeamLastChangeTime = 0;
-int stableFirstBeamState = LOW;
-int stableSecondBeamState = LOW;
-const unsigned long DEBOUNCE_TIME = 200; // Debounce time in milliseconds for snow conditions
+unsigned long debounceDelay = 50; // 50 ms debounce delay
 
+// Variables to store the stable state and last state change time
+bool stableFirstBeamState = LOW;
+bool stableSecondBeamState = LOW;
+unsigned long lastFirstBeamChangeTime = 0;
+unsigned long lastSecondBeamChangeTime = 0;
 
 AsyncWebServer server(80);
 
@@ -223,13 +230,9 @@ void onOTAEnd(bool success) {
   // <Add your own code here>
 }
 
-
-
-
 /** Display Definitions & variables **/
-#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);;
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 const int line1 =0;
 const int line2 =9;
 const int line3 = 19;
@@ -287,7 +290,7 @@ char months[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 unsigned long hourlyCarCount[24] = {0}; // Array for Daily total cars per hour
 
 /** REAL TIME Clock & Time Related Variables **/
-#define DS3231_I2C_ADDRESS 0x68
+
 RTC_DS3231 rtc;
 const char* ampm ="AM";
 const char* ntpServer = "pool.ntp.org";
@@ -829,42 +832,39 @@ void beamCarDetect() {
 /** State Machine to Detect and Count Cars */
 void detectCar() {
     unsigned long currentMillis = millis();
-    // Read the current state of the beams
-    int currentFirstBeamState = digitalRead(firstBeamPin);
-    int currentSecondBeamState = digitalRead(secondBeamPin);
+    bool rawFirstBeamState = digitalRead(firstBeamPin);
+    bool rawSecondBeamState = digitalRead(secondBeamPin);
 
-    // Debouncing logic for the first beam
-    if (currentFirstBeamState != stableFirstBeamState) {
-        if (currentMillis - firstBeamLastChangeTime >= DEBOUNCE_TIME) {
-            stableFirstBeamState = currentFirstBeamState;
-            firstBeamLastChangeTime = currentMillis;
-
-            // Only publish if the state changes after debounce
+    // Debounce first beam sensor
+    if (rawFirstBeamState != stableFirstBeamState) {
+        if (currentMillis - lastFirstBeamChangeTime > debounceDelay) {
+            stableFirstBeamState = rawFirstBeamState;
+            lastFirstBeamChangeTime = currentMillis;
             publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(stableFirstBeamState));
         }
     } else {
-        // Reset debounce timer if the state is stable
-        firstBeamLastChangeTime = currentMillis;
+        lastFirstBeamChangeTime = currentMillis;
     }
 
-    // Debouncing logic for the second beam
-    if (currentSecondBeamState != stableSecondBeamState) {
-        if (currentMillis - secondBeamLastChangeTime >= DEBOUNCE_TIME) {
-            stableSecondBeamState = currentSecondBeamState;
-            secondBeamLastChangeTime = currentMillis;
-
-            // Only publish if the state changes after debounce
+    // Debounce second beam sensor
+    if (rawSecondBeamState != stableSecondBeamState) {
+        if (currentMillis - lastSecondBeamChangeTime > debounceDelay) {
+            stableSecondBeamState = rawSecondBeamState;
+            lastSecondBeamChangeTime = currentMillis;
             publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(stableSecondBeamState));
         }
     } else {
-        // Reset debounce timer if the state is stable
-        secondBeamLastChangeTime = currentMillis;
+        lastSecondBeamChangeTime = currentMillis;
     }
+
+    // Use the stable beam states instead of the raw readings
+    firstBeamState = stableFirstBeamState;
+    secondBeamState = stableSecondBeamState;
 
     // Handle detection states
     switch (currentCarDetectState) {
         case WAITING_FOR_CAR:
-            if (stableFirstBeamState == 1) {
+            if (firstBeamState == 1) {
                 firstBeamTripTime = currentMillis; // Set the time when the first beam is tripped
                 currentCarDetectState = FIRST_BEAM_BROKEN;
                 publishMQTT(MQTT_DEBUG_LOG, "First Beam High");
@@ -873,15 +873,15 @@ void detectCar() {
             break;
 
         case FIRST_BEAM_BROKEN:
-            if (stableSecondBeamState == 1) {
+            if (secondBeamState == 1) {
                 // Both beams have been tripped, measure time for validation
                 unsigned long timeBeamsHigh = currentMillis - firstBeamTripTime;
 
-                if (timeBeamsHigh >= 750) {
+                if (timeBeamsHigh >= waitDuration) {
                     bothBeamsHighTime = currentMillis; // Set the time when both beams are confirmed to be high
                     carPresentFlag = true;
                     currentCarDetectState = BOTH_BEAMS_BROKEN;
-                    publishMQTT(MQTT_DEBUG_LOG, "Both Beams HIGH, Car Detected!");
+                    publishMQTT(MQTT_DEBUG_LOG, "State Changed Both Beams High");
                     digitalWrite(greenArchPin, LOW);  // Turn off green arch
                     digitalWrite(redArchPin, HIGH);   // Turn on red arch
                  }
@@ -889,7 +889,7 @@ void detectCar() {
             } else if (firstBeamState == 0) {
                 // If the first beam is cleared before the second beam is triggered, reset
                 currentCarDetectState = WAITING_FOR_CAR;
-                publishMQTT(MQTT_DEBUG_LOG, "Reset Waiting for Car");
+                publishMQTT(MQTT_DEBUG_LOG, "1st Beam Low, Changed Waiting for Car");
                 digitalWrite(greenArchPin, HIGH); // Turn on green arch
             }
             break;
@@ -901,7 +901,7 @@ void detectCar() {
             }         
             if (secondBeamState == 0 && carPresentFlag) {
                 currentCarDetectState = CAR_DETECTED;
-                publishMQTT(MQTT_DEBUG_LOG, "Beam 2 Low-Car Passed Through");
+                publishMQTT(MQTT_DEBUG_LOG, "Changed state to Car Detected");
             }
             break;
 
@@ -924,7 +924,7 @@ void detectCar() {
 
                 // Reset to waiting for a new car
                 currentCarDetectState = WAITING_FOR_CAR;
-                publishMQTT(MQTT_DEBUG_LOG, "Waiting for Car");
+                publishMQTT(MQTT_DEBUG_LOG, "Idle-Waiting For Car");
             }
             break;
     }
@@ -1044,10 +1044,15 @@ void callback(char* topic, byte* payload, unsigned int length)  {
   } else if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)  {
       // Topic used to change car counter timeout
       carCounterTimeout = atoi((char *)payload);
-      Serial.println(F(" Car Counter Alarm Timer Updated"));
+      Serial.println(F(" Counter Alarm Timer Updated"));
       publishMQTT(MQTT_PUB_HELLO, "Car Counter Timeout Updated");
-  }  
- } /***** END OF CALLBACK TOPICS *****/
+  } else if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)  {
+      // Topic used to change car counter timeout
+      waitDuration = atoi((char *)payload);
+      Serial.println(F(" Sensor Durtion Updated"));
+      publishMQTT(MQTT_PUB_HELLO, "Sensor Duration Updated"); 
+ } 
+ }/***** END OF CALLBACK TOPICS *****/
 
 /******  BEGIN SETUP ******/
 void setup() {
