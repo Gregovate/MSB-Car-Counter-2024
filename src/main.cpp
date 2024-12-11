@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.11.3 OTA-SDCard Branch Added OTA for file operations Revised checkAndCreateFile() for server files needed under /data  
 24.12.11.2 Added thousands separator to total show cars with new proceedure formatK
 24.12.11.1 Refactored saveDailyShowSummary() to fix avg temp and put any cars up tp 9:10 pm into the 9:00 bucket & included show total & days running
 24.12.10.3 Removed saveDailySummary(); Deleted global variables for hourly totals
@@ -109,7 +110,7 @@ D23 - MOSI
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.11.2" // Firmware Version
+#define FWVersion "24.12.11.3" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -209,6 +210,7 @@ unsigned long lastFirstBeamChangeTime = 0;
 unsigned long lastSecondBeamChangeTime = 0;
 
 AsyncWebServer server(80);
+String currentDirectory = "/"; // Current working directory
 
 unsigned long ota_progress_millis = 0;
 
@@ -360,6 +362,90 @@ const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since
 const String fileName5 = "/EnterSummary.csv"; // EnterSummary.csv Stores Daily Totals by Hour and total
 const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car counts for season (was MASTER.CSV)
 const String fileName7 = "/ShowSummary.csv"; // Show summary of counts during show (5:00pm to 9:10pm)
+const String fileName8 = "/data/index.html"; // data folder and index.html for serving files OTA
+const String fileName9 = "/data/style.css"; // data folder and index.html for serving files OTA
+
+// BEGIN OTA SD Card File Operations
+void listSDFiles(AsyncWebServerRequest *request) {
+    String fileList = "Files in " + currentDirectory + ":\n";
+
+    File root = SD.open(currentDirectory);
+    if (!root || !root.isDirectory()) {
+        request->send(500, "text/plain", "Failed to open directory");
+        return;
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+        fileList += String(file.name()) + " (" + String(file.size()) + " bytes)\n";
+        file = root.openNextFile();
+    }
+
+    request->send(200, "text/plain", fileList);
+}
+
+void downloadSDFile(AsyncWebServerRequest *request) {
+    if (!request->hasParam("filename")) {
+        request->send(400, "text/plain", "Filename is required");
+        return;
+    }
+
+    String filename = currentDirectory + request->getParam("filename")->value();
+    if (!SD.exists(filename)) {
+        request->send(404, "text/plain", "File not found");
+        return;
+    }
+
+    request->send(SD, filename, "application/octet-stream");
+}
+
+void uploadSDFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    static File uploadFile;
+    String fullPath = currentDirectory + filename;
+
+    if (index == 0) { // First chunk
+        if (SD.exists(fullPath)) {
+            SD.remove(fullPath);
+        }
+        uploadFile = SD.open(fullPath, FILE_WRITE);
+        if (!uploadFile) {
+            request->send(500, "text/plain", "Failed to open file for writing");
+            return;
+        }
+    }
+
+    if (uploadFile) { // Write the data
+        uploadFile.write(data, len);
+    }
+
+    if (final) { // Final chunk
+        if (uploadFile) {
+            uploadFile.close();
+        }
+        request->send(200, "text/plain", "File uploaded successfully to " + currentDirectory);
+    }
+}
+
+void changeDirectory(AsyncWebServerRequest *request) {
+    if (!request->hasParam("dir")) {
+        request->send(400, "text/plain", "Directory name is required");
+        return;
+    }
+
+    String newDirectory = request->getParam("dir")->value();
+    if (newDirectory[0] != '/') {
+        newDirectory = currentDirectory + "/" + newDirectory;
+    }
+
+    if (SD.exists(newDirectory) && SD.open(newDirectory).isDirectory()) {
+        currentDirectory = newDirectory;
+        request->send(200, "text/plain", "Changed directory to " + currentDirectory);
+    } else {
+        request->send(404, "text/plain", "Directory not found");
+    }
+}
+//END OTA SD Card File Operations
+
 
 // Utility helper to format numbers as strings with thousnds separator
 String formatK(int number) {
@@ -417,16 +503,79 @@ void setup_wifi()  {
     display.print(rssi);
     display.println(" dBm");
     display.display();
-    // Elegant OTA
+ 
+    delay(1000);
+}  // END WiFi Setup
+
+// HTML Content now served from /data/index.html and /data/style.css
+void setupServer() {
+    // Serve HTML file
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!SD.exists("/data/index.html")) {
+            request->send(500, "text/plain", "index.html not found in /data");
+            return;
+        }
+        request->send(SD, "/data/index.html", "text/html");
+    });
+
+    // Serve CSS file
+    server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!SD.exists("/data/style.css")) {
+            request->send(500, "text/plain", "style.css not found in /data");
+            return;
+        }
+        request->send(SD, "/data/style.css", "text/css");
+    });
+
+    // Setup Web Server Routes
+    server.on("/listFiles", HTTP_GET, listSDFiles);
+    server.on("/download", HTTP_GET, downloadSDFile);
+    server.on("/upload", HTTP_POST, 
+        [](AsyncWebServerRequest *request) {},
+        uploadSDFile);
+    // Handle file uploads to /data directory
+    server.on("/uploadToData", HTTP_POST, 
+        [](AsyncWebServerRequest *request) {},
+        [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+            String fullPath = "/data/" + filename;
+            static File uploadFile;
+
+            if (index == 0) { // First chunk
+                if (SD.exists(fullPath)) {
+                    SD.remove(fullPath);
+                }
+                uploadFile = SD.open(fullPath, FILE_WRITE);
+                if (!uploadFile) {
+                    request->send(500, "text/plain", "Failed to open file for writing");
+                    return;
+                }
+            }
+
+            if (uploadFile) { // Write the data
+                uploadFile.write(data, len);
+            }
+
+            if (final) { // Final chunk
+                if (uploadFile) {
+                    uploadFile.close();
+                }
+                request->send(200, "text/plain", "File uploaded successfully to /data");
+            }
+        });
+    
+    server.on("/changeDirectory", HTTP_GET, changeDirectory);
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Hi! This is The Car Counter.");
     });
+
+    // Elegant OTA
     // You can also enable authentication by uncommenting the below line.
     // ElegantOTA.setAuth("admin", "password");
     ElegantOTA.setID(THIS_MQTT_CLIENT);  // Set Hardware ID
     ElegantOTA.setFWVersion(FWVersion);   // Set Firmware Version
     ElegantOTA.setTitle(OTA_Title);  // Set OTA Webpage Title
     //ElegantOTA.setFilesystemMode(true);  // added 10.16.24.4
+    // Start ElegantOTA
     ElegantOTA.begin(&server);    // Start ElegantOTA
     // ElegantOTA callbacks
     ElegantOTA.onStart(onOTAStart);
@@ -434,8 +583,8 @@ void setup_wifi()  {
     ElegantOTA.onEnd(onOTAEnd);
     server.begin();
     Serial.println("HTTP server started");
-    delay(1000);
-}  // END WiFi Setup
+}
+
 
 void checkWiFiConnection() {
     static unsigned long lastWiFiCheck = 0;
@@ -1231,17 +1380,27 @@ void detectCar() {
 // CHECK AND CREATE FILES on SD Card and WRITE HEADERS if Needed
 void checkAndCreateFile(const String &fileName, const String &header = "") {
     if (!SD.exists(fileName)) {
-        Serial.printf("%s doesn't exist. Creating file...\n", fileName.c_str());
-        myFile = SD.open(fileName, FILE_WRITE);
-        myFile.close();
-        if (!header.isEmpty()) {
-            myFile = SD.open(fileName, FILE_APPEND);
-            myFile.println(header);
-            myFile.close();
-            Serial.printf("Header written to %s\n", fileName.c_str());
+        Serial.printf("%s not found. Creating...\n", fileName.c_str());
+        if (fileName.endsWith("/")) { // Create directory if it ends with '/'
+            if (!SD.mkdir(fileName)) {
+                Serial.printf("Failed to create directory %s\n", fileName.c_str());
+                while (1);
+            } else {
+                Serial.printf("Directory %s created successfully\n", fileName.c_str());
+            }
+        } else { // Create file if not a directory
+            File file = SD.open(fileName, FILE_WRITE);
+            if (!file) {
+                Serial.printf("Failed to create file %s\n", fileName.c_str());
+                while (1);
+            } else {
+                if (!header.isEmpty()) {
+                    file.print(header);
+                }
+                file.close();
+                Serial.printf("File %s created successfully\n", fileName.c_str());
+            }
         }
-    } else {
-        Serial.printf("%s exists on SD Card.\n", fileName.c_str());
     }
 }
 
@@ -1295,6 +1454,8 @@ void initSDCard()  {
     checkAndCreateFile(fileName5, "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23");
     checkAndCreateFile(fileName6, "Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
     checkAndCreateFile(fileName7, "Date,DailyCars,6PM,7PM,8PM,9PM,DaysRunning,ShowTotal,DailyAvgTemp,DaysRunning");
+    checkAndCreateFile(fileName8);
+    checkAndCreateFile(fileName9);
 }
 
 /** Resets the hourly count array at midnight */
@@ -1502,14 +1663,11 @@ void setup() {
     //Initialize SD Card
     initSDCard();  // Initialize SD card and ready for Read/Write
 
-    //on reboot, get totals saved on SD Card
-    //getDailyTotal();  /*Daily total that is updated with every detection*/
-    //getShowTotal();   /*Saves Show Total*/
-    //getDayOfMonth();  /* Get Last Calendar Day*/ 
-    //getDaysRunning(); /*Needs to be reset 1st day of show*/
-    getSavedValuesOnReboot();  // Update/reset counts based on reboot day
-    
+    // Initialize Server
+    setupServer();
 
+    //on reboot, get totals saved on SD Card
+    getSavedValuesOnReboot();  // Update/reset counts based on reboot day
 
     // Setup MDNS
     if (!MDNS.begin(THIS_MQTT_CLIENT)) {
