@@ -4,6 +4,8 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.11.2 Added thousands separator to total show cars with new proceedure formatK
+24.12.11.1 Refactored saveDailyShowSummary() to fix avg temp and put any cars up tp 9:10 pm into the 9:00 bucket & included show total & days running
 24.12.10.3 Removed saveDailySummary(); Deleted global variables for hourly totals
 24.12.10.2 Fixed topic in beamCarDetect for Hourly counts. Fixed if statement in timeTriggeredEvents()
 24.12.10.1 Clarified procedure names, restructured midnight resets and hourly counts
@@ -107,7 +109,7 @@ D23 - MOSI
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.10.3" // Firmware Version
+#define FWVersion "24.12.11.2" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -137,7 +139,7 @@ char topicBase[60];
 #define MQTT_PUB_TEMP  "msb/traffic/CarCounter/temp"
 #define MQTT_PUB_TIME  "msb/traffic/CarCounter/time"
 #define MQTT_PUB_ENTER_TOTAL  "msb/traffic/CarCounter/EnterTotal"
-#define MQTT_PUB_CARS  "msb/traffic/CarCounter/Cars/"
+#define MQTT_PUB_CARS  "msb/traffic/CarCounter/Cars"
 #define MQTT_PUB_SUMMARY "msb/traffic/CarCounter/Summary"
 #define MQTT_PUB_DAYOFMONTH  "msb/traffic/CarCounter/DayOfMonth"
 #define MQTT_PUB_SHOWTOTAL  "msb/traffic/CarCounter/ShowTotal"
@@ -359,6 +361,26 @@ const String fileName5 = "/EnterSummary.csv"; // EnterSummary.csv Stores Daily T
 const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car counts for season (was MASTER.CSV)
 const String fileName7 = "/ShowSummary.csv"; // Show summary of counts during show (5:00pm to 9:10pm)
 
+// Utility helper to format numbers as strings with thousnds separator
+String formatK(int number) {
+    String result = "";
+    int count = 0;
+
+    // Process the number from the least significant digit to the most
+    do {
+        int digit = number % 10;
+        result = String(digit) + result; // Add the digit to the result
+        number /= 10;
+        count++;
+
+        // Add a comma after every 3 digits (except at the end)
+        if (count % 3 == 0 && number > 0) {
+            result = "," + result;
+        }
+    } while (number > 0);
+
+    return result;
+}
 
 void setup_wifi()  {
     Serial.println("Connecting to WiFi");
@@ -726,80 +748,53 @@ void saveDaysRunning() {
 // Save cars counted each hour in the event of a reboot
 void saveHourlyCounts() {
     DateTime now = rtc.now();
-    static int lastRecordedDay = -1; // Tracks the last day recorded
-    int currentDay = now.day();
+    static int lastHour = -1; // Track the last hour the function was executed
 
-    // Read existing file content
-    myFile = SD.open(fileName5, FILE_READ);
-    if (!myFile) {
-        Serial.println("Failed to open file for reading hourly data.");
-        publishMQTT(MQTT_DEBUG_LOG, "Failed to save hourly data to SD card.");
+    int currentHour = now.hour();
+
+    // Ensure this function is only called once per hour
+    if (currentHour == lastHour) {
         return;
     }
+    lastHour = currentHour; // Update last executed hour
 
-    String fileContent = "";
-    String lastLine = "";
-    bool dayExists = false;
+    // Publish traffic counts for the current hour
+    for (int i = 0; i < 24; i++) {
+        char hourlyTopic[100];
+        snprintf(hourlyTopic, sizeof(hourlyTopic), "%s%02d", MQTT_PUB_CARS, i); // Topic: msb/traffic/CarCounter/Cars/hh
+        publishMQTT(hourlyTopic, String(hourlyCarCount[i])); // Publish the count for the hour
 
-// Read through the file and capture its content
-    // Prepare today's line
+        // Debug log
+        //Serial.printf("Published hourly count for %02d: %d cars\n", i, hourlyCarCount[i]);
+    }
+
+    // Publish daily total to a separate topic
+    publishMQTT("msb/traffic/CarCounter/Cars", String(totalDailyCars));
+    //Serial.printf("Published daily total: %d cars\n", totalDailyCars);
+
+    // Save data to the SD card or perform any other end-of-hour actions as necessary
     char dateBuffer[12];
     snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d", now.year(), now.month(), now.day());
-    String newLine = String(dateBuffer);
 
-    while (myFile.available()) {
-        String line = myFile.readStringUntil('\n');
-        if (line.startsWith(dateBuffer)) {
-            lastLine = line; // Found today's line
-            dayExists = true;
-        } else {
-            fileContent += line + "\n";
-        }
-    }
-    myFile.close();
-
-
-
-    // If the day exists, update the existing line
-    if (dayExists) {
-        int counts[24] = {0};
-        sscanf(lastLine.c_str(), "%*[^,],%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
-               &counts[0], &counts[1], &counts[2], &counts[3], &counts[4], &counts[5], &counts[6], &counts[7], &counts[8],
-               &counts[9], &counts[10], &counts[11], &counts[12], &counts[13], &counts[14], &counts[15], &counts[16],
-               &counts[17], &counts[18], &counts[19], &counts[20], &counts[21], &counts[22], &counts[23]);
-        counts[now.hour()] = hourlyCarCount[now.hour()]; // Update the current hour count
-        for (int i = 0; i < 24; i++) {
-            newLine += "," + String(counts[i]);
-        }
-    } else {
-        // If the day does not exist, create a new line
-        for (int i = 0; i < 24; i++) {
-            newLine += "," + String(hourlyCarCount[i]);
-        }
-    }
-
-    // Write back the updated content
-    myFile = SD.open(fileName5, FILE_WRITE); // This will overwrite the file content
-    if (!myFile) {
-        Serial.println("Failed to open file for writing updated data.");
+    File hourlyFile = SD.open(fileName5, FILE_APPEND);
+    if (!hourlyFile) {
+        Serial.println("Failed to open file for writing hourly data.");
         return;
     }
 
-    // Write the updated file content and today's line
-    myFile.print(fileContent);
-    myFile.println(newLine);
-    myFile.close();
-
-    Serial.printf("Hourly data saved successfully for date %s\n", dateBuffer);
+    // Write the hourly data to the SD card
+    hourlyFile.printf("%s,%02d,%d\n", dateBuffer, currentHour, hourlyCarCount[currentHour]);
+    hourlyFile.close();
+    Serial.printf("Saved hourly data for %02d: %d cars\n", currentHour, hourlyCarCount[currentHour]);
 }
 
-
+// Save and Publish Show Totals
 void saveDailyShowSummary() {
     DateTime now = rtc.now();
-    
-    // Define show hours (5 PM to 9:10 PM)
+
+    // Define show hours (5 PM to 9 PM)
     const int showStartHour = 17; // 5 PM
-    const int showEndHour = 21;  // End hour for show (up to 9:10 PM)
+    const int showEndHour = 20;  // Up to 9 PM
 
     // Calculate cumulative totals for each key hour
     int cumulative6PM = hourlyCarCount[17]; // Total at 6 PM
@@ -807,21 +802,22 @@ void saveDailyShowSummary() {
     int cumulative8PM = cumulative7PM + hourlyCarCount[19]; // Total at 8 PM
     int cumulative9PM = cumulative8PM + hourlyCarCount[20]; // Total at 9 PM
 
-    // Include additional cars counted between 9:00 PM and 9:10 PM
-    int cumulative910PM = cumulative9PM;
-    if (hourlyCarCount[21] > 0 && now.hour() == 21 && now.minute() <= 10) {
-        cumulative910PM += hourlyCarCount[21];
+    // Include additional cars detected between 9:00 PM and 9:10 PM
+    if (now.hour() == 21 && now.minute() <= 10) {
+        cumulative9PM += hourlyCarCount[21];
     }
 
-    // Calculate the average temperature during show hours
+    // Calculate the average temperature during show hours (5 PM to 9 PM)
     float showTempSum = 0.0;
     int showTempCount = 0;
+
     for (int i = showStartHour; i <= showEndHour; i++) {
-        if (hourlyTemp[i] > 0) { // Only include valid temperatures
+        if (hourlyTemp[i] != 0.0) { // Include all valid temperatures
             showTempSum += hourlyTemp[i];
             showTempCount++;
         }
     }
+
     float showAverageTemp = (showTempCount > 0) ? (showTempSum / showTempCount) : 0.0;
 
     // Open file for appending
@@ -832,20 +828,24 @@ void saveDailyShowSummary() {
         return;
     }
 
-     // Format the current date
+    // Format the current date
     char dateBuffer[12];
     snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d", now.year(), now.month(), now.day());
 
+    // format with thousands separator
+    String totalShowCarsK = formatK(totalShowCars);
+    String cumulative9PMK = formatK(cumulative9PM);
+
     // Append the show summary data
-    summaryFile.printf("%s,%d,%d,%d,%d,%d,%d,%.1f\n",
+    summaryFile.printf("%s,%d,%d,%d,%d,%d,%.1f\n",
                        dateBuffer,       // Current date
                        cumulative6PM,    // Cumulative total up to 6 PM
                        cumulative7PM,    // Cumulative total up to 7 PM
                        cumulative8PM,    // Cumulative total up to 8 PM
-                       cumulative9PM,    // Cumulative total up to 9 PM
-                       cumulative910PM,  // Cumulative total up to 9:10 PM
-                       cumulative910PM,  // Total show cars
-                       showAverageTemp); // Average temperature during show hours
+                       cumulative9PM,    // Cumulative total up to 9 PM, including 9:10 PM cars
+                       cumulative9PM,    // Total show cars
+                       showAverageTemp,  // Average temperature during show hours
+                       daysRunning);     // Total days running
     summaryFile.close();
 
     // Publish show summary data to MQTT
@@ -853,31 +853,15 @@ void saveDailyShowSummary() {
                                        ", 6PM: " + cumulative6PM +
                                        ", 7PM: " + cumulative7PM +
                                        ", 8PM: " + cumulative8PM +
-                                       ", 9PM: " + cumulative9PM +
-                                       ", 9:10PM: " + cumulative910PM +
-                                       ", ShowTotal: " + cumulative910PM +
-                                       ", ShowAvgTemp: " + String(showAverageTemp, 1));
-
-    // Publish dynamic topics for hourly totals
-    for (int i = showStartHour; i <= showEndHour; i++) {
-        char topic[100];
-        snprintf(topic, sizeof(topic), "%s/hourly/%02d", MQTT_PUB_CARS, i);
-        publishMQTT(topic, String(hourlyCarCount[i]));
-        Serial.printf("Published hourly total for hour %02d: %d cars to topic: %s\n", i, hourlyCarCount[i], topic);
-    }
-
-    // Publish cumulative total for 9:10 PM
-    if (cumulative910PM > cumulative9PM) {
-        char topic[100];
-        snprintf(topic, sizeof(topic), "%s/hourly/21_10", MQTT_PUB_CARS);
-        publishMQTT(topic, String(hourlyCarCount[21]));
-        Serial.printf("Published additional cars for 9:10 PM: %d to topic: %s\n", hourlyCarCount[21], topic);
-    }
-
-    // Log completion
-    Serial.printf("Daily show summary written: %s, 6PM: %d, 7PM: %d, 8PM: %d, 9PM: %d, 9:10PM: %d, ShowTotal: %d, Avg Temp: %.1f°F.\n",
-                  dateBuffer, cumulative6PM, cumulative7PM, cumulative8PM, cumulative9PM, cumulative910PM, cumulative910PM, showAverageTemp);
+                                       ", 9PM: " + cumulative9PMK +
+                                       ", ShowTotal: " + totalShowCarsK +
+                                       ", ShowAvgTemp: " + String(showAverageTemp, 1) +
+                                       ", DaysRunning: " + String(daysRunning));
+    
+    Serial.printf("Daily show summary written: %s, 6PM: %d, 7PM: %d, 8PM: %d, 9PM: %d, ShowTotal: %d, Avg Temp: %.1f°F.\n",
+                  dateBuffer, cumulative6PM, cumulative7PM, cumulative8PM, cumulative9PM, totalShowCars , showAverageTemp);
 }
+
 
 void getSavedValuesOnReboot() {
     DateTime now = rtc.now();
@@ -1100,6 +1084,7 @@ void beamCarDetect() {
     // Increment hourly car count
     int currentHour = now.hour();
     hourlyCarCount[currentHour]++;
+
     // Construct the MQTT topic dynamically
     char formattedTopic[100]; // Buffer for the full topic
     snprintf(formattedTopic, sizeof(formattedTopic), "%s%02d", MQTT_PUB_CARS, currentHour); // Append the two-digit hour
@@ -1309,7 +1294,7 @@ void initSDCard()  {
     checkAndCreateFile(fileName4);
     checkAndCreateFile(fileName5, "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23");
     checkAndCreateFile(fileName6, "Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
-    checkAndCreateFile(fileName7, "Date,DailyCars,6PM,7PM,8PM,9PM,9:10PM,DaysRunning,ShowTotal,DailyAvgTemp");
+    checkAndCreateFile(fileName7, "Date,DailyCars,6PM,7PM,8PM,9PM,DaysRunning,ShowTotal,DailyAvgTemp,DaysRunning");
 }
 
 /** Resets the hourly count array at midnight */
@@ -1385,7 +1370,6 @@ void timeTriggeredEvents() {
 
 
 
-
 // Update OLED Display while running
 void updateDisplay() {
     DateTime now = rtc.now();
@@ -1393,6 +1377,9 @@ void updateDisplay() {
     int currentHr24 = now.hour();
     int currentHr12 = currentHr24 > 12 ? currentHr24 - 12 : (currentHr24 == 0 ? 12 : currentHr24);
     const char* ampm = currentHr24 < 12 ? "AM" : "PM";
+
+    // Example: Display totalShowCars with thousands separator
+    String totalShowCarsK = formatK(totalShowCars);
 
     // Clear display and set formatting
     display.clearDisplay();
@@ -1410,7 +1397,7 @@ void updateDisplay() {
 
     // Line 3: Days Running and Show Total
     display.setCursor(0, 20);
-    display.printf("Day %d   Total: %d", daysRunning, totalShowCars);
+    display.printf("Day %d  Total: %d", daysRunning, totalShowCarsK);
 
     // Line 4: Total Daily Cars
     display.setTextSize(2);
