@@ -4,6 +4,8 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.11.5 OTA-SDCard Branch added endpoint and page to list /getShowSummary. Fixed uploading to subdirectory
+24.12.11.4 OTA-SDCard Branch revised procedure for creating hourly filename 
 24.12.11.3 OTA-SDCard Branch Added OTA for file operations Revised checkAndCreateFile() for server files needed under /data  
 24.12.11.2 Added thousands separator to total show cars with new proceedure formatK
 24.12.11.1 Refactored saveDailyShowSummary() to fix avg temp and put any cars up tp 9:10 pm into the 9:00 bucket & included show total & days running
@@ -110,7 +112,7 @@ D23 - MOSI
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.11.3" // Firmware Version
+#define FWVersion "24.12.11.5" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -359,7 +361,7 @@ const String fileName1 = "/EnterTotal.txt"; // DailyTot.txt file to store daily 
 const String fileName2 = "/ShowTotal.txt";  // ShowTot.txt file to store season total counts
 const String fileName3 = "/DayOfMonth.txt"; // DayOfMonth.txt file to store current day number
 const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
-const String fileName5 = "/EnterSummary.csv"; // EnterSummary.csv Stores Daily Totals by Hour and total
+const String fileName5 = "/HourlyData.csv"; // EnterSummary.csv Stores Daily Totals by Hour and total
 const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car counts for season (was MASTER.CSV)
 const String fileName7 = "/ShowSummary.csv"; // Show summary of counts during show (5:00pm to 9:10pm)
 const String fileName8 = "/data/index.html"; // data folder and index.html for serving files OTA
@@ -400,31 +402,41 @@ void downloadSDFile(AsyncWebServerRequest *request) {
 }
 
 void uploadSDFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-    static File uploadFile;
-    String fullPath = currentDirectory + filename;
+    static File uploadFile; // Keep track of the currently uploading file
+    String fullPath = currentDirectory + "/" + filename; // Respect the current directory
 
-    if (index == 0) { // First chunk
+    // Handle the start of the upload
+    if (index == 0) {
+        Serial.printf("Upload started: %s\n", fullPath.c_str());
         if (SD.exists(fullPath)) {
-            SD.remove(fullPath);
+            SD.remove(fullPath); // Remove the file if it already exists
         }
         uploadFile = SD.open(fullPath, FILE_WRITE);
         if (!uploadFile) {
+            Serial.printf("Failed to open file: %s\n", fullPath.c_str());
             request->send(500, "text/plain", "Failed to open file for writing");
             return;
         }
     }
 
-    if (uploadFile) { // Write the data
+    // Write data to the file
+    if (uploadFile) {
         uploadFile.write(data, len);
     }
 
-    if (final) { // Final chunk
+    // Handle the end of the upload
+    if (final) {
         if (uploadFile) {
             uploadFile.close();
+            Serial.printf("Upload completed: %s\n", fullPath.c_str());
+            request->send(200, "text/plain", "File uploaded successfully to " + currentDirectory);
+        } else {
+            Serial.printf("Upload failed: %s\n", fullPath.c_str());
+            request->send(500, "text/plain", "Failed to write file");
         }
-        request->send(200, "text/plain", "File uploaded successfully to " + currentDirectory);
     }
 }
+
 
 void changeDirectory(AsyncWebServerRequest *request) {
     if (!request->hasParam("dir")) {
@@ -444,6 +456,35 @@ void changeDirectory(AsyncWebServerRequest *request) {
         request->send(404, "text/plain", "Directory not found");
     }
 }
+
+void deleteSDFile(AsyncWebServerRequest *request) {
+    if (!request->hasParam("filename")) {
+        request->send(400, "text/plain", "Filename is required");
+        return;
+    }
+
+    String fileName = request->getParam("filename")->value();
+    String fullPath = currentDirectory + "/" + fileName; // Respect the current directory
+
+    // Normalize the file path
+    if (fullPath.startsWith("//")) {
+        fullPath = fullPath.substring(1); // Remove redundant leading slashes
+    }
+
+    if (SD.exists(fullPath)) {
+        if (SD.remove(fullPath)) {
+            Serial.printf("File deleted: %s\n", fullPath.c_str());
+            request->send(200, "text/plain", "File deleted successfully: " + fullPath);
+        } else {
+            Serial.printf("Failed to delete file: %s\n", fullPath.c_str());
+            request->send(500, "text/plain", "Failed to delete file: " + fullPath);
+        }
+    } else {
+        Serial.printf("File not found: %s\n", fullPath.c_str());
+        request->send(404, "text/plain", "File not found: " + fullPath);
+    }
+}
+
 //END OTA SD Card File Operations
 
 
@@ -564,6 +605,12 @@ void setupServer() {
         });
     
     server.on("/changeDirectory", HTTP_GET, changeDirectory);
+    server.on("/ShowSummary.csv", HTTP_GET, [](AsyncWebServerRequest *request) {
+        AsyncWebServerResponse *response = request->beginResponse(SD, "/ShowSummary.csv", "text/csv");
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(response);
+    });
+
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Hi! This is The Car Counter.");
     });
@@ -809,19 +856,22 @@ void getHourlyData() {
 
     if (lastLine.length() > 0) {
         char dateBuffer[12];
-        int parsedColumns = sscanf(lastLine.c_str(), "%[^,],%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
-                                   dateBuffer, &hourlyCarCount[0], &hourlyCarCount[1], &hourlyCarCount[2], &hourlyCarCount[3],
+        int parsedColumns = sscanf(lastLine.c_str(),
+                                   "%[^,],%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+                                   dateBuffer,
+                                   &hourlyCarCount[0], &hourlyCarCount[1], &hourlyCarCount[2], &hourlyCarCount[3],
                                    &hourlyCarCount[4], &hourlyCarCount[5], &hourlyCarCount[6], &hourlyCarCount[7],
                                    &hourlyCarCount[8], &hourlyCarCount[9], &hourlyCarCount[10], &hourlyCarCount[11],
                                    &hourlyCarCount[12], &hourlyCarCount[13], &hourlyCarCount[14], &hourlyCarCount[15],
                                    &hourlyCarCount[16], &hourlyCarCount[17], &hourlyCarCount[18], &hourlyCarCount[19],
                                    &hourlyCarCount[20], &hourlyCarCount[21], &hourlyCarCount[22], &hourlyCarCount[23]);
 
-        if (parsedColumns == 25) {
-            Serial.println("Hourly data successfully loaded from file.");
-        } else {
-            Serial.println("Error parsing hourly data. Resetting counts.");
+        if (parsedColumns != 25) {
+            Serial.println("Error parsing hourly data. Expected 25 columns but found: " + String(parsedColumns));
             memset(hourlyCarCount, 0, sizeof(hourlyCarCount)); // Reset to 0
+        } else {
+            Serial.println("Hourly data successfully loaded from file:");
+            Serial.println(lastLine);
         }
     } else {
         Serial.println("File is empty. Initializing hourly data.");
@@ -910,16 +960,16 @@ void saveHourlyCounts() {
     // Publish traffic counts for the current hour
     for (int i = 0; i < 24; i++) {
         char hourlyTopic[100];
-        snprintf(hourlyTopic, sizeof(hourlyTopic), "%s%02d", MQTT_PUB_CARS, i); // Topic: msb/traffic/CarCounter/Cars/hh
+        snprintf(hourlyTopic, sizeof(hourlyTopic), "/%s%02d", MQTT_PUB_CARS , i); // Topic: msb/traffic/CarCounter/Cars/hh
         publishMQTT(hourlyTopic, String(hourlyCarCount[i])); // Publish the count for the hour
 
         // Debug log
         //Serial.printf("Published hourly count for %02d: %d cars\n", i, hourlyCarCount[i]);
     }
 
-    // Publish daily total to a separate topic
+ //   // Publish daily total to a separate topic
     publishMQTT("msb/traffic/CarCounter/Cars", String(totalDailyCars));
-    //Serial.printf("Published daily total: %d cars\n", totalDailyCars);
+ //   //Serial.printf("Published daily total: %d cars\n", totalDailyCars);
 
     // Save data to the SD card or perform any other end-of-hour actions as necessary
     char dateBuffer[12];
@@ -950,6 +1000,13 @@ void saveDailyShowSummary() {
     int cumulative7PM = cumulative6PM + hourlyCarCount[18]; // Total at 7 PM
     int cumulative8PM = cumulative7PM + hourlyCarCount[19]; // Total at 8 PM
     int cumulative9PM = cumulative8PM + hourlyCarCount[20]; // Total at 9 PM
+
+    // Calculate cumilative totals before show starts
+    int totalBefore5 = 0;
+        for (int i = 0; i <= 16; i++) { // Loop from hour 0 to hour 16
+        totalBefore5 += hourlyCarCount[i];
+    }
+
 
     // Include additional cars detected between 9:00 PM and 9:10 PM
     if (now.hour() == 21 && now.minute() <= 10) {
@@ -982,33 +1039,34 @@ void saveDailyShowSummary() {
     snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d", now.year(), now.month(), now.day());
 
     // format with thousands separator
-    String totalShowCarsK = formatK(totalShowCars);
-    String cumulative9PMK = formatK(cumulative9PM);
+    //String totalShowCarsK = formatK(totalShowCars);
+    //String cumulative9PMK = formatK(cumulative9PM);
 
     // Append the show summary data
-    summaryFile.printf("%s,%d,%d,%d,%d,%d,%.1f\n",
+    summaryFile.printf("%s,%d,%d,%d,%d,%d,%d,%d,%.1f\n",
                        dateBuffer,       // Current date
+                       daysRunning,      // Total days running
+                       totalBefore5,     // Cars counted before 5pm
                        cumulative6PM,    // Cumulative total up to 6 PM
                        cumulative7PM,    // Cumulative total up to 7 PM
                        cumulative8PM,    // Cumulative total up to 8 PM
                        cumulative9PM,    // Cumulative total up to 9 PM, including 9:10 PM cars
-                       cumulative9PM,    // Total show cars
-                       showAverageTemp,  // Average temperature during show hours
-                       daysRunning);     // Total days running
+                       totalShowCars,    // Total show cars
+                       showAverageTemp); // Average temperature during show hours     
     summaryFile.close();
 
     // Publish show summary data to MQTT
     publishMQTT(MQTT_PUB_SUMMARY, String("Date: ") + dateBuffer +
-                                       ", 6PM: " + cumulative6PM +
-                                       ", 7PM: " + cumulative7PM +
-                                       ", 8PM: " + cumulative8PM +
-                                       ", 9PM: " + cumulative9PMK +
-                                       ", ShowTotal: " + totalShowCarsK +
-                                       ", ShowAvgTemp: " + String(showAverageTemp, 1) +
-                                       ", DaysRunning: " + String(daysRunning));
-    
-    Serial.printf("Daily show summary written: %s, 6PM: %d, 7PM: %d, 8PM: %d, 9PM: %d, ShowTotal: %d, Avg Temp: %.1f°F.\n",
-                  dateBuffer, cumulative6PM, cumulative7PM, cumulative8PM, cumulative9PM, totalShowCars , showAverageTemp);
+                                        ", DaysRunning: " + daysRunning +
+                                        ", Before5: " + totalBefore5 +   
+                                        ", 6PM: " + cumulative6PM +
+                                        ", 7PM: " + cumulative7PM +
+                                        ", 8PM: " + cumulative8PM +
+                                        ", 9PM: " + cumulative9PM +
+                                        ", ShowTotal: " + totalShowCars +
+                                        ", ShowAvgTemp: " + String(showAverageTemp, 1));
+    Serial.printf("Daily show summary written: %s, DaysRunning: %d, Before5: %d, 6PM: %d, 7PM: %d, 8PM: %d, 9PM: %d, ShowTotal: %d, Avg Temp: %.1f°F.\n",
+                  dateBuffer, daysRunning, totalBefore5, cumulative6PM, cumulative7PM, cumulative8PM, cumulative9PM, totalShowCars, showAverageTemp);
 }
 
 
@@ -1404,6 +1462,38 @@ void checkAndCreateFile(const String &fileName, const String &header = "") {
     }
 }
 
+void createAndInitializeHourlyFile(const String &fileName) {
+    if (!SD.exists(fileName)) {
+        Serial.printf("%s not found. Creating...\n", fileName.c_str());
+        File file = SD.open(fileName, FILE_WRITE);
+        if (!file) {
+            Serial.printf("Failed to create file %s\n", fileName.c_str());
+            return;
+        }
+
+        // Write the header
+        file.println("Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23");
+
+        // Add an initial row for the current day
+        DateTime now = rtc.now();
+        char dateBuffer[12];
+        snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d", now.year(), now.month(), now.day());
+        file.print(dateBuffer); // Write the current date
+
+        // Initialize 24 hourly counts to 0
+        for (int i = 0; i < 24; i++) {
+            file.print(",0");
+        }
+        file.println(); // Move to the next line
+
+        file.close();
+        Serial.println("Hourly file created and initialized for the current day.");
+    } else {
+        Serial.printf("File %s already exists. No initialization performed.\n", fileName.c_str());
+    }
+}
+
+
 /** Initilaize microSD card */
 void initSDCard()  {
     if(!SD.begin(PIN_SPI_CS))  {
@@ -1451,9 +1541,9 @@ void initSDCard()  {
     checkAndCreateFile(fileName2);
     checkAndCreateFile(fileName3);
     checkAndCreateFile(fileName4);
-    checkAndCreateFile(fileName5, "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23");
+    //checkAndCreateFile(fileName5, "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23");
     checkAndCreateFile(fileName6, "Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
-    checkAndCreateFile(fileName7, "Date,DailyCars,6PM,7PM,8PM,9PM,DaysRunning,ShowTotal,DailyAvgTemp,DaysRunning");
+    checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
     checkAndCreateFile(fileName8);
     checkAndCreateFile(fileName9);
 }
@@ -1518,7 +1608,7 @@ void timeTriggeredEvents() {
     }
 
     // Reset flags for next day
-    if (now.hour() == 0 && now.minute() == 1 ) { 
+    if (now.hour() == 0 && now.minute() == 1 && now.second() == 1 ) { 
         flagDaysRunningReset = false;
         flagMidnightReset = false;
         flagDailyShowStartReset = false;
@@ -1529,8 +1619,6 @@ void timeTriggeredEvents() {
     }
 }
 
-
-
 // Update OLED Display while running
 void updateDisplay() {
     DateTime now = rtc.now();
@@ -1540,7 +1628,7 @@ void updateDisplay() {
     const char* ampm = currentHr24 < 12 ? "AM" : "PM";
 
     // Example: Display totalShowCars with thousands separator
-    String totalShowCarsK = formatK(totalShowCars);
+    //String totalShowCarsK = formatK(totalShowCars);
 
     // Clear display and set formatting
     display.clearDisplay();
@@ -1558,7 +1646,7 @@ void updateDisplay() {
 
     // Line 3: Days Running and Show Total
     display.setCursor(0, 20);
-    display.printf("Day %d  Total: %d", daysRunning, totalShowCarsK);
+    display.printf("Day %d  Total: %d", daysRunning, totalShowCars);
 
     // Line 4: Total Daily Cars
     display.setTextSize(2);
@@ -1568,9 +1656,6 @@ void updateDisplay() {
     // Write to the display
     display.display();
 }
-
-
-
 
 /******  BEGIN SETUP ******/
 void setup() {
@@ -1663,6 +1748,8 @@ void setup() {
     //Initialize SD Card
     initSDCard();  // Initialize SD card and ready for Read/Write
 
+    createAndInitializeHourlyFile(fileName5);
+
     // Initialize Server
     setupServer();
 
@@ -1700,10 +1787,9 @@ void loop() {
         publishMQTT(MQTT_DEBUG_LOG, debugMessage);
     }
 
-
     ElegantOTA.loop();  // Keep OTA Updates Alive
 
-      // Only record show totals when show is open
+    // Only record show totals when show is open
     currentTimeMinute = now.hour()*60 + now.minute();
     if (currentTimeMinute >= showStartTime && currentTimeMinute <= showEndTime) {
         // show is running and save counts
