@@ -258,7 +258,7 @@ DHT dht(DHTPIN, DHTTYPE);
 float temperature = 0.0;  // Temperature
 float humidity = 0.0;     // Humidity
 unsigned long lastDHTReadMillis = 0; // Time since last sensor read
-const unsigned long dhtReadInterval = 10000; // Minimum interval between reads (10 seconds)
+const unsigned long dhtReadInterval = 600000; // Minimum interval between reads (10 min)
 
 /** Display Definitions & variables **/
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -320,6 +320,7 @@ bool flagDailySummarySaved = false;
 bool flagDailyShowSummarySaved = false;
 bool flagHourlyCountsSaved = false;
 bool showTime = false;
+bool resetFlagsOnce = false;
 
 // **********FILE NAMES FOR SD CARD *********
 File myFile;   //used to write files to SD Card
@@ -406,6 +407,45 @@ void SetLocalTime()  {
   tempF = ((rtc.getTemperature()*9/5)+32);
 } // end SetLocalTime
 
+void setup_wifi()  {
+    Serial.println("Connecting to WiFi");
+    display.println("Connecting to WiFi..");
+    display.display();
+    while(wifiMulti.run(connectTimeOutPerAP) != WL_CONNECTED) {
+        Serial.print(".");
+    }
+    Serial.println("Connected to the WiFi network");
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.display();
+  
+    display.setCursor(0, line1);
+    display.print("SSID: ");
+    display.println(WiFi.SSID());   // print the SSID of the network you're attached to:
+    Serial.print("SSID: ");
+    Serial.println(WiFi.SSID());
+    
+    IPAddress ip = WiFi.localIP();  // print your board's IP address:
+    Serial.print("IP: ");
+    Serial.println(ip);
+    display.setCursor(0, line2);
+    display.print("IP: ");
+    display.println(ip);
+    
+    long rssi = WiFi.RSSI();
+    Serial.print("signal strength (RSSI):");
+    Serial.print(rssi);
+    Serial.println(" dBm");
+    display.setCursor(0, line3);
+    display.print("signal: ");
+    display.print(rssi);  // print the received signal strength:
+    display.println(" dBm");
+    display.display();
+ 
+    delay(1000);
+}  // END WiFi Setup
+
 // BEGIN OTA SD Card File Operations
 void listSDFiles(AsyncWebServerRequest *request) {
     String fileList = "Files in " + currentDirectory + ":\n";
@@ -476,7 +516,6 @@ void uploadSDFile(AsyncWebServerRequest *request, String filename, size_t index,
     }
 }
 
-
 void changeDirectory(AsyncWebServerRequest *request) {
     if (!request->hasParam("dir")) {
         request->send(400, "text/plain", "Directory name is required");
@@ -525,44 +564,7 @@ void deleteSDFile(AsyncWebServerRequest *request) {
 }
 //END OTA SD Card File Operations
 
-void setup_wifi()  {
-    Serial.println("Connecting to WiFi");
-    display.println("Connecting to WiFi..");
-    display.display();
-    while(wifiMulti.run(connectTimeOutPerAP) != WL_CONNECTED) {
-        Serial.print(".");
-    }
-    Serial.println("Connected to the WiFi network");
-    display.clearDisplay();
-    display.setTextColor(WHITE);
-    display.setTextSize(1);
-    display.display();
-  
-    display.setCursor(0, line1);
-    display.print("SSID: ");
-    display.println(WiFi.SSID());   // print the SSID of the network you're attached to:
-    Serial.print("SSID: ");
-    Serial.println(WiFi.SSID());
-    
-    IPAddress ip = WiFi.localIP();  // print your board's IP address:
-    Serial.print("IP: ");
-    Serial.println(ip);
-    display.setCursor(0, line2);
-    display.print("IP: ");
-    display.println(ip);
-    
-    long rssi = WiFi.RSSI();
-    Serial.print("signal strength (RSSI):");
-    Serial.print(rssi);
-    Serial.println(" dBm");
-    display.setCursor(0, line3);
-    display.print("signal: ");
-    display.print(rssi);  // print the received signal strength:
-    display.println(" dBm");
-    display.display();
- 
-    delay(1000);
-}  // END WiFi Setup
+
 
 // HTML Content now served from /data/index.html and /data/style.css
 void setupServer() {
@@ -729,7 +731,7 @@ void publishQueuedMessages() {
 }
 
 void publishDebugLog(const String &message) {
-    publishMQTT(MQTT_TOPIC_DEBUG_LOG, message);
+    publishMQTT(MQTT_DEBUG_LOG, message);
 }
 
 // Used to publish current counts to update Gate Counter every 30 seconds if no car is counted
@@ -980,31 +982,17 @@ void saveDaysRunning() {
 // Save cars counted each hour in the event of a reboot
 void saveHourlyCounts() {
     DateTime now = rtc.now();
-    static int lastHour = -1; // Track the last hour the function was executed
+    static int lastSavedDay = -1; // Track the last day saved to avoid duplicate writes
 
-    int currentHour = now.hour();
+    int currentDay = now.day();
 
-    // Ensure this function is only called once per hour
-    if (currentHour == lastHour) {
+    // Ensure this function only runs once per day
+    if (currentDay == lastSavedDay) {
         return;
     }
-    lastHour = currentHour; // Update last executed hour
 
-    // Publish traffic counts for the current hour
-    for (int i = 0; i < 24; i++) {
-        char hourlyTopic[100];
-        snprintf(hourlyTopic, sizeof(hourlyTopic), "/%s%02d", MQTT_PUB_CARS , i); // Topic: msb/traffic/CarCounter/Cars/hh
-        publishMQTT(hourlyTopic, String(hourlyCarCount[i])); // Publish the count for the hour
+    lastSavedDay = currentDay; // Update the last saved day
 
-        // Debug log
-        //Serial.printf("Published hourly count for %02d: %d cars\n", i, hourlyCarCount[i]);
-    }
-
- //   // Publish daily total to a separate topic
-    publishMQTT(MQTT_PUB_CARS, String(totalDailyCars));
- //   //Serial.printf("Published daily total: %d cars\n", totalDailyCars);
-
-    // Save data to the SD card or perform any other end-of-hour actions as necessary
     char dateBuffer[12];
     snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d", now.year(), now.month(), now.day());
 
@@ -1014,11 +1002,21 @@ void saveHourlyCounts() {
         return;
     }
 
-    // Write the hourly data to the SD card
-    hourlyFile.printf("%s,%02d,%d\n", dateBuffer, currentHour, hourlyCarCount[currentHour]);
+    // Write the date as the first column
+    hourlyFile.print(dateBuffer);
+
+    // Write the 24 hourly counts as subsequent columns
+    for (int i = 0; i < 24; i++) {
+        hourlyFile.printf(",%d", hourlyCarCount[i]);
+    }
+    hourlyFile.println(); // Newline to complete the row
+
     hourlyFile.close();
-    Serial.printf("Saved hourly data for %02d: %d cars\n", currentHour, hourlyCarCount[currentHour]);
+
+    Serial.println("Hourly data saved successfully as a row:");
+    Serial.println(dateBuffer);
 }
+
 
 // Save and Publish Show Totals
 void saveDailyShowSummary() {
@@ -1526,7 +1524,6 @@ void createAndInitializeHourlyFile(const String &fileName) {
     }
 }
 
-
 /** Initilaize microSD card */
 void initSDCard()  {
     if(!SD.begin(PIN_SPI_CS))  {
@@ -1604,8 +1601,6 @@ void readTempandRH () {
     }
 }
 
-
-
 /** Resets the hourly count array at midnight */
 void resetHourlyCounts() {
     for (int i = 0; i < 24; i++) {
@@ -1622,8 +1617,8 @@ void timeTriggeredEvents() {
 
     // Reset hourly counts at midnight
     if (now.hour() == 23 && now.minute() == 59 && !flagMidnightReset) { 
-        resetHourlyCounts();  // reset array for collecting hourly car counts      
-        totalDailyCars = 0;   // reset total daily cars to 0 at midnight
+        resetHourlyCounts();  // Reset array for collecting hourly car counts      
+        totalDailyCars = 0;   // Reset total daily cars to 0 at midnight
         saveDailyTotal();
         publishMQTT(MQTT_DEBUG_LOG, "Total cars reset at Midnight");
         flagMidnightReset = true;
@@ -1654,10 +1649,9 @@ void timeTriggeredEvents() {
     // Save daily summary at 9:10 PM
     if (now.hour() == 21 && now.minute() == 10 && !flagDailyShowSummarySaved) {
         saveDailyShowSummary();
-         publishMQTT(MQTT_DEBUG_LOG, "Daily Show Summary Saved");
+        publishMQTT(MQTT_DEBUG_LOG, "Daily Show Summary Saved");
         flagDailyShowSummarySaved = true;
     }
-
 
     // Check for hourly data save
     if (now.minute() == 59 && now.second() == 59 && !flagHourlyCountsSaved) {
@@ -1665,8 +1659,8 @@ void timeTriggeredEvents() {
         flagHourlyCountsSaved = true;
     }
 
-    // Reset flags for next day
-    if (now.hour() == 0 && now.minute() == 1 && now.second() == 1 ) { 
+    // Reset flags for the next day at 12:01:01 AM
+    if (now.hour() == 0 && now.minute() == 1 && now.second() == 1 && !resetFlagsOnce) { 
         flagDaysRunningReset = false;
         flagMidnightReset = false;
         flagDailyShowStartReset = false;
@@ -1674,8 +1668,15 @@ void timeTriggeredEvents() {
         flagDailyShowSummarySaved = false;
         flagHourlyCountsSaved = false;
         publishMQTT(MQTT_DEBUG_LOG, "Run once flags reset for new day");
+        resetFlagsOnce = true; // Prevent further execution within the same day
+    }
+
+    // Reset the `resetFlagsOnce` at 12:02:00 AM to allow it to run the next day
+    if (now.hour() == 0 && now.minute() == 2 && now.second() == 0) {
+        resetFlagsOnce = false; // Allow reset logic to run again the next day
     }
 }
+
 
 // Update OLED Display while running
 void updateDisplay() {
