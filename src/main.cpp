@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.15.15.1 added SD.begin(PIN_SPI_CS) and DHT22 for temp & RH
 24.12.11.5 OTA-SDCard Branch added endpoint and page to list /getShowSummary. Fixed uploading to subdirectory
 24.12.11.4 OTA-SDCard Branch revised procedure for creating hourly filename 
 24.12.11.3 OTA-SDCard Branch Added OTA for file operations Revised checkAndCreateFile() for server files needed under /data  
@@ -109,16 +110,21 @@ D23 - MOSI
 #include <ESPmDNS.h>
 #include <ESPAsyncWebServer.h>
 #include <ElegantOTAPro.h>
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.11.5" // Firmware Version
+#define FWVersion "24.12.15.1" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
 #define secondBeamPin 32
 #define redArchPin 25
 #define greenArchPin 26
+#define DHTPIN 4  // GPIO pin for the DHT22
+#define DHTTYPE DHT22  // DHT TYPE
 #define PIN_SPI_CS 5 // The ESP32 pin GPIO5
 #define OLED_RESET -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
@@ -155,12 +161,12 @@ char topicBase[60];
 
 // Subscribing Topics (to reset values)
 //#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
-#define MQTT_SUB_TOPIC1  "msb/traffic/CarCounter/resetDailyCount"
-#define MQTT_SUB_TOPIC2  "msb/traffic/CarCounter/resetShowCount"
-#define MQTT_SUB_TOPIC3  "msb/traffic/CarCounter/resetDayOfMonth"
-#define MQTT_SUB_TOPIC4  "msb/traffic/CarCounter/resetDaysRunning"
-#define MQTT_SUB_TOPIC5  "msb/traffic/CarCounter/carCounterTimeout"
-#define MQTT_SUB_TOPIC6  "msb/traffic/CarCounter/waitDuration"
+#define MQTT_SUB_TOPIC1  "msb/traffic/CarCounter/resetDailyCount"    // Reset Daily counter
+#define MQTT_SUB_TOPIC2  "msb/traffic/CarCounter/resetShowCount"     // Resets Show Counter
+#define MQTT_SUB_TOPIC3  "msb/traffic/CarCounter/resetDayOfMonth"    // Reset Calendar Day
+#define MQTT_SUB_TOPIC4  "msb/traffic/CarCounter/resetDaysRunning"   // Reset Days Running
+#define MQTT_SUB_TOPIC5  "msb/traffic/CarCounter/carCounterTimeout"  // Reset Timeout if car leaves detection Zone
+#define MQTT_SUB_TOPIC6  "msb/traffic/CarCounter/waitDuration"       // Reset time from firstBeamSensor trip to secondBeamSensor Active
 
 
 /** State Machine Enum to represent the different states of the play pattern */
@@ -193,15 +199,14 @@ unsigned long bothBeamsHighTime = 0;
 unsigned long lastCarDetectedMillis = 0;
 unsigned long secondBeamTripTime = 0;
 
-const unsigned long personTimeout = 500;        // Time in ms considered too fast for a car, more likely a person
-const unsigned long bothBeamsHighThreshold = 750;  // Time in ms for both beams high to consider a car is in the detection zone
+//const unsigned long personTimeout = 500;        // Time in ms considered too fast for a car, more likely a person
+//const unsigned long bothBeamsHighThreshold = 750;  // Time in ms for both beams high to consider a car is in the detection zone
 unsigned long carCounterTimeout = 60000; // default time for car counter alarm in millis
 unsigned long timeToPass = 0;
 int firstBeamState;  // Holds the current state of the FIRST IR receiver/Beam
 int secondBeamState;  // Holds the current state of the SECOND IR receiver/Beam
 int prevFirstBeamState = -1; // Holds the previous state of the FIRST IR receiver/Beam
 int prevSecondBeamState = -1; // Holds the previous state of the SECOND IR receiver/Beam 
-
 unsigned long debounceDelay = 50; // 50 ms debounce delay
 unsigned long minActivationDuration = 100; // 100ms Minimum duration for valid activation
 
@@ -240,8 +245,22 @@ void onOTAEnd(bool success) {
   // <Add your own code here>
 }
 
-/** Display Definitions & variables **/
+/** REAL TIME Clock & Time Related Variables **/
+RTC_DS3231 rtc;
+const char* ampm ="AM";
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = -21600;
+const int   daylightOffset_sec = 3600;
+float tempF = 0.0;
 
+// Initialize DHT sensor & Variables for temperature and humidity
+DHT dht(DHTPIN, DHTTYPE);
+float temperature = 0.0;  // Temperature
+float humidity = 0.0;     // Humidity
+unsigned long lastDHTReadMillis = 0; // Time since last sensor read
+const unsigned long dhtReadInterval = 10000; // Minimum interval between reads (10 seconds)
+
+/** Display Definitions & variables **/
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 const int line1 =0;
 const int line2 =9;
@@ -251,7 +270,7 @@ const int line5 = 50;
 
 //Create Multiple WIFI Object
 WiFiMulti wifiMulti;
-//WiFiClientSecure espCarCounter;  // Not using htps
+//WiFiClientSecure espCarCounter;  // Not using https
 WiFiClient espCarCounter;
 
 //const uint32_t connectTimeoutMs = 10000;
@@ -271,20 +290,20 @@ bool wifi_connected = false;
 int wifi_connect_attempts = 5;
 
 /***** GLOBAL VARIABLES *****/
-unsigned int dayOfMonth; // Current Calendar day
-unsigned int currentMonth; // Current Month
-unsigned int currentHr12; //Current Hour 12 Hour format
-unsigned int currentHr24; //Current Hour 24 Hour Format
-unsigned int currentMin;
-unsigned int currentSec;
-unsigned int lastdayOfMonth; // Pervious day's calendar day used to reset running days
+unsigned int dayOfMonth;     // Current Calendar day
+unsigned int lastDayOfMonth; // Last calendar day used to reset days running
+unsigned int currentMonth;   // Current Month
+unsigned int currentHr12;    // Current Hour 12 Hour format
+unsigned int currentHr24;    // Current Hour 24 Hour Format
+unsigned int currentMin;     // Current Minute
+unsigned int currentSec;      // Current Second
 unsigned int daysRunning;  // Number of days the show is running.
 unsigned int currentTimeMinute; // for converting clock time hh:mm to clock time mm
 int totalDailyCars; // total cars counted per day 24/7 Needed for debugging
-int totalShowCars; // total cars counted for durning show hours open (5:00 pm to 9:10 pm)
+int totalShowCars;  // total cars counted for durning show hours open (5:00 pm to 9:10 pm)
 int connectionAttempts = 5; // number of WiFi or MQTT Connection Attempts
 
-
+/***** TIME VARIABLES *****/
 unsigned long wifi_connectioncheckMillis = 5000; // check for connection every 5 sec
 unsigned long mqtt_connectionCheckMillis = 20000; // check for connection
 unsigned long start_MqttMillis; // for Keep Alive Timer
@@ -292,19 +311,8 @@ unsigned long start_WiFiMillis; // for keep Alive Timer
 unsigned long noCarTimer = 0;
 int displayMode = 0;
 unsigned long dayMillis = 0;
-static char days[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-static char months[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-static unsigned long hourlyCarCount[24] = {0}; // Array for Daily total cars per hour
-static float hourlyTemp[24] = {0.0};   // Array to store average temperatures for 24 hours
 
-/** REAL TIME Clock & Time Related Variables **/
-
-RTC_DS3231 rtc;
-const char* ampm ="AM";
-const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = -21600;
-const int   daylightOffset_sec = 3600;
-float tempF;
+//***** DAILY RESET FLAGS *****
 bool flagDaysRunningReset = false;
 bool flagMidnightReset = false;
 bool flagDailyShowStartReset = false;
@@ -312,6 +320,49 @@ bool flagDailySummarySaved = false;
 bool flagDailyShowSummarySaved = false;
 bool flagHourlyCountsSaved = false;
 bool showTime = false;
+
+// **********FILE NAMES FOR SD CARD *********
+File myFile;   //used to write files to SD Card
+const String fileName1 = "/EnterTotal.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
+const String fileName2 = "/ShowTotal.txt";  // ShowTot.txt file to store season total counts
+const String fileName3 = "/DayOfMonth.txt"; // DayOfMonth.txt file to store current day number
+const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
+const String fileName5 = "/HourlyData.csv"; // EnterSummary.csv Stores Daily Totals by Hour and total
+const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car counts for season (was MASTER.CSV)
+const String fileName7 = "/ShowSummary.csv"; // Show summary of counts during show (5:00pm to 9:10pm)
+const String fileName8 = "/data/index.html"; // data folder and index.html for serving files OTA
+const String fileName9 = "/data/style.css"; // data folder and index.html for serving files OTA
+
+/***** Arrays for Hourly Totals/Averages *****/
+static unsigned long hourlyCarCount[24] = {0}; // Array for Daily total cars per hour
+static float hourlyTemp[24] = {0.0};   // Array to store average temperatures for 24 hours
+
+/***** Arrays Used to make display Pretty *****/
+static char days[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+static char months[12][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+// Utility helper to format numbers as strings with thousnds separator
+String formatK(int number) {
+    String result = "";
+    int count = 0;
+
+    // Process the number from the least significant digit to the most
+    do {
+        int digit = number % 10;
+        result = String(digit) + result; // Add the digit to the result
+        number /= 10;
+        count++;
+
+        // Add a comma after every 3 digits (except at the end)
+        if (count % 3 == 0 && number > 0) {
+            result = "," + result;
+        }
+    } while (number > 0);
+
+    return result;
+}
+
+
 
 // sync Time at REBOOT
 void SetLocalTime()  {
@@ -354,18 +405,6 @@ void SetLocalTime()  {
   rtc.adjust(DateTime(timeStringBuff));
   tempF = ((rtc.getTemperature()*9/5)+32);
 } // end SetLocalTime
-
-// **********FILE NAMES FOR SD CARD *********
-File myFile;   //used to write files to SD Card
-const String fileName1 = "/EnterTotal.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
-const String fileName2 = "/ShowTotal.txt";  // ShowTot.txt file to store season total counts
-const String fileName3 = "/DayOfMonth.txt"; // DayOfMonth.txt file to store current day number
-const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
-const String fileName5 = "/HourlyData.csv"; // EnterSummary.csv Stores Daily Totals by Hour and total
-const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car counts for season (was MASTER.CSV)
-const String fileName7 = "/ShowSummary.csv"; // Show summary of counts during show (5:00pm to 9:10pm)
-const String fileName8 = "/data/index.html"; // data folder and index.html for serving files OTA
-const String fileName9 = "/data/style.css"; // data folder and index.html for serving files OTA
 
 // BEGIN OTA SD Card File Operations
 void listSDFiles(AsyncWebServerRequest *request) {
@@ -484,30 +523,7 @@ void deleteSDFile(AsyncWebServerRequest *request) {
         request->send(404, "text/plain", "File not found: " + fullPath);
     }
 }
-
 //END OTA SD Card File Operations
-
-
-// Utility helper to format numbers as strings with thousnds separator
-String formatK(int number) {
-    String result = "";
-    int count = 0;
-
-    // Process the number from the least significant digit to the most
-    do {
-        int digit = number % 10;
-        result = String(digit) + result; // Add the digit to the result
-        number /= 10;
-        count++;
-
-        // Add a comma after every 3 digits (except at the end)
-        if (count % 3 == 0 && number > 0) {
-            result = "," + result;
-        }
-    } while (number > 0);
-
-    return result;
-}
 
 void setup_wifi()  {
     Serial.println("Connecting to WiFi");
@@ -524,24 +540,24 @@ void setup_wifi()  {
   
     display.setCursor(0, line1);
     display.print("SSID: ");
-    display.println(WiFi.SSID()); // print the SSID of the network you're attached to:
+    display.println(WiFi.SSID());   // print the SSID of the network you're attached to:
     Serial.print("SSID: ");
     Serial.println(WiFi.SSID());
-    // print your board's IP address:
-    IPAddress ip = WiFi.localIP();
+    
+    IPAddress ip = WiFi.localIP();  // print your board's IP address:
     Serial.print("IP: ");
     Serial.println(ip);
     display.setCursor(0, line2);
     display.print("IP: ");
     display.println(ip);
-    // print the received signal strength:
+    
     long rssi = WiFi.RSSI();
     Serial.print("signal strength (RSSI):");
     Serial.print(rssi);
     Serial.println(" dBm");
     display.setCursor(0, line3);
     display.print("signal: ");
-    display.print(rssi);
+    display.print(rssi);  // print the received signal strength:
     display.println(" dBm");
     display.display();
  
@@ -712,6 +728,10 @@ void publishQueuedMessages() {
     }
 }
 
+void publishDebugLog(const String &message) {
+    publishMQTT(MQTT_TOPIC_DEBUG_LOG, message);
+}
+
 // Used to publish current counts to update Gate Counter every 30 seconds if no car is counted
 void KeepMqttAlive()  {
    publishMQTT(MQTT_PUB_TEMP, String(tempF));
@@ -741,8 +761,21 @@ void MQTTreconnect() {
         // Attempt to connect
         if (mqtt_client.connect(clientId.c_str(), mqtt_username, mqtt_password)) {
             Serial.println("connected.");
+            display.setTextSize(1);
+            display.setTextColor(WHITE);
+            display.setCursor(0,line1);
+            display.println("MQTT Connect");
+            display.display();    
+            Serial.println("connected!");
+            Serial.println("Waiting for Car");
+            // Once connected, publish an announcement…
+            publishMQTT(MQTT_PUB_HELLO, "Car Counter ONLINE!");
+            publishMQTT(MQTT_PUB_TEMP, String(tempF));
+            publishMQTT(MQTT_PUB_ENTER_TOTAL, String(totalDailyCars));
+            publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
 
             // Subscribe to necessary topics
+            mqtt_client.subscribe(MQTT_PUB_HELLO);
             mqtt_client.subscribe(MQTT_SUB_TOPIC1); // Reset Daily Count
             mqtt_client.subscribe(MQTT_SUB_TOPIC2); // Reset Show Count
             mqtt_client.subscribe(MQTT_SUB_TOPIC3); // Reset Day of Month
@@ -758,12 +791,14 @@ void MQTTreconnect() {
             Serial.print("failed, rc=");
             Serial.print(mqtt_client.state());
             Serial.println(". Will retry...");
+            display.setTextSize(1);
+            display.setTextColor(WHITE);
+            display.setCursor(0,line1);
+            display.println("MQTT Error");
+            display.display();
         }
     }
 }
-
-
-
 /***** END MQTT SECTION *****/
 
 // =========== GET SAVED SETUP FROM SD CARD ==========
@@ -808,10 +843,10 @@ void getDayOfMonth()  {
     myFile = SD.open(fileName3,FILE_READ);
     if (myFile)  {
             while (myFile.available()) {
-            lastdayOfMonth = myFile.parseInt(); // read day Number
+            lastDayOfMonth = myFile.parseInt(); // read day Number
             Serial.print(" Calendar Day = ");
-            Serial.println(lastdayOfMonth);
-            publishMQTT(MQTT_PUB_DAYOFMONTH, String(lastdayOfMonth));
+            Serial.println(lastDayOfMonth);
+            publishMQTT(MQTT_PUB_DAYOFMONTH, String(lastDayOfMonth));
             }
         myFile.close();
     }
@@ -878,8 +913,6 @@ void getHourlyData() {
         memset(hourlyCarCount, 0, sizeof(hourlyCarCount)); // Reset to 0
     }
 }
-
-
 
 /***** UPDATE and SAVE TOTALS TO SD CARD *****/
 /** Save the daily Total of cars counted */
@@ -968,7 +1001,7 @@ void saveHourlyCounts() {
     }
 
  //   // Publish daily total to a separate topic
-    publishMQTT("msb/traffic/CarCounter/Cars", String(totalDailyCars));
+    publishMQTT(MQTT_PUB_CARS, String(totalDailyCars));
  //   //Serial.printf("Published daily total: %d cars\n", totalDailyCars);
 
     // Save data to the SD card or perform any other end-of-hour actions as necessary
@@ -1077,7 +1110,7 @@ void getSavedValuesOnReboot() {
     getDayOfMonth();
 
     // Check if the ESP32 is rebooting on a new day
-    if (now.day() != lastdayOfMonth) {
+    if (now.day() != lastDayOfMonth) {
         dayOfMonth = now.day(); // Update to the current day
         saveDayOfMonth(); // Save the new day to the SD card
         totalDailyCars = 0; // Reset daily car count
@@ -1267,13 +1300,13 @@ void averageHourlyTemp() {
     }
 
     // Add the current temperature reading to the sum
-    float tempF = ((rtc.getTemperature() * 9 / 5) + 32);
+    //float tempF = ((rtc.getTemperature() * 9 / 5) + 32);
     tempReadingsSum += tempF;
     tempReadingsCount++;
 }
 
 // Car Counted, increment the counter by 1 and append to the Enterlog.csv log file on the SD card
-void beamCarDetect() {
+void countTheCar() {
     /* COUNT SUCCESS */
 
     noCarTimer = millis();
@@ -1411,7 +1444,7 @@ void detectCar() {
 
         case CAR_DETECTED:
             if (carPresentFlag) {
-                beamCarDetect(); // Count the car and update files
+                countTheCar(); // Count the car and update files
                 unsigned long timeToPass = currentMillis - firstBeamTripTime;
                 publishMQTT(MQTT_PUB_TTP, String(timeToPass));
                 publishMQTT(MQTT_DEBUG_LOG, "Car Counted Successfully!!");
@@ -1537,16 +1570,41 @@ void initSDCard()  {
     display.printf("SD Card Size: %lluMB\n", cardSize);
     display.display();
     // NECESSARY FILES NEEDED TO RUN
-    checkAndCreateFile(fileName1);
-    checkAndCreateFile(fileName2);
-    checkAndCreateFile(fileName3);
-    checkAndCreateFile(fileName4);
-    //checkAndCreateFile(fileName5, "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23");
-    checkAndCreateFile(fileName6, "Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
-    checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
-    checkAndCreateFile(fileName8);
-    checkAndCreateFile(fileName9);
 }
+
+void readTempandRH () {
+  unsigned long currentMillis = millis();
+
+    // Check if it's time to read the sensor
+    if (currentMillis - lastDHTReadMillis >= dhtReadInterval) {
+        lastDHTReadMillis = currentMillis;
+
+        // Read temperature and humidity
+        humidity = dht.readHumidity();
+        tempF = dht.readTemperature(true); // Default is Celsius
+        // For Fahrenheit: dht.readTemperature(true);
+
+        // Check if the readings are valid
+        if (isnan(temperature) || isnan(humidity)) {
+            Serial.println("Failed to read from DHT sensor!");
+        } else {
+            // Display the readings
+            Serial.print("Temperature: ");
+            Serial.print(tempF);
+            Serial.println(" °F");
+
+            Serial.print("Humidity: ");
+            Serial.print(humidity);
+            Serial.println(" %");
+
+            // Use the temperature value in your application
+            // Example: publish to MQTT
+            // publishMQTT(MQTT_PUB_TEMP, String(temperature));
+        }
+    }
+}
+
+
 
 /** Resets the hourly count array at midnight */
 void resetHourlyCounts() {
@@ -1572,7 +1630,7 @@ void timeTriggeredEvents() {
     }
     
     // Increment days running only if not Christmas Eve
-    if (now.day() != lastdayOfMonth) {
+    if (now.day() != lastDayOfMonth) {
         if (!(now.month() == 12 && now.day() == 24) && !flagDaysRunningReset) {
             daysRunning++;
             saveDaysRunning();
@@ -1730,6 +1788,11 @@ void setup() {
     digitalWrite(redArchPin, HIGH);
     digitalWrite(greenArchPin, HIGH);
     
+    // Initialize DHT sensor
+    dht.begin();
+    Serial.println("DHT22 sensor initialized.");
+    readTempandRH();
+
     display.clearDisplay();
     display.setTextColor(WHITE);
     display.setTextSize(2);
@@ -1739,15 +1802,27 @@ void setup() {
 
     Serial.println  ("Initializing Car Counter");
     Serial.print("Temperature: ");
-    tempF=((rtc.getTemperature()*9/5)+32);
     Serial.print(tempF);
     Serial.println(" F");
     display.display();
     delay(500); // display Startup
   
     //Initialize SD Card
+    SD.begin(PIN_SPI_CS);
     initSDCard();  // Initialize SD card and ready for Read/Write
 
+    // Check and create Required Data files
+    checkAndCreateFile(fileName1);
+    checkAndCreateFile(fileName2);
+    checkAndCreateFile(fileName3);
+    checkAndCreateFile(fileName4);
+    //checkAndCreateFile(fileName5, "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23");
+    checkAndCreateFile(fileName6, "Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
+    checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
+    checkAndCreateFile(fileName8);
+    checkAndCreateFile(fileName9);
+
+    // Required Hourly Data Files
     createAndInitializeHourlyFile(fileName5);
 
     // Initialize Server
@@ -1773,6 +1848,7 @@ void loop() {
     DateTime now = rtc.now();
     int currentHour = now.hour();
     int currentMinute = now.minute();
+    readTempandRH(); // Get Temperature and Humidity
 
     // Run the function only when the hour changes and once in the first minute
     if (currentHour != lastHour || (currentHour == lastHour && currentMinute == 0 && lastMinute != 0)) {
@@ -1789,15 +1865,9 @@ void loop() {
 
     ElegantOTA.loop();  // Keep OTA Updates Alive
 
-    // Only record show totals when show is open
+    // Check if time is inbetween show hours to record show totals
     currentTimeMinute = now.hour()*60 + now.minute();
-    if (currentTimeMinute >= showStartTime && currentTimeMinute <= showEndTime) {
-        // show is running and save counts
-        showTime = true;
-    } 
-    else {
-        showTime = false;
-    }
+    showTime = (currentTimeMinute >= showStartTime && currentTimeMinute <= showEndTime); // show is running and save counts
 
     // Update the display
     updateDisplay();
