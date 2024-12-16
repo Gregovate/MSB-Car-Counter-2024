@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.15.15.2 Changed SaveShowSummmary() to only average temps during show hours
 24.15.15.1 added SD.begin(PIN_SPI_CS) and DHT22 for temp & RH
 24.12.11.5 OTA-SDCard Branch added endpoint and page to list /getShowSummary. Fixed uploading to subdirectory
 24.12.11.4 OTA-SDCard Branch revised procedure for creating hourly filename 
@@ -116,7 +117,7 @@ D23 - MOSI
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.15.1" // Firmware Version
+#define FWVersion "24.12.15.2" // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -1032,12 +1033,11 @@ void saveDailyShowSummary() {
     int cumulative8PM = cumulative7PM + hourlyCarCount[19]; // Total at 8 PM
     int cumulative9PM = cumulative8PM + hourlyCarCount[20]; // Total at 9 PM
 
-    // Calculate cumilative totals before show starts
+    // Calculate total cars counted before the show starts
     int totalBefore5 = 0;
-        for (int i = 0; i <= 16; i++) { // Loop from hour 0 to hour 16
+    for (int i = 0; i < 17; i++) { // Loop from hour 0 to hour 16
         totalBefore5 += hourlyCarCount[i];
     }
-
 
     // Include additional cars detected between 9:00 PM and 9:10 PM
     if (now.hour() == 21 && now.minute() <= 10) {
@@ -1048,8 +1048,8 @@ void saveDailyShowSummary() {
     float showTempSum = 0.0;
     int showTempCount = 0;
 
-    for (int i = showStartHour; i <= showEndHour; i++) {
-        if (hourlyTemp[i] != 0.0) { // Include all valid temperatures
+    for (int i = 17; i <= 20; i++) { // Loop only between 5 PM and 9 PM
+        if (hourlyTemp[i] != 0.0) { // Include valid temperature readings
             showTempSum += hourlyTemp[i];
             showTempCount++;
         }
@@ -1069,10 +1069,6 @@ void saveDailyShowSummary() {
     char dateBuffer[12];
     snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d", now.year(), now.month(), now.day());
 
-    // format with thousands separator
-    //String totalShowCarsK = formatK(totalShowCars);
-    //String cumulative9PMK = formatK(cumulative9PM);
-
     // Append the show summary data
     summaryFile.printf("%s,%d,%d,%d,%d,%d,%d,%d,%.1f\n",
                        dateBuffer,       // Current date
@@ -1083,22 +1079,24 @@ void saveDailyShowSummary() {
                        cumulative8PM,    // Cumulative total up to 8 PM
                        cumulative9PM,    // Cumulative total up to 9 PM, including 9:10 PM cars
                        totalShowCars,    // Total show cars
-                       showAverageTemp); // Average temperature during show hours     
+                       showAverageTemp); // Average temperature during show hours
     summaryFile.close();
 
     // Publish show summary data to MQTT
     publishMQTT(MQTT_PUB_SUMMARY, String("Date: ") + dateBuffer +
                                         ", DaysRunning: " + daysRunning +
-                                        ", Before5: " + totalBefore5 +   
+                                        ", Before5: " + totalBefore5 +
                                         ", 6PM: " + cumulative6PM +
                                         ", 7PM: " + cumulative7PM +
                                         ", 8PM: " + cumulative8PM +
                                         ", 9PM: " + cumulative9PM +
                                         ", ShowTotal: " + totalShowCars +
                                         ", ShowAvgTemp: " + String(showAverageTemp, 1));
+
     Serial.printf("Daily show summary written: %s, DaysRunning: %d, Before5: %d, 6PM: %d, 7PM: %d, 8PM: %d, 9PM: %d, ShowTotal: %d, Avg Temp: %.1f°F.\n",
                   dateBuffer, daysRunning, totalBefore5, cumulative6PM, cumulative7PM, cumulative8PM, cumulative9PM, totalShowCars, showAverageTemp);
 }
+
 
 
 void getSavedValuesOnReboot() {
