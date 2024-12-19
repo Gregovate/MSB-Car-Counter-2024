@@ -4,6 +4,11 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.18.3 copied readTempandRH from gate counter
+24.12.18.2 Moved saveHoulyCounts to timeTriggeredEvents & refactored
+24.12.18.1 Renamed hourlyCarCount[] to hourlyCount[] and finished comparison to Gate Counter Code
+24.12.17.2 added new topic MQTT_COUNTER_LOG "msb/traffic/CarCounter/CounterLog" used SaveHourlyCounts() from GateCounter
+24.12.17.1 more tweaks to detectCar() revised averageHourlyTemp() & readTempandRH() removed averageHourlyTemp() from Loop changed downloadSDFile
 24.12.16.1 removed all references to tempF from RTC sensor moved to DHT22 sensor publish every 10 min publish temp & RH json format
 24.15.15.2 Changed SaveShowSummmary() to only average temps during show hours 
 24.15.15.1 added SD.begin(PIN_SPI_CS) and DHT22 for temp & RH
@@ -94,9 +99,8 @@ D23 - MOSI
 #include <Adafruit_SSD1306.h>
 #include "RTClib.h"
 #include "NTPClient.h"
-//#include "WIFI.h"
 //#include "WiFiClientSecure.h"
-#include "WiFiMulti.h"
+#include <WiFiMulti.h>
 #include "secrets.h"
 #include "time.h"
 #include "SD.h"
@@ -118,28 +122,28 @@ D23 - MOSI
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.16.1" // Firmware Version
+#define FWVersion "24.12.18.3"  // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
 #define secondBeamPin 32
 #define redArchPin 25
 #define greenArchPin 26
-#define DHTPIN 4  // GPIO pin for the DHT22
+#define DHTPIN 4       // GPIO pin for the DHT22
 #define DHTTYPE DHT22  // DHT TYPE
-#define PIN_SPI_CS 5 // The ESP32 pin GPIO5
-#define OLED_RESET -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define PIN_SPI_CS 5   // The ESP32 pin GPIO5
+#define OLED_RESET -1  // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // #define MQTT_KEEPALIVE 30 //removed 10/16/24
 
 unsigned int waitDuration = 950; // minimum millis for secondBeam to be broken needed to detect a car
-unsigned int showStartTime = 17*60; // Show (counting) starts at 5:00 pm
-unsigned int showEndTime =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
+const int showStartMin = 17*60; // Show (counting) starts at 5:00 pm
+const int showEndMin =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
 // **************************************************
 
-//***** MQTT DEFINITIONS *****/
+/***** MQTT TOPIC DEFINITIONS *****/
 #define THIS_MQTT_CLIENT "espCarCounter" // Look at line 90 and set variable for WiFi Client secure & PubSubCLient 12/23/23
 int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client connected
 // Publishing Topics 
@@ -149,8 +153,8 @@ char topicBase[60];
 #define MQTT_PUB_HELLO  "msb/traffic/CarCounter/hello"
 #define MQTT_PUB_TEMP  "msb/traffic/CarCounter/temp"
 #define MQTT_PUB_TIME  "msb/traffic/CarCounter/time"
-#define MQTT_PUB_ENTER_TOTAL  "msb/traffic/CarCounter/EnterTotal"
-#define MQTT_PUB_CARS  "msb/traffic/CarCounter/Cars"
+#define MQTT_PUB_ENTER_CARS  "msb/traffic/CarCounter/EnterTotal"
+#define MQTT_PUB_CARS_HOURLY  "msb/traffic/CarCounter/Cars"
 #define MQTT_PUB_SUMMARY "msb/traffic/CarCounter/Summary"
 #define MQTT_PUB_DAYOFMONTH  "msb/traffic/CarCounter/DayOfMonth"
 #define MQTT_PUB_SHOWTOTAL  "msb/traffic/CarCounter/ShowTotal"
@@ -158,6 +162,7 @@ char topicBase[60];
 #define MQTT_SECOND_BEAM_SENSOR_STATE "msb/traffic/CarCounter/secondBeamSensorState"
 #define MQTT_PUB_TTP "msb/traffic/CarCounter/TTP"
 #define MQTT_PUB_DAYSRUNNING "msb/traffic/CarCounter/DaysRunning"
+#define MQTT_COUNTER_LOG "msb/traffic/CarCounter/CounterLog"
 #define MQTT_DEBUG_LOG "msb/traffic/CarCounter/debuglog"
 #define MQTT_PUB_TIMEBETWEENCARS "msb/traffic/CarCounter/timeBetweenCars"
 
@@ -203,8 +208,8 @@ unsigned long secondBeamTripTime = 0;
 
 //const unsigned long personTimeout = 500;        // Time in ms considered too fast for a car, more likely a person
 //const unsigned long bothBeamsHighThreshold = 750;  // Time in ms for both beams high to consider a car is in the detection zone
-unsigned long carCounterTimeout = 60000; // default time for car counter alarm in millis
-unsigned long timeToPass = 0;
+
+unsigned long timeToPassMS = 0;
 int firstBeamState;  // Holds the current state of the FIRST IR receiver/Beam
 int secondBeamState;  // Holds the current state of the SECOND IR receiver/Beam
 int prevFirstBeamState = -1; // Holds the previous state of the FIRST IR receiver/Beam
@@ -218,7 +223,7 @@ bool stableSecondBeamState = LOW;
 unsigned long lastFirstBeamChangeTime = 0;
 unsigned long lastSecondBeamChangeTime = 0;
 
-AsyncWebServer server(80);
+AsyncWebServer server(80);     // Define Webserver
 String currentDirectory = "/"; // Current working directory
 
 unsigned long ota_progress_millis = 0;
@@ -259,16 +264,17 @@ const int   daylightOffset_sec = 3600;
 DHT dht(DHTPIN, DHTTYPE);
 float tempF = 0.0;  // Temperature
 float humidity = 0.0;     // Humidity
-//unsigned long lastDHTReadMillis = 0; // Time since last sensor read
-//const unsigned long dhtReadInterval = 600000; // Minimum interval between reads (10 min)
 
 /** Display Definitions & variables **/
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+/*Line Numbers used for Display*/
 const int line1 =0;
 const int line2 =9;
 const int line3 = 19;
-const int line4 = 35;
-const int line5 = 50;
+const int line4 = 30;
+const int line5 = 42;
+const int line6 = 50;
+const int line7 = 53;
 
 //Create Multiple WIFI Object
 WiFiMulti wifiMulti;
@@ -292,27 +298,24 @@ bool wifi_connected = false;
 int wifi_connect_attempts = 5;
 
 /***** GLOBAL VARIABLES *****/
-unsigned int dayOfMonth;     // Current Calendar day
-unsigned int lastDayOfMonth; // Last calendar day used to reset days running
-unsigned int currentMonth;   // Current Month
-unsigned int currentHr12;    // Current Hour 12 Hour format
-unsigned int currentHr24;    // Current Hour 24 Hour Format
-unsigned int currentMin;     // Current Minute
+unsigned int dayOfMonth;      // Current Calendar day
+unsigned int lastDayOfMonth;  // Last calendar day used to reset days running
+unsigned int currentHr12;     // Current Hour 12 Hour format
+unsigned int currentHr24;     // Current Hour 24 Hour Format
+unsigned int currentMin;      // Current Minute
 unsigned int currentSec;      // Current Second
-unsigned int daysRunning;  // Number of days the show is running.
-unsigned int currentTimeMinute; // for converting clock time hh:mm to clock time mm
+unsigned int daysRunning;     // Number of days the show is running.
+unsigned int currentTimeMinute; // for converting clock time hh:mm to clock time min since midnight
 int totalDailyCars; // total cars counted per day 24/7 Needed for debugging
 int totalShowCars;  // total cars counted for durning show hours open (5:00 pm to 9:10 pm)
-int connectionAttempts = 5; // number of WiFi or MQTT Connection Attempts
 
 /***** TIME VARIABLES *****/
-unsigned long wifi_connectioncheckMillis = 5000; // check for connection every 5 sec
-unsigned long mqtt_connectionCheckMillis = 20000; // check for connection
+const unsigned long wifi_connectioncheckMillis = 5000; // check for connection every 5 sec
+const unsigned long mqtt_connectionCheckMillis = 30000; // check for connection
 unsigned long start_MqttMillis; // for Keep Alive Timer
 unsigned long start_WiFiMillis; // for keep Alive Timer
+unsigned long carCounterTimeout = 60000; // default time for car counter alarm in millis
 unsigned long noCarTimer = 0;
-int displayMode = 0;
-unsigned long dayMillis = 0;
 
 //***** DAILY RESET FLAGS *****
 bool flagDaysRunningReset = false;
@@ -320,7 +323,7 @@ bool flagMidnightReset = false;
 bool flagDailyShowStartReset = false;
 bool flagDailySummarySaved = false;
 bool flagDailyShowSummarySaved = false;
-bool flagHourlyCountsSaved = false;
+bool flagHourlyReset = false;
 bool showTime = false;
 bool resetFlagsOnce = false;
 
@@ -330,14 +333,14 @@ const String fileName1 = "/EnterTotal.txt"; // DailyTot.txt file to store daily 
 const String fileName2 = "/ShowTotal.txt";  // ShowTot.txt file to store season total counts
 const String fileName3 = "/DayOfMonth.txt"; // DayOfMonth.txt file to store current day number
 const String fileName4 = "/RunDays.txt"; // RunDays.txt file to store days since open
-const String fileName5 = "/HourlyData.csv"; // EnterSummary.csv Stores Daily Totals by Hour and total
+const String fileName5 = "/HourlyData.csv"; // HourlyData.csv Stores Daily Totals by Hour and total
 const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car counts for season (was MASTER.CSV)
 const String fileName7 = "/ShowSummary.csv"; // Show summary of counts during show (5:00pm to 9:10pm)
 const String fileName8 = "/data/index.html"; // data folder and index.html for serving files OTA
 const String fileName9 = "/data/style.css"; // data folder and index.html for serving files OTA
 
 /***** Arrays for Hourly Totals/Averages *****/
-static unsigned long hourlyCarCount[24] = {0}; // Array for Daily total cars per hour
+static unsigned long hourlyCount[24] = {0}; // Array for Daily total cars per hour
 static float hourlyTemp[24] = {0.0};   // Array to store average temperatures for 24 hours
 
 /***** Arrays Used to make display Pretty *****/
@@ -365,12 +368,10 @@ String formatK(int number) {
     return result;
 }
 
-
-
 // sync Time at REBOOT
 void SetLocalTime()  {
   struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
+  if(!getLocalTime(&timeinfo)) {
       Serial.println("Failed to obtain time. Using Compiled Date");
       return;
   }
@@ -406,8 +407,7 @@ void SetLocalTime()  {
   strftime(timeStringBuff, sizeof(timeStringBuff), "%Y-%m-%d %H:%M:%S", &timeinfo);
   Serial.println(timeStringBuff);
   rtc.adjust(DateTime(timeStringBuff));
-  //tempF = ((rtc.getTemperature()*9/5)+32);
-} // end SetLocalTime
+}
 
 void setup_wifi()  {
     Serial.println("Connecting to WiFi");
@@ -479,7 +479,11 @@ void downloadSDFile(AsyncWebServerRequest *request) {
         return;
     }
 
-    request->send(SD, filename, "application/octet-stream");
+    // Add Content-Disposition header for proper filename handling
+    AsyncWebServerResponse *response = request->beginResponse(SD, filename, "application/octet-stream");
+    response->addHeader("Content-Disposition", "attachment; filename=\"" + String(request->getParam("filename")->value()) + "\"");
+
+    request->send(response);
 }
 
 void uploadSDFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
@@ -566,8 +570,6 @@ void deleteSDFile(AsyncWebServerRequest *request) {
 }
 //END OTA SD Card File Operations
 
-
-
 // HTML Content now served from /data/index.html and /data/style.css
 void setupServer() {
     // Serve HTML file
@@ -652,7 +654,6 @@ void setupServer() {
     Serial.println("HTTP server started");
 }
 
-
 void checkWiFiConnection() {
     static unsigned long lastWiFiCheck = 0;
     static unsigned long lastDisconnectedTime = 0; // Track how long WiFi has been disconnected
@@ -701,7 +702,6 @@ void checkWiFiConnection() {
     }
 }
 
-
 /***** MQTT SECTION ******/
 // Save messages if MQTT is not connected in Queue
 std::queue<String> publishQueue;
@@ -736,10 +736,10 @@ void publishDebugLog(const String &message) {
     publishMQTT(MQTT_DEBUG_LOG, message);
 }
 
-// Used to publish current counts to update Gate Counter every 30 seconds if no car is counted
-void KeepMqttAlive()  {
+// Used to publish current counts to update Car Counter every 30 seconds if no car is counted
+void KeepMqttAlive() {
    publishMQTT(MQTT_PUB_TEMP, String(tempF));
-   publishMQTT(MQTT_PUB_ENTER_TOTAL, String(totalDailyCars));
+   publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
    publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
    start_MqttMillis = millis();
 }
@@ -767,7 +767,7 @@ void MQTTreconnect() {
             Serial.println("connected.");
             display.setTextSize(1);
             display.setTextColor(WHITE);
-            display.setCursor(0,line1);
+            display.setCursor(0,line5);
             display.println("MQTT Connect");
             display.display();    
             Serial.println("connected!");
@@ -775,7 +775,7 @@ void MQTTreconnect() {
             // Once connected, publish an announcement…
             publishMQTT(MQTT_PUB_HELLO, "Car Counter ONLINE!");
             publishMQTT(MQTT_PUB_TEMP, String(tempF));
-            publishMQTT(MQTT_PUB_ENTER_TOTAL, String(totalDailyCars));
+            publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
             publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
 
             // Subscribe to necessary topics
@@ -797,7 +797,7 @@ void MQTTreconnect() {
             Serial.println(". Will retry...");
             display.setTextSize(1);
             display.setTextColor(WHITE);
-            display.setCursor(0,line1);
+            display.setCursor(0,line6);
             display.println("MQTT Error");
             display.display();
         }
@@ -816,7 +816,7 @@ void getDailyTotal()   {
             Serial.println(totalDailyCars);
         }
         myFile.close();
-        publishMQTT(MQTT_PUB_ENTER_TOTAL, String(totalDailyCars));
+        publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
     }  
     else  {
         Serial.print("SD Card: Cannot open the file: ");
@@ -827,7 +827,7 @@ void getDailyTotal()   {
 /** Get season total cars since show opened */
 void getShowTotal() {
     myFile = SD.open(fileName2,FILE_READ);
-    if (myFile)  {
+    if (myFile) {
         while (myFile.available()) {
             totalShowCars = myFile.parseInt(); // read total
             Serial.print(" Total Show cars from file = ");
@@ -835,27 +835,25 @@ void getShowTotal() {
         }
         myFile.close();
         publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
-    }
-    else  {
-        Serial.print("SD Card: Cannot open the file: ");
+    } else {
+        Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName2);
     }
 }  // end getShowTotal
 
 /** Get the last calendar day used for reset daily counts) **/
-void getDayOfMonth()  {
+void getDayOfMonth() {
     myFile = SD.open(fileName3,FILE_READ);
     if (myFile)  {
             while (myFile.available()) {
             lastDayOfMonth = myFile.parseInt(); // read day Number
             Serial.print(" Calendar Day = ");
             Serial.println(lastDayOfMonth);
-            publishMQTT(MQTT_PUB_DAYOFMONTH, String(lastDayOfMonth));
             }
         myFile.close();
-    }
-    else {
-        Serial.print("SD Card: Cannot open the file: ");
+        publishMQTT(MQTT_PUB_DAYOFMONTH, String(lastDayOfMonth));
+    } else {
+        Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName3);
         }
 }
@@ -863,7 +861,7 @@ void getDayOfMonth()  {
 /** Get number of Days the show has been running) */
 void getDaysRunning()  {
     myFile = SD.open(fileName4,FILE_READ);
-    if (myFile)  {
+    if (myFile) {
         while (myFile.available()) {
             daysRunning = myFile.parseInt(); // read day Number
             Serial.print(" Days Running = ");
@@ -871,9 +869,8 @@ void getDaysRunning()  {
         }
         myFile.close();
         publishMQTT(MQTT_PUB_DAYSRUNNING, String(daysRunning));
-    }
-    else  {
-        Serial.print("SD Card: Cannot open the file: ");
+    } else {
+        Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName4);
     }
 } 
@@ -883,7 +880,7 @@ void getHourlyData() {
     File file = SD.open(fileName5, FILE_READ);
     if (!file) {
         Serial.println("Failed to open file for reading. Initializing hourly data.");
-        memset(hourlyCarCount, 0, sizeof(hourlyCarCount)); // Reset to 0
+        memset(hourlyCount, 0, sizeof(hourlyCount)); // Reset to 0
         return;
     }
 
@@ -898,23 +895,23 @@ void getHourlyData() {
         int parsedColumns = sscanf(lastLine.c_str(),
                                    "%[^,],%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
                                    dateBuffer,
-                                   &hourlyCarCount[0], &hourlyCarCount[1], &hourlyCarCount[2], &hourlyCarCount[3],
-                                   &hourlyCarCount[4], &hourlyCarCount[5], &hourlyCarCount[6], &hourlyCarCount[7],
-                                   &hourlyCarCount[8], &hourlyCarCount[9], &hourlyCarCount[10], &hourlyCarCount[11],
-                                   &hourlyCarCount[12], &hourlyCarCount[13], &hourlyCarCount[14], &hourlyCarCount[15],
-                                   &hourlyCarCount[16], &hourlyCarCount[17], &hourlyCarCount[18], &hourlyCarCount[19],
-                                   &hourlyCarCount[20], &hourlyCarCount[21], &hourlyCarCount[22], &hourlyCarCount[23]);
+                                   &hourlyCount[0], &hourlyCount[1], &hourlyCount[2], &hourlyCount[3],
+                                   &hourlyCount[4], &hourlyCount[5], &hourlyCount[6], &hourlyCount[7],
+                                   &hourlyCount[8], &hourlyCount[9], &hourlyCount[10], &hourlyCount[11],
+                                   &hourlyCount[12], &hourlyCount[13], &hourlyCount[14], &hourlyCount[15],
+                                   &hourlyCount[16], &hourlyCount[17], &hourlyCount[18], &hourlyCount[19],
+                                   &hourlyCount[20], &hourlyCount[21], &hourlyCount[22], &hourlyCount[23]);
 
         if (parsedColumns != 25) {
             Serial.println("Error parsing hourly data. Expected 25 columns but found: " + String(parsedColumns));
-            memset(hourlyCarCount, 0, sizeof(hourlyCarCount)); // Reset to 0
+            memset(hourlyCount, 0, sizeof(hourlyCount)); // Reset to 0
         } else {
             Serial.println("Hourly data successfully loaded from file:");
             Serial.println(lastLine);
         }
     } else {
         Serial.println("File is empty. Initializing hourly data.");
-        memset(hourlyCarCount, 0, sizeof(hourlyCarCount)); // Reset to 0
+        memset(hourlyCount, 0, sizeof(hourlyCount)); // Reset to 0
     }
 }
 
@@ -925,14 +922,13 @@ void saveDailyTotal() {
     if (myFile) {  // check for an open failure
         myFile.print(totalDailyCars);
         myFile.close();
-        publishMQTT(MQTT_PUB_ENTER_TOTAL, String(totalDailyCars));
-    }
-    else {
+        publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
+    } else {
         Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName1);
         publishMQTT(MQTT_DEBUG_LOG, "SD Write Failure: Unable to save daily total.");
     }
-    publishMQTT(MQTT_PUB_ENTER_TOTAL, String(totalDailyCars));
+    publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
 }
 
 /* Save the grand total cars file for season  */
@@ -941,11 +937,7 @@ void saveShowTotal()  {
     if (myFile) {
         myFile.print(totalShowCars); // only count cars between 4:55 pm and 9:10 pm
         myFile.close();
-        Serial.print(F("Updating Show Total "));
-        Serial.print(totalShowCars);
-        Serial.print(F(" Car # "));
-    }
-    else {
+    } else {
         Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName2);
     }
@@ -958,8 +950,7 @@ void saveDayOfMonth()  {
     if (myFile) {
         myFile.print(dayOfMonth);
         myFile.close();
-    }
-    else {
+    } else {
         Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName3);
     }
@@ -972,53 +963,91 @@ void saveDaysRunning() {
     if (myFile) {
             myFile.print(daysRunning);
             myFile.close();
-    }
-    else  {
+    } else {
             Serial.print(F("SD Card: Cannot open the file: "));
             Serial.println(fileName4);
     }
     publishMQTT(MQTT_PUB_DAYSRUNNING, String(daysRunning));
 }
 
-
 // Save cars counted each hour in the event of a reboot
 void saveHourlyCounts() {
     DateTime now = rtc.now();
-    static int lastSavedDay = -1; // Track the last day saved to avoid duplicate writes
-
-    int currentDay = now.day();
-
-    // Ensure this function only runs once per day
-    if (currentDay == lastSavedDay) {
-        return;
-    }
-
-    lastSavedDay = currentDay; // Update the last saved day
-
     char dateBuffer[12];
     snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d", now.year(), now.month(), now.day());
 
-    File hourlyFile = SD.open(fileName5, FILE_APPEND);
-    if (!hourlyFile) {
-        Serial.println("Failed to open file for writing hourly data.");
-        return;
+    int currentHour = now.hour(); // Get the current hour (0-23)
+
+    File file = SD.open(fileName5, FILE_READ);
+    String updatedContent = "";
+    bool rowExists = false;
+
+    if (file) {
+        while (file.available()) {
+            String line = file.readStringUntil('\n');
+            if (line.startsWith(dateBuffer)) {
+                rowExists = true;
+                updatedContent += dateBuffer; // Start with the date
+
+                int valueIndex = 0; // Track which value we are processing
+                int lastCommaIndex = line.indexOf(",") + 1; // Start after the date
+                
+                // Parse each value in the line
+                for (int i = 0; i < 24; i++) {
+                    int nextCommaIndex = line.indexOf(",", lastCommaIndex);
+                    String currentValue;
+
+                    if (nextCommaIndex != -1) {
+                        currentValue = line.substring(lastCommaIndex, nextCommaIndex);
+                        lastCommaIndex = nextCommaIndex + 1;
+                    } else {
+                        currentValue = line.substring(lastCommaIndex);
+                    }
+
+                    // Replace value for the current hour
+                    if (i == currentHour) {
+                        updatedContent += "," + String(hourlyCount[i]);
+                    } else {
+                        updatedContent += "," + currentValue;
+                    }
+                }
+                updatedContent += "\n";
+
+                // Publish current hour's data to MQTT
+                char topic[60];
+                snprintf(topic, sizeof(topic), "%s/hour%02d", MQTT_PUB_CARS_HOURLY, currentHour);
+                publishMQTT(topic, String(hourlyCount[currentHour]));
+            } else {
+                updatedContent += line + "\n"; // Preserve other rows
+            }
+        }
+        file.close();
     }
 
-    // Write the date as the first column
-    hourlyFile.print(dateBuffer);
+    // If no row exists for today, create a new one
+    if (!rowExists) {
+        updatedContent += dateBuffer;
+        for (int i = 0; i < 24; i++) {
+            updatedContent += (i == currentHour) ? "," + String(hourlyCount[i]) : ",0";
+        }
+        updatedContent += "\n";
 
-    // Write the 24 hourly counts as subsequent columns
-    for (int i = 0; i < 24; i++) {
-        hourlyFile.printf(",%d", hourlyCarCount[i]);
+        // Publish current hour's data to MQTT
+        char topic[60];
+        snprintf(topic, sizeof(topic), "%s/hour%02d", MQTT_PUB_CARS_HOURLY, currentHour);
+        publishMQTT(topic, String(hourlyCount[currentHour]));
     }
-    hourlyFile.println(); // Newline to complete the row
 
-    hourlyFile.close();
-
-    Serial.println("Hourly data saved successfully as a row:");
-    Serial.println(dateBuffer);
+    // Write updated content back to the file
+    file = SD.open(fileName5, FILE_WRITE);
+    if (file) {
+        file.print(updatedContent);
+        file.close();
+        Serial.printf("Hourly counts for hour %02d saved and published.\n", currentHour);
+    } else {
+        Serial.println("Failed to open HourlyData.csv for writing.");
+    }
 }
-
 
 // Save and Publish Show Totals
 void saveDailyShowSummary() {
@@ -1029,20 +1058,20 @@ void saveDailyShowSummary() {
     const int showEndHour = 20;  // Up to 9 PM
 
     // Calculate cumulative totals for each key hour
-    int cumulative6PM = hourlyCarCount[17]; // Total at 6 PM
-    int cumulative7PM = cumulative6PM + hourlyCarCount[18]; // Total at 7 PM
-    int cumulative8PM = cumulative7PM + hourlyCarCount[19]; // Total at 8 PM
-    int cumulative9PM = cumulative8PM + hourlyCarCount[20]; // Total at 9 PM
+    int cumulative6PM = hourlyCount[17]; // Total at 6 PM
+    int cumulative7PM = cumulative6PM + hourlyCount[18]; // Total at 7 PM
+    int cumulative8PM = cumulative7PM + hourlyCount[19]; // Total at 8 PM
+    int cumulative9PM = cumulative8PM + hourlyCount[20]; // Total at 9 PM
 
     // Calculate total cars counted before the show starts
     int totalBefore5 = 0;
     for (int i = 0; i < 17; i++) { // Loop from hour 0 to hour 16
-        totalBefore5 += hourlyCarCount[i];
+        totalBefore5 += hourlyCount[i];
     }
 
-    // Include additional cars detected between 9:00 PM and 9:10 PM
-    if (now.hour() == 21 && now.minute() <= 10) {
-        cumulative9PM += hourlyCarCount[21];
+    // Include additional cars detected between 9:00 PM and 9:20 PM
+    if (now.hour() * 60 + now.minute() <= showEndMin) {
+        cumulative9PM += hourlyCount[21];
     }
 
     // Calculate the average temperature during show hours (5 PM to 9 PM)
@@ -1098,8 +1127,6 @@ void saveDailyShowSummary() {
                   dateBuffer, daysRunning, totalBefore5, cumulative6PM, cumulative7PM, cumulative8PM, cumulative9PM, totalShowCars, showAverageTemp);
 }
 
-
-
 void getSavedValuesOnReboot() {
     DateTime now = rtc.now();
 
@@ -1139,17 +1166,7 @@ void getSavedValuesOnReboot() {
 
 /*** MQTT CALLBACK TOPICS for Reveived messages ****/
 void callback(char* topic, byte* payload, unsigned int length)  {
-    /* 
-    Serial.print("Message arrived [");
-    Serial.print(topic);
-    Serial.print("] ");
-    for (int i = 0; i < length; i++)
-    {
-      Serial.print((char)payload[i]);
-    }
-    payload[length] = '\0';
-    Serial.println();
-    */
+
     char message[length + 1];
     strncpy(message, (char*)payload, length);
     message[length] = '\0'; // Safely null-terminate the payload
@@ -1191,8 +1208,6 @@ void callback(char* topic, byte* payload, unsigned int length)  {
     } 
  }
  /***** END OF CALLBACK TOPICS *****/
-
-
 
 /***** IDLE STUFF  *****/
 // Flash an alternating pattern on the arches (called if a car hasn't been detected for over 30 seconds)
@@ -1268,26 +1283,28 @@ void playPattern() {
 // Average Temperature each hour
 void averageHourlyTemp() {
     static int lastPublishedHour = -1;     // Tracks the last hour when data was published
-    static int tempReadingsCount = 0;      // Number of temperature readings
-    static float tempReadingsSum = 0.0;    // Sum of temperature readings
+    static int tempReadingsCount = 0;      // Number of valid temperature readings
+    static float tempReadingsSum = 0.0;    // Sum of valid temperature readings
     static float hourlyTemp[24] = {0.0};   // Array to store average temperatures for 24 hours
 
+    // Get the current time
     DateTime now = rtc.now();
     int nowHour = now.hour();
 
     // Check if the hour has changed
     if (nowHour != lastPublishedHour) {
-        // Calculate and store the average for the previous hour
+        // Publish the average for the completed hour
         if (tempReadingsCount > 0 && lastPublishedHour >= 0) {
             hourlyTemp[lastPublishedHour] = tempReadingsSum / tempReadingsCount;
 
-            // Publish the average temperature for the completed hour
+            // Publish to MQTT
             char topic[50];
             snprintf(topic, sizeof(topic), "%s/hourly/%02d", MQTT_PUB_TEMP, lastPublishedHour);
             publishMQTT(topic, String(hourlyTemp[lastPublishedHour], 1)); // Publish with 1 decimal place
 
-            // Print to serial monitor
+            // Log the published temperature
             Serial.printf("Hour %02d average temperature published: %.1f°F\n", lastPublishedHour, hourlyTemp[lastPublishedHour]);
+            //publishDebugLog("Hourly average temperature published: " + String(hourlyTemp[lastPublishedHour], 1));
         }
 
         // Reset for the new hour
@@ -1296,10 +1313,12 @@ void averageHourlyTemp() {
         tempReadingsCount = 0;
     }
 
-    // Add the current temperature reading to the sum
-    //float tempF = ((rtc.getTemperature() * 9 / 5) + 32);
-    tempReadingsSum += tempF;
-    tempReadingsCount++;
+    // Add the latest temperature reading if valid
+    if (tempF != -999) { // Ensure only valid readings are processed
+        tempReadingsSum += tempF;
+        tempReadingsCount++;
+        //publishDebugLog("Temperature added for averaging: " + String(tempF));
+    }
 }
 
 // Car Counted, increment the counter by 1 and append to the Enterlog.csv log file on the SD card
@@ -1317,17 +1336,16 @@ void countTheCar() {
     Serial.print(", ");
     // increase Count for Every car going through car counter regardless of time
     totalDailyCars ++;   
-    saveDailyTotal();  // Save Daily Total on SD Card
     // Increment hourly car count
     int currentHour = now.hour();
-    hourlyCarCount[currentHour]++;
-
+    hourlyCount[currentHour]++;
+    saveDailyTotal(); // Update Daily Total on SD Card to retain numbers with reboot
     // Construct the MQTT topic dynamically
     char formattedTopic[100]; // Buffer for the full topic
-    snprintf(formattedTopic, sizeof(formattedTopic), "%s%02d", MQTT_PUB_CARS, currentHour); // Append the two-digit hour
+    snprintf(formattedTopic, sizeof(formattedTopic), "%s%02d", MQTT_PUB_CARS_HOURLY, currentHour); // Append the two-digit hour
 
     // Publish the updated hourly count
-    publishMQTT(formattedTopic, String(hourlyCarCount[currentHour]));
+    publishMQTT(formattedTopic, String(hourlyCount[currentHour]));
 
     // increase Show Count only when show is open
     if (showTime == true)  {
@@ -1340,7 +1358,7 @@ void countTheCar() {
     if (myFile) {
         myFile.print(now.toString(buf2));
         myFile.print(", ");
-        myFile.print (timeToPass) ; 
+        myFile.print (timeToPassMS) ; 
         myFile.print(", 1 , "); 
         myFile.print (totalDailyCars) ; 
         myFile.print(", ");
@@ -1352,10 +1370,9 @@ void countTheCar() {
         publishMQTT(MQTT_PUB_HELLO, "Car Counter Working");
         publishMQTT(MQTT_PUB_TEMP, String(tempF));
         publishMQTT(MQTT_PUB_TIME, now.toString(buf2));
-        publishMQTT(MQTT_PUB_ENTER_TOTAL, String(totalDailyCars));
+        publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
         start_MqttMillis = millis();
-    } 
-    else {
+    } else {
         Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName6);
     }
@@ -1401,7 +1418,7 @@ void detectCar() {
             if (firstBeamState == 1) {
                 firstBeamTripTime = currentMillis; // Set the time when the first beam is tripped
                 currentCarDetectState = FIRST_BEAM_HIGH;
-                publishMQTT(MQTT_DEBUG_LOG, "First Beam High");
+                publishMQTT(MQTT_COUNTER_LOG, "First Beam High");
                 digitalWrite(greenArchPin, HIGH); // Turn on green arch
             }
             break;
@@ -1415,7 +1432,7 @@ void detectCar() {
                     bothBeamsHighTime = currentMillis; // Set the time when both beams are confirmed to be high
                     carPresentFlag = true;
                     currentCarDetectState = BOTH_BEAMS_HIGH;
-                    publishMQTT(MQTT_DEBUG_LOG, "State Changed Both Beams High");
+                    publishMQTT(MQTT_COUNTER_LOG, "State Changed Both Beams High");
                     digitalWrite(greenArchPin, LOW);  // Turn off green arch
                     digitalWrite(redArchPin, HIGH);   // Turn on red arch
                  }
@@ -1423,7 +1440,7 @@ void detectCar() {
             } else if (firstBeamState == 0) {
                 // If the first beam is cleared before the second beam is triggered, reset
                 currentCarDetectState = WAITING_FOR_CAR;
-                publishMQTT(MQTT_DEBUG_LOG, "1st Beam Low, Changed Waiting for Car");
+                publishMQTT(MQTT_COUNTER_LOG, "1st Beam Low, Changed Waiting for Car");
                 digitalWrite(greenArchPin, HIGH); // Turn on green arch
             }
             break;
@@ -1435,16 +1452,16 @@ void detectCar() {
             }         
             if (secondBeamState == 0 && carPresentFlag) {
                 currentCarDetectState = CAR_DETECTED;
-                publishMQTT(MQTT_DEBUG_LOG, "Changed state to Car Detected");
+                publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected");
             }
             break;
 
         case CAR_DETECTED:
             if (carPresentFlag) {
                 countTheCar(); // Count the car and update files
-                unsigned long timeToPass = currentMillis - firstBeamTripTime;
-                publishMQTT(MQTT_PUB_TTP, String(timeToPass));
-                publishMQTT(MQTT_DEBUG_LOG, "Car Counted Successfully!!");
+                unsigned long timeToPassMS = currentMillis - firstBeamTripTime;
+                publishMQTT(MQTT_PUB_TTP, String(timeToPassMS));
+                publishMQTT(MQTT_COUNTER_LOG, "Car Counted Successfully!!");
                 carPresentFlag = false;
 
                 // Update lights on successful detection
@@ -1458,7 +1475,7 @@ void detectCar() {
 
                 // Reset to waiting for a new car
                 currentCarDetectState = WAITING_FOR_CAR;
-                publishMQTT(MQTT_DEBUG_LOG, "Idle-Waiting For Car");
+                publishMQTT(MQTT_COUNTER_LOG, "Idle-Waiting For Car");
             }
             break;
     }
@@ -1524,10 +1541,9 @@ void createAndInitializeHourlyFile(const String &fileName) {
 }
 
 /** Initilaize microSD card */
-void initSDCard()  {
-    if(!SD.begin(PIN_SPI_CS))  {
+void initSDCard() {
+    if(!SD.begin(PIN_SPI_CS)) {
         Serial.println("Card Mount Failed");
-        //Serial.println(F("SD CARD FAILED, OR NOT PRESENT!"));
         display.clearDisplay();
         display.setTextSize(1);
         display.setTextColor(WHITE);
@@ -1539,7 +1555,7 @@ void initSDCard()  {
     }
     uint8_t cardType = SD.cardType();
 
-    if(cardType == CARD_NONE)  {
+    if(cardType == CARD_NONE) {
         Serial.println("No SD card attached");
         return;
     }
@@ -1562,10 +1578,8 @@ void initSDCard()  {
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(0,line1);
-    //display.println("SD Card Ready");
     display.printf("SD Card Size: %lluMB\n", cardSize);
     display.display();
-    // NECESSARY FILES NEEDED TO RUN
 }
 
 void readTempandRH() {
@@ -1573,6 +1587,7 @@ void readTempandRH() {
     static unsigned long lastDHTPrintMillis = 0;   // Last time temperature was printed
     const unsigned long dhtReadInterval = 10000;  // 10 seconds interval for reading temp
     const unsigned long dhtPrintInterval = 600000; // 10 minutes interval for printing temp
+    static bool tempOutOfRangeReported = false;
 
     unsigned long currentMillis = millis();
 
@@ -1587,30 +1602,55 @@ void readTempandRH() {
         // Check if the readings are valid
         if (isnan(tempF) || isnan(humidity)) {
             Serial.println("Failed to read from DHT sensor!");
+            publishDebugLog("DHT sensor reading failed.");
+            tempF = -999;  // Use a sentinel value to indicate failure
+            humidity = -999;
             return; // Exit function if the readings are invalid
         }
+        // Check for temperature out of range
+        if (tempF < -40 || tempF > 120) {
+            if (!tempOutOfRangeReported) {
+                // Publish only if not already reported
+                Serial.println("Temperature out of range!");
+                publishDebugLog("DHT temperature out of range: " + String(tempF));
+                tempOutOfRangeReported = true; // Set flag to prevent duplicate reporting
+            }
+            tempF = -999; // Set to sentinel value for out-of-range condition
+        } else {
+            // Reset the flag if temperature is back in range
+            if (tempOutOfRangeReported) {
+                Serial.println("Temperature back in range.");
+                tempOutOfRangeReported = false;
+            }
 
-        // Publish the temperature and humidity as JSON to MQTT
-        char jsonPayload[100];
-        snprintf(jsonPayload, sizeof(jsonPayload), "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
-        publishMQTT(MQTT_PUB_TEMP, String(jsonPayload));
-    }
+            // Publish the temperature and humidity as JSON to MQTT
+            char jsonPayload[100];
+            snprintf(jsonPayload, sizeof(jsonPayload), "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
+            publishMQTT(MQTT_PUB_TEMP, String(jsonPayload));
+            //publishDebugLog("Temperature and humidity published: " + String(jsonPayload));
 
-    // Check if it's time to print the readings
-    if (currentMillis - lastDHTPrintMillis >= dhtPrintInterval) {
-        lastDHTPrintMillis = currentMillis;
+            // Forward valid readings to the hourly average system
+            averageHourlyTemp(); // Ensure the reading is processed for summaries
+        }
 
-        // Print temperature and humidity readings
-        Serial.printf("Temperature: %.1f °F, Humidity: %.1f %%\n", tempF, humidity);
-    }
+        // Check if it's time to print the readings
+        if (currentMillis - lastDHTPrintMillis >= dhtPrintInterval) {
+            lastDHTPrintMillis = currentMillis;
+
+            // Print temperature and humidity readings
+            if (tempF != -999 && humidity != -999) {
+                Serial.printf("Temperature: %.1f °F, Humidity: %.1f %%\n", tempF, humidity);
+            } else {
+                Serial.println("Temperature/Humidity data invalid. Check sensor.");
+            }
+        }
+    }   
 }
-
-
 
 /** Resets the hourly count array at midnight */
 void resetHourlyCounts() {
     for (int i = 0; i < 24; i++) {
-        hourlyCarCount[i] = 0; // Reset the hourly counts
+        hourlyCount[i] = 0; // Reset the hourly counts
     }
     // Log the reset
     Serial.println("Hourly counts have been reset.");
@@ -1620,7 +1660,7 @@ void resetHourlyCounts() {
 /* Resets counts at Start of Show and Midnight */
 void timeTriggeredEvents() {
     DateTime now = rtc.now();
-
+    currentHr24 = now.hour();
     // Reset hourly counts at midnight
     if (now.hour() == 23 && now.minute() == 59 && !flagMidnightReset) { 
         resetHourlyCounts();  // Reset array for collecting hourly car counts      
@@ -1659,10 +1699,18 @@ void timeTriggeredEvents() {
         flagDailyShowSummarySaved = true;
     }
 
-    // Check for hourly data save
-    if (now.minute() == 59 && now.second() == 59 && !flagHourlyCountsSaved) {
-        saveHourlyCounts();
-        flagHourlyCountsSaved = true;
+    // Hourly Save Timer
+    if (now.minute() == 0  && !flagHourlyReset) {
+        saveHourlyCounts(); // Saves hourly counts
+        flagHourlyReset = true;
+        char debugMessage[100];
+        snprintf(debugMessage, sizeof(debugMessage), "Hourly data saved for hour %02d.", currentHr24);
+        publishMQTT(MQTT_DEBUG_LOG, debugMessage);
+    }
+    
+    // reset Hourly Save flag for next hour
+    if (now.minute() == 1) {
+        flagHourlyReset = false;
     }
 
     // Reset flags for the next day at 12:01:01 AM
@@ -1672,7 +1720,7 @@ void timeTriggeredEvents() {
         flagDailyShowStartReset = false;
         flagDailySummarySaved = false;
         flagDailyShowSummarySaved = false;
-        flagHourlyCountsSaved = false;
+        flagHourlyReset = false;
         publishMQTT(MQTT_DEBUG_LOG, "Run once flags reset for new day");
         resetFlagsOnce = true; // Prevent further execution within the same day
     }
@@ -1688,7 +1736,6 @@ void timeTriggeredEvents() {
 void updateDisplay() {
     DateTime now = rtc.now();
     //float tempF = ((rtc.getTemperature() * 9 / 5) + 32); // Get temperature in Fahrenheit
-
     int currentHr24 = now.hour();
     int currentHr12 = currentHr24 > 12 ? currentHr24 - 12 : (currentHr24 == 0 ? 12 : currentHr24);
     const char* ampm = currentHr24 < 12 ? "AM" : "PM";
@@ -1703,15 +1750,15 @@ void updateDisplay() {
 
     // Line 1: Date and Day of the Week
     display.setTextSize(1);
-    display.setCursor(0, 0);
+    display.setCursor(0, line1);
     display.printf("%s %s %02d, %04d", days[now.dayOfTheWeek()], months[now.month() - 1], now.day(), now.year());
 
     // Line 2: Time and Temperature
-    display.setCursor(0, 10);
+    display.setCursor(0, line2);
     display.printf("%02d:%02d:%02d %s  %d F", currentHr12, now.minute(), now.second(), ampm, (int)tempF);
 
     // Line 3: Days Running and Show Total
-    display.setCursor(0, 20);
+    display.setCursor(0, line3);
     display.printf("Day %d  Total: %d", daysRunning, totalShowCars);
 
     // Line 4: Total Daily Cars
@@ -1844,7 +1891,6 @@ void setup() {
         Serial.println("Error starting mDNS");
         return;
     }
-
     delay(1000);
     start_MqttMillis = millis();
 } /***** END SETUP ******/
@@ -1856,8 +1902,14 @@ void loop() {
     DateTime now = rtc.now();
     int currentHour = now.hour();
     int currentMinute = now.minute();
+    // Check if time is in between show hours to record show totals
+    currentTimeMinute = now.hour()*60 + now.minute(); // convert time to minutes
+    showTime = (currentTimeMinute >= showStartMin && currentTimeMinute <= showEndMin); // show is running and save counts
     readTempandRH(); // Get Temperature and Humidity
 
+
+
+/*
     // Run the function only when the hour changes and once in the first minute
     if (currentHour != lastHour || (currentHour == lastHour && currentMinute == 0 && lastMinute != 0)) {
         saveHourlyCounts(); // Save data for the new hour
@@ -1870,12 +1922,8 @@ void loop() {
         snprintf(debugMessage, sizeof(debugMessage), "Hourly data saved for hour %02d.", currentHour);
         publishMQTT(MQTT_DEBUG_LOG, debugMessage);
     }
-
+*/
     ElegantOTA.loop();  // Keep OTA Updates Alive
-
-    // Check if time is inbetween show hours to record show totals
-    currentTimeMinute = now.hour()*60 + now.minute();
-    showTime = (currentTimeMinute >= showStartTime && currentTimeMinute <= showEndTime); // show is running and save counts
 
     // Update the display
     updateDisplay();
@@ -1896,20 +1944,34 @@ void loop() {
         playPattern();
     }
 
-    // Update temperature readings for hourly average
-    averageHourlyTemp();
-
-    // Keep MQTT connection alive
-    if (mqtt_client.connected()) {
-        publishQueuedMessages();
-        mqtt_client.loop();  //  Kee[ MQTT Client Alive
-    } else {
-        MQTTreconnect();  // Ensure MQTT connection is maintained
+  /* non-blocking WiFi and MQTT Connectivity Checks 
+  First check if WiFi is connected */
+  if (wifiMulti.run() == WL_CONNECTED) {
+    /* If MQTT is not connected then Attempt MQTT Connection */
+    if (!mqtt_client.connected()) {
+      Serial.print("hour = ");
+      Serial.println(currentHr12);
+      Serial.println("Attempting MQTT Connection");
+      MQTTreconnect();
+      start_MqttMillis = millis();
+    } 
+    else {
+         //keep MQTT client connected when WiFi is connected
+         mqtt_client.loop();
     }
+  } 
+  else {
+    // If WiFi if lost, then attemp non blocking WiFi Connection
+    if ((millis() - start_WiFiMillis) > wifi_connectioncheckMillis) {
+      setup_wifi();
+      start_WiFiMillis = millis();
+    }
+  } 
     
     // Publish Car counts to keep Gate Counter Updated
     if ((millis() - start_MqttMillis) > (mqttKeepAlive * 1000)) {
         KeepMqttAlive();
     }
 
-} /***** Repeat Loop *****/
+} 
+/***** Repeat Loop *****/
