@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.19.4 removed temperature array from average procedure an used the global declared array
 24.12.19.3 Accidentally removed mqtt_client.setCallback(callback) Fixed with a forward declaration
 24.12.19.2 added saveHourlyCounts() to countTheCar and removed from OTA Update
 24.12.19.1 Refactored to match Gate Counter where common code exists
@@ -125,7 +126,7 @@ D23 - MOSI
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.19.3"  // Firmware Version
+#define FWVersion "24.12.19.4"  // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -1278,7 +1279,7 @@ void averageHourlyTemp() {
     static int lastPublishedHour = -1;     // Tracks the last hour when data was published
     static int tempReadingsCount = 0;      // Number of valid temperature readings
     static float tempReadingsSum = 0.0;    // Sum of valid temperature readings
-    static float hourlyTemp[24] = {0.0};   // Array to store average temperatures for 24 hours
+    
 
     // Get the current time
     DateTime now = rtc.now();
