@@ -47,8 +47,8 @@ This system is an essential tool for traffic control and capacity management in 
 
 For more detailed information about specific components, see the following:
 
-- [MQTT Reset Topics](mqtt_reset_topics.md): Detailed descriptions of MQTT reset topics and their payloads.
-- [Changelog](changelog.md): A history of updates, fixes, and new features in the Gate Counter project.
+- [MQTT Reset Topics](docs/mqtt_reset_topics.md): Detailed descriptions of MQTT reset topics and their payloads.
+- [Changelog](docs/changelog.md): A history of updates, fixes, and new features in the Gate Counter project.
 
 ---
 
