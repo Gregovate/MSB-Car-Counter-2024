@@ -1,9 +1,11 @@
 /*
-Car counter Interface to MQTT by Greg Liebig gliebig@sheboyganlights.org
+Car counter Interface to MQTT by Greg Liebig greg@engrinnovations.com
 Initial Build 12/5/2023 12:15 pm
-Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
+Stores data on SD card in event of internet failure
+DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
 
-Changelog
+
+## BEGIN CHANGELOG ##
 24.12.19.4 removed temperature array from average procedure an used the global declared array
 24.12.19.3 Accidentally removed mqtt_client.setCallback(callback) Fixed with a forward declaration
 24.12.19.2 added saveHourlyCounts() to countTheCar and removed from OTA Update
@@ -83,19 +85,11 @@ and serial writes used in the Arduino program were impossible to correct for ESP
 12 Hours before the program would compile. Problems may exist with the counts but ready for debugging. 10/20/24 GAL
 24.10.17.2 
 23.12.15 Added MQTT to Hive MQTT and Fixed WIFI for Testing at home and on-site7 12/15/23
-Purpose: suppliments Car Counter to improve traffic control and determine park capacity
-Counts vehicles as they exit the park
-Connects to WiFi and updates RTC on Boot
+23.12.13 Changed time format YYYY-MM-DD hh:mm:ss
 Uses the existing car counter built by Andrew Bubb and outputs data to MQTT
-Stores data on SD card in event of internet failure
-DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
-SPI Pins
-D5 - CS
-D18 - CLK
-D19 - MISO
-D23 - MOSI
-
+## END CHANGELOG ##
 */
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <PubSubClient.h>
