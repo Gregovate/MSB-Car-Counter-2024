@@ -1,74 +1,103 @@
-# MQTT Reset Topics - Gate Counter
+## MQTT Reset Topics
 
-This document provides descriptions for the MQTT reset topics supported by the Gate Counter system. These topics allow remote control and configuration of various counters and states within the system.
+### Reset Topics
 
----
+#### `msb/traffic/CarCounter/resetDailyCount`
+**Purpose**: Resets the daily car count.
 
-## Subscribed Topics for Resets
-
-### 1. `msb/traffic/GateCounter/resetDailyCount`
-- **Description**: Resets the total daily vehicle count to a specified value.
-- **Payload**: Integer representing the new value for the daily counter.
+- **Payload**: Integer value representing the new daily count.
 - **Example**:
-  - Payload: `0` (Resets the daily vehicle count to 0.)
+  ```json
+  {"payload": 0}
+  ```
+  Resets the daily count to `0`.
 
----
+#### `msb/traffic/CarCounter/resetShowCount`
+**Purpose**: Resets the show-specific car count.
 
-### 2. `msb/traffic/GateCounter/resetShowCount`
-- **Description**: Resets the total show vehicle count.
-- **Payload**: Integer representing the new value for the show counter.
+- **Payload**: Integer value representing the new show count.
 - **Example**:
-  - Payload: `50` (Sets the show vehicle count to 50.)
+  ```json
+  {"payload": 0}
+  ```
+  Resets the show count to `0`.
 
----
+#### `msb/traffic/CarCounter/resetDayOfMonth`
+**Purpose**: Updates the internal calendar to a specific day of the month.
 
-### 3. `msb/traffic/GateCounter/resetDayOfMonth`
-- **Description**: Manually resets the calendar day to a specific value.
-- **Payload**: Integer representing the new day of the month.
+- **Payload**: Integer value (1–31) representing the desired day.
 - **Example**:
-  - Payload: `15` (Sets the day of the month to the 15th.)
+  ```json
+  {"payload": 15}
+  ```
+  Sets the day of the month to `15`.
 
----
+#### `msb/traffic/CarCounter/resetDaysRunning`
+**Purpose**: Resets the number of days the show has been running.
 
-### 4. `msb/traffic/GateCounter/resetDaysRunning`
-- **Description**: Resets the total number of days the show has been running.
-- **Payload**: Integer representing the new value for days running.
+- **Payload**: Integer value representing the new "days running" count.
 - **Example**:
-  - Payload: `10` (Resets the "days running" counter to 10.)
+  ```json
+  {"payload": 1}
+  ```
+  Resets the days running count to `1`.
 
----
+#### `msb/traffic/CarCounter/carCounterTimeout`
+**Purpose**: Updates the timeout duration for car counter detection.
 
-### 5. `msb/traffic/GateCounter/gateCounterTimeout`
-- **Description**: Updates the timeout duration for the gate counter.
-- **Payload**: Integer in milliseconds specifying the new timeout.
+- **Payload**: Integer value (in milliseconds) for the timeout duration.
 - **Example**:
-  - Payload: `60000` (Sets the timeout duration to 60 seconds.)
+  ```json
+  {"payload": 60000}
+  ```
+  Sets the timeout to `60,000 ms` (1 minute).
 
----
+#### `msb/traffic/CarCounter/waitDuration`
+**Purpose**: Adjusts the wait duration for car detection between sensors.
 
-### 6. `msb/traffic/GateCounter/carDetectMS`
-- **Description**: Updates the minimum wait duration for confirming a vehicle.
-- **Payload**: Integer in milliseconds specifying the new detection duration.
+- **Payload**: Integer value (in milliseconds) for the wait duration.
 - **Example**:
-  - Payload: `1500` (Sets the detection duration to 1.5 seconds.)
+  ```json
+  {"payload": 950}
+  ```
+  Sets the wait duration to `950 ms`.
 
----
+#### `msb/traffic/CarCounter/resetHourlyCounts`
+**Purpose**: Resets all hourly car counts for the current day.
 
-### 7. `msb/traffic/GateCounter/loggingEnabled`
-- **Description**: Toggles the logging of sensor data.
-- **Payload**:
-  - `1`: Enables logging.
-  - `0`: Disables logging.
+- **Payload**: None required.
 - **Example**:
-  - Payload: `1` (Enables logging of sensor data.)
+  ```json
+  {}
+  ```
+  Resets all hourly car counts to `0`.
 
----
+#### `msb/traffic/CarCounter/resetDailySummary`
+**Purpose**: Clears the daily show summary data.
 
-## Notes
-- Ensure all payloads are sent as valid integers where applicable.
-- Use these topics to remotely manage the Gate Counter system for improved flexibility and responsiveness.
+- **Payload**: None required.
+- **Example**:
+  ```json
+  {}
+  ```
+  Resets the daily summary file.
 
----
+#### `msb/traffic/CarCounter/resetTemperatureAverages`
+**Purpose**: Resets hourly temperature averages for the current day.
 
-For further assistance, contact the system administrator or refer to the Gate Counter documentation.
+- **Payload**: None required.
+- **Example**:
+  ```json
+  {}
+  ```
+  Clears all recorded hourly temperature averages.
 
+#### `msb/traffic/CarCounter/reboot`
+**Purpose**: Reboots the ESP32 device.
+
+- **Payload**: None required.
+- **Example**:
+  ```json
+  {}
+  ```
+  Initiates a system reboot.

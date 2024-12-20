@@ -1,56 +1,64 @@
-# Changelog
+## Changelog
 
-## Version History
+### [1.3.0] - 2024-12-19
+#### Added
+- Published hourly average temperatures via MQTT.
+- Improved temperature and humidity logging logic for accurate summaries.
+- Enhanced state machine logic for vehicle detection reliability.
 
-### Version 24.12.19.3
-- Synced shared code between Gate Counter and Car Counter.
-- Resolved warnings and removed unused variables.
-- Updated `carDetectMS` default value to 1200ms.
-- Enhanced SD card file operations for better persistence.
-- Fixed remaining issues with HTML file handling.
+#### Fixed
+- Resolved issue with average show temperature always being zero.
+- Corrected redundant declaration of `hourlyTemp` array in `averageHourlyTemp()` function.
 
-### Version 24.12.19.2
-- Addressed warnings during compilation.
-- Improved handling of unused variables.
-- Simplified configuration settings.
+#### Changed
+- Refactored `saveDailyShowSummary()` for better handling of hourly temperature calculations.
+- Streamlined MQTT topic naming for temperature and hourly data.
 
-### Version 24.12.19.1
-- Added functionality to save hourly data before firmware updates.
-- Set hostname dynamically for multiple instances.
-- Improved MQTT topic structure for consistency.
-- Enhanced firmware update compatibility by modifying `secrets.h`.
+### [1.2.0] - 2024-12-10
+#### Added
+- Integrated DHT22 sensor for temperature and humidity monitoring.
+- Hourly temperature averages calculated and stored for summaries.
+- SD card functionality to log vehicle counts and environmental data.
 
-### Version 24.12.18.6
-- Introduced `flagHourlyReset` for better hourly data saving.
-- Enhanced logging capabilities for analysis and debugging.
+#### Fixed
+- Resolved MQTT connection stability issues with improved reconnect logic.
+- Debugged data recovery process during reboots to prevent count loss.
 
-### Version 24.12.18.5
-- Added dynamic MQTT topics for hourly car totals.
-- Enhanced reliability of `detectCar()` functionality.
+#### Changed
+- Updated MQTT topics to support environmental data.
+- Improved logging for better debugging and monitoring.
 
-### Version 24.12.18.3
-- Added new statistics for "Time Between Cars" and beam sensor high time.
-- Refined state machine logic for car detection.
+### [1.1.0] - 2024-12-01
+#### Added
+- Implemented ElegantOTA for firmware updates.
+- Introduced WiFiMulti for seamless multi-network connection support.
+- Added OLED display support for real-time monitoring of counts and temperature.
 
-### Version 24.12.16.5
-- Introduced logging functions for sensor data analysis.
-- Updated daily reset logic for improved consistency.
+#### Fixed
+- Addressed sensor bounce issues during detection in snowy conditions.
+- Resolved SD card initialization failure for specific configurations.
 
-### Version 24.11.25.3
-- Improved MQTT topic management.
-- Resolved car detection discrepancies during specific scenarios.
+#### Changed
+- Optimized state machine logic for car detection.
 
-### Version 24.10.24.1
-- Addressed errors in MQTT variable declarations.
-- Refined daily total management for better accuracy.
+### [1.0.0] - 2024-11-15
+#### Added
+- Initial implementation of car counter using ESP32.
+- Vehicle detection with IR beam sensors.
+- MQTT integration for remote monitoring of vehicle counts.
+- SD card support for local data logging.
+- Time synchronization using NTP and RTC.
+- Basic OLED display support.
 
 ---
 
-## Notes
-- For further details, refer to the documentation or contact the system administrator.
-- Future releases will focus on enhancing real-time analytics and integrating additional sensor support.
+## Future Enhancements
+- Add a web-based dashboard for real-time data visualization.
+- Integration of additional environmental sensors for advanced analytics.
+- Enhanced power efficiency for long-term, battery-powered deployments.
 
 ---
 
-For more information, see the [README.md](README.md) file.
-
+This changelog follows semantic versioning. For further details, please contact:
+**Greg Liebig**  
+Email: `greg@engrinnovations.com`
