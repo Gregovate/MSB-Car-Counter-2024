@@ -4,6 +4,7 @@ Initial Build 12/5/2023 12:15 pm
 Changed time format YYYY-MM-DD hh:mm:ss 12/13/23
 
 Changelog
+24.12.19.3 Accidentally removed mqtt_client.setCallback(callback) Fixed with a forward declaration
 24.12.19.2 added saveHourlyCounts() to countTheCar and removed from OTA Update
 24.12.19.1 Refactored to match Gate Counter where common code exists
 24.12.18.3 copied readTempandRH from gate counter
@@ -124,7 +125,7 @@ D23 - MOSI
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.19.2"  // Firmware Version
+#define FWVersion "24.12.19.3"  // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -151,11 +152,11 @@ int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client conn
 // Publishing Topics 
 char topic[60];
 char topicBase[60];
-#define topic_base_path  "msb/traffic/CarCounter"
-#define MQTT_PUB_HELLO  "msb/traffic/CarCounter/hello"
-#define MQTT_PUB_TEMP  "msb/traffic/CarCounter/temp"
-#define MQTT_PUB_TIME  "msb/traffic/CarCounter/time"
-#define MQTT_PUB_ENTER_CARS  "msb/traffic/CarCounter/EnterTotal"
+#define topic_base_path "msb/traffic/CarCounter"
+#define MQTT_PUB_HELLO "msb/traffic/CarCounter/hello"
+#define MQTT_PUB_TEMP "msb/traffic/CarCounter/temp"
+#define MQTT_PUB_TIME "msb/traffic/CarCounter/time"
+#define MQTT_PUB_ENTER_CARS "msb/traffic/CarCounter/EnterTotal"
 #define MQTT_PUB_CARS_HOURLY  "msb/traffic/CarCounter/Cars"
 #define MQTT_PUB_SUMMARY "msb/traffic/CarCounter/Summary"
 #define MQTT_PUB_DAYOFMONTH  "msb/traffic/CarCounter/DayOfMonth"
@@ -679,6 +680,9 @@ void KeepMqttAlive() {
    start_MqttMillis = millis();
 }
 
+// Forward Declare the callback function
+void callback(char* topic, byte* payload, unsigned int length);
+
 //Connects to MQTT Server
 void MQTTreconnect() {
     static unsigned long lastReconnectAttempt = 0; // Tracks the last reconnect attempt time
@@ -697,6 +701,7 @@ void MQTTreconnect() {
         for (int i = 0; i < mqtt_servers_count; i++) {
             // Set the server for the current configuration
             mqtt_client.setServer(mqtt_configs[i].server, mqtt_configs[i].port);
+            mqtt_client.setCallback(callback);  // required to receive messages
 
             // Create a unique client ID
             String clientId = THIS_MQTT_CLIENT;
@@ -914,13 +919,11 @@ void saveDailyTotal() {
     if (myFile) {  // check for an open failure
         myFile.print(totalDailyCars);
         myFile.close();
-        publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
     } else {
         Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName1);
         publishMQTT(MQTT_DEBUG_LOG, "SD Write Failure: Unable to save daily total.");
     }
-    publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
 }
 
 /* Save the grand total cars file for season  */
