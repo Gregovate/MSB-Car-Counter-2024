@@ -6,6 +6,7 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
 
 
 ## BEGIN CHANGELOG ##
+25.11.18.1 GAL: Added sdAvailable flag; removed SD-related while(1) lockups so device runs without SD
 24.12.19.4 removed temperature array from average procedure an used the global declared array
 24.12.19.3 Accidentally removed mqtt_client.setCallback(callback) Fixed with a forward declaration
 24.12.19.2 added saveHourlyCounts() to countTheCar and removed from OTA Update
@@ -120,7 +121,7 @@ Uses the existing car counter built by Andrew Bubb and outputs data to MQTT
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "24.12.19.4"  // Firmware Version
+#define FWVersion "25.11.18.1"  // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -326,6 +327,8 @@ bool flagDailyShowSummarySaved = false;
 bool flagHourlyReset = false;
 bool showTime = false;
 bool resetFlagsOnce = false;
+// GAL 25-11-18: Track whether SD card is usable so we don't brick on failure
+bool sdAvailable = false;
 
 // **********FILE NAMES FOR SD CARD *********
 File myFile;   //used to write files to SD Card
@@ -1116,6 +1119,16 @@ void saveDailyShowSummary() {
 }
 
 void getSavedValuesOnReboot() {
+    // GAL 25-11-18: If SD is offline, start fresh but keep running
+    if (!sdAvailable) {
+        totalDailyCars = 0;
+        totalShowCars  = 0;
+        daysRunning    = 0;
+        memset(hourlyCount, 0, sizeof(hourlyCount));
+        Serial.println("getSavedValuesOnReboot: SD not available, counters reset to 0.");
+        return;
+    }
+
     DateTime now = rtc.now();
 
     // Read the last recorded day from the SD card
@@ -1472,13 +1485,19 @@ void detectCar() {
 // END CAR DETECTION
 
 // CHECK AND CREATE FILES on SD Card and WRITE HEADERS if Needed
+// GAL 25-11-18: Make file creation non-fatal if SD has issues
 void checkAndCreateFile(const String &fileName, const String &header = "") {
+    if (!sdAvailable) {
+        Serial.printf("checkAndCreateFile skipped (%s) - SD not available\n", fileName.c_str());
+        return;
+    }
+
     if (!SD.exists(fileName)) {
         Serial.printf("%s not found. Creating...\n", fileName.c_str());
         if (fileName.endsWith("/")) { // Create directory if it ends with '/'
             if (!SD.mkdir(fileName)) {
                 Serial.printf("Failed to create directory %s\n", fileName.c_str());
-                while (1);
+                // GAL 25-11-18: no while(1); just log and keep going
             } else {
                 Serial.printf("Directory %s created successfully\n", fileName.c_str());
             }
@@ -1486,7 +1505,7 @@ void checkAndCreateFile(const String &fileName, const String &header = "") {
             File file = SD.open(fileName, FILE_WRITE);
             if (!file) {
                 Serial.printf("Failed to create file %s\n", fileName.c_str());
-                while (1);
+                // GAL 25-11-18: no while(1); just log and keep going
             } else {
                 if (!header.isEmpty()) {
                     file.print(header);
@@ -1497,6 +1516,7 @@ void checkAndCreateFile(const String &fileName, const String &header = "") {
         }
     }
 }
+
 
 void createAndInitializeHourlyFile(const String &fileName) {
     if (!SD.exists(fileName)) {
@@ -1530,46 +1550,54 @@ void createAndInitializeHourlyFile(const String &fileName) {
 }
 
 /** Initilaize microSD card */
+// GAL 25-11-18: Make SD init non-blocking; device runs even if SD is missing
 void initSDCard() {
-    if(!SD.begin(PIN_SPI_CS)) {
+    sdAvailable = false;  // pessimistic default
+
+    if (!SD.begin(PIN_SPI_CS)) {
         Serial.println("Card Mount Failed");
         display.clearDisplay();
         display.setTextSize(1);
         display.setTextColor(WHITE);
-        display.setCursor(0,line1);
-        display.println("Check SD Card");
+        display.setCursor(0, line1);
+        display.println("SD ERROR");
         display.display();
-        while (1); // stop the program and check SD Card
+        // GAL 25-11-18: Do NOT while(1); keep running without SD
         return;
     }
+
     uint8_t cardType = SD.cardType();
 
-    if(cardType == CARD_NONE) {
+    if (cardType == CARD_NONE) {
         Serial.println("No SD card attached");
+        // GAL 25-11-18: also keep running without SD
         return;
     }
 
+    sdAvailable = true;  // SD is present and responding
+
     Serial.print("SD Card Type: ");
-    if(cardType == CARD_MMC){
+    if (cardType == CARD_MMC) {
         Serial.println("MMC");
-    } else if(cardType == CARD_SD){
+    } else if (cardType == CARD_SD) {
         Serial.println("SDSC");
-    } else if(cardType == CARD_SDHC){
+    } else if (cardType == CARD_SDHC) {
         Serial.println("SDHC");
     } else {
         Serial.println("UNKNOWN");
     }
-    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+    uint64_t cardSize = SD.cardSize() / (1024ULL * 1024ULL);
 
     Serial.printf("SD Card Size: %lluMB\n", cardSize);
     Serial.println(F("SD CARD INITIALIZED."));
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);
-    display.setCursor(0,line1);
+    display.setCursor(0, line1);
     display.printf("SD Card Size: %lluMB\n", cardSize);
     display.display();
 }
+
 
 void readTempandRH() {
     static unsigned long lastDHTReadMillis = 0;    // Last time temperature was read
@@ -1861,7 +1889,7 @@ void setup() {
     delay(500); // display Startup
   
     //Initialize SD Card
-    SD.begin(PIN_SPI_CS);
+    // GAL 25-11-18: initSDCard() now calls SD.begin() and will not block on failure
     initSDCard();  // Initialize SD card and ready for Read/Write
 
     // Check and create Required Data files
