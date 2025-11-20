@@ -164,6 +164,8 @@ char topicBase[60];
 #define MQTT_COUNTER_LOG "msb/traffic/CarCounter/CounterLog"
 #define MQTT_DEBUG_LOG "msb/traffic/CarCounter/debuglog"
 #define MQTT_PUB_TIMEBETWEENCARS "msb/traffic/CarCounter/timeBetweenCars"
+// GAL 25-11-18: Publish firmware version to MQTT on boot
+#define MQTT_PUB_FW_VERSION "msb/traffic/CarCounter/firmware"
 
 // Subscribing Topics (to reset values)
 //#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
@@ -722,7 +724,8 @@ void MQTTreconnect() {
                 publishMQTT(MQTT_PUB_TEMP, String(tempF));
                 publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
                 publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
-
+                // GAL 25-11-18: announce firmware version
+                publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion));
                 // Subscribe to necessary topics
                 mqtt_client.subscribe(MQTT_PUB_HELLO);
                 mqtt_client.subscribe(MQTT_SUB_TOPIC1); // Reset Daily Count
