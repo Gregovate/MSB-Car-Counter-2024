@@ -1,5 +1,51 @@
-.pio
+# ------------------------------
+# PlatformIO / Arduino build
+# ------------------------------
+.pio/
+.pioenvs/
+.piolibdeps/
+.libdeps/
+.pio/build/
+
+# ------------------------------
+# VSCode / IDE
+# ------------------------------
 .vscode/
-/include/secrets.h
-/lib/ElegantOTAPro-3-1-4
-/logs
+.idea/
+*.code-workspace
+
+# ------------------------------
+# OS junk
+# ------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ------------------------------
+# Logs / temp
+# ------------------------------
+logs/
+log/
+*.log
+*.tmp
+*.bak
+
+# ------------------------------
+# Secrets / local config
+# ------------------------------
+include/secrets.h
+include/secrets*.h
+**/secrets.h
+**/secrets*.h
+
+# ------------------------------
+# Optional: local libraries you don't want tracked
+# (only keep if you truly want these excluded)
+# ------------------------------
+lib/ElegantOTAPro-3-1-4/
+
+# ------------------------------
+# DO NOT IGNORE THESE (Force Git to track)
+!/firmware/
+!/data/
