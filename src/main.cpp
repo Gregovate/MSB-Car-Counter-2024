@@ -6,6 +6,9 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
 
 
 ## BEGIN CHANGELOG ##
+25.11.21.1 GAL: Restored idle playPattern() timeout; added retained MQTT publishes
+                 for counts/WiFi/buckets; added retain-capable publishMQTT(),
+                 expanded MQTT queue with overflow protection and chunked flush.
 25.11.18.1 GAL: Added sdAvailable flag; removed SD-related while(1) lockups so device runs without SD
 24.12.19.4 removed temperature array from average procedure an used the global declared array
 24.12.19.3 Accidentally removed mqtt_client.setCallback(callback) Fixed with a forward declaration
@@ -121,7 +124,7 @@ Uses the existing car counter built by Andrew Bubb and outputs data to MQTT
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "25.11.18.1"  // Firmware Version
+#define FWVersion "25.11.21.1"  // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -164,8 +167,12 @@ char topicBase[60];
 #define MQTT_COUNTER_LOG "msb/traffic/CarCounter/CounterLog"
 #define MQTT_DEBUG_LOG "msb/traffic/CarCounter/debuglog"
 #define MQTT_PUB_TIMEBETWEENCARS "msb/traffic/CarCounter/timeBetweenCars"
+#define MQTT_PUB_HOURLY_JSON "msb/traffic/CarCounter/Cars/hourly_json"
 // GAL 25-11-18: Publish firmware version to MQTT on boot
 #define MQTT_PUB_FW_VERSION "msb/traffic/CarCounter/firmware"
+#define MQTT_PUB_RSSI "msb/traffic/CarCounter/wifi/rssi"
+#define MQTT_PUB_SSID "msb/traffic/CarCounter/wifi/ssid"
+#define MQTT_PUB_IP   "msb/traffic/CarCounter/wifi/ip"
 
 // Subscribing Topics (to reset values)
 //#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
@@ -638,52 +645,116 @@ void setupServer() {
     Serial.println("HTTP server started");
 }
 
+
 /***** MQTT SECTION ******/
-// Save messages if MQTT is not connected in Queue
+// Queue for offline MQTT publishes
 std::queue<String> publishQueue;
 
-// Used to publish MQTT Messages
-void publishMQTT(const char *topic, const String &message) {
+// GAL 25-11-21: Increased queue for multi-hour outages during busy nights
+const size_t MAX_QUEUE = 3000;
+const size_t MAX_FLUSH_PER_CALL = 150;   // prevents WDT resets
+
+// Helper to encode retain flag into queue "topic|message|retain"
+String encodeQueuedMessage(const char *topic, const String &msg, bool retainFlag) {
+    return String(topic) + "|" + msg + "|" + (retainFlag ? "1" : "0");
+}
+
+// Overload allowing explicit retain flag
+void publishMQTT(const char *topic, const String &message, bool retainFlag) {
     if (mqtt_client.connected()) {
-        mqtt_client.publish(topic, message.c_str());
+        mqtt_client.publish(topic, message.c_str(), retainFlag);
     } else {
-        Serial.printf("MQTT not connected. Adding to queue: %s -> %s\n", topic, message.c_str());
-        publishQueue.push(String(topic) + "|" + message);  // Add message to queue
+        if (publishQueue.size() >= MAX_QUEUE) {
+            publishQueue.pop();    // drop oldest
+        }
+        Serial.printf("MQTT offline. QUEUEING: %s -> %s (retain=%d)\n",
+                      topic, message.c_str(), retainFlag);
+
+        publishQueue.push(encodeQueuedMessage(topic, message, retainFlag));
     }
     start_MqttMillis = millis();
 }
 
-// Used to publish Queued Messages
-void publishQueuedMessages() {
-    while (!publishQueue.empty() && mqtt_client.connected()) {
+// Default wrapper = NO retain (for debug, HELLO, resets)
+void publishMQTT(const char *topic, const String &message) {
+    publishMQTT(topic, message, false);
+}
+
+// Publish queued messages (retain aware)
+void publishQueuedMessages(size_t maxToFlush = MAX_FLUSH_PER_CALL) {
+    size_t flushed = 0;
+
+    while (!publishQueue.empty() &&
+           mqtt_client.connected() &&
+           flushed < maxToFlush) {
+
         String data = publishQueue.front();
         publishQueue.pop();
-        
-        int delimiterPos = data.indexOf('|');
-        if (delimiterPos != -1) {
-            String topic = data.substring(0, delimiterPos);
-            String message = data.substring(delimiterPos + 1);
-            mqtt_client.publish(topic.c_str(), message.c_str());
+
+        int p1 = data.indexOf('|');
+        int p2 = data.indexOf('|', p1 + 1);
+
+        if (p1 != -1) {
+            String topic   = data.substring(0, p1);
+            String message = data.substring(p1 + 1, p2);
+            bool retainFlag = (p2 != -1 && data.substring(p2 + 1) == "1");
+
+            mqtt_client.publish(topic.c_str(), message.c_str(), retainFlag);
         }
+
+        flushed++;
+    }
+
+    if (flushed > 0) {
+        Serial.printf("MQTT Queue Flush: %u messages flushed, %u remain\n",
+                      (unsigned)flushed, (unsigned)publishQueue.size());
     }
 }
 
 void publishDebugLog(const String &message) {
-    publishMQTT(MQTT_DEBUG_LOG, message);
+    publishMQTT(MQTT_DEBUG_LOG, message);   // never retained
 }
 
-// Used to publish current counts to update Car Counter every 30 seconds if no car is counted
+
+// ===========================
+// KEEPALIVE (every 30 sec)
+// ===========================
 void KeepMqttAlive() {
-   publishMQTT(MQTT_PUB_TEMP, String(tempF));
-   publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
-   publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
-   start_MqttMillis = millis();
+
+    // ---- Retained core counts ----
+    publishMQTT(MQTT_PUB_TEMP,        String(tempF),          true);
+    publishMQTT(MQTT_PUB_ENTER_CARS,  String(totalDailyCars), true);
+    publishMQTT(MQTT_PUB_SHOWTOTAL,   String(totalShowCars),  true);
+
+    // ---- WiFi Diagnostics (Retained) ----
+    publishMQTT(MQTT_PUB_RSSI, String(WiFi.RSSI()), true);
+    publishMQTT(MQTT_PUB_SSID, String(WiFi.SSID()), true);
+    publishMQTT(MQTT_PUB_IP,   WiFi.localIP().toString(), true);
+
+    // ---- Hourly Snapshot for HA/DB Backfill ----
+    char buckets[180];
+    snprintf(buckets, sizeof(buckets),
+        "[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
+        hourlyCount[0], hourlyCount[1], hourlyCount[2], hourlyCount[3],
+        hourlyCount[4], hourlyCount[5], hourlyCount[6], hourlyCount[7],
+        hourlyCount[8], hourlyCount[9], hourlyCount[10], hourlyCount[11],
+        hourlyCount[12], hourlyCount[13], hourlyCount[14], hourlyCount[15],
+        hourlyCount[16], hourlyCount[17], hourlyCount[18], hourlyCount[19],
+        hourlyCount[20], hourlyCount[21], hourlyCount[22], hourlyCount[23]
+    );
+
+    publishMQTT(MQTT_PUB_HOURLY_JSON, String(buckets), true);
+
+    start_MqttMillis = millis();
 }
 
-// Forward Declare the callback function
+
+// ===========================
+// MQTT Reconnect Block
+// ===========================
 void callback(char* topic, byte* payload, unsigned int length);
 
-//Connects to MQTT Server
+//Connects to MQTT Server (single-server version)
 void MQTTreconnect() {
     static unsigned long lastReconnectAttempt = 0; // Tracks the last reconnect attempt time
     const unsigned long reconnectInterval = 5000; // Time between reconnect attempts (5 seconds)
@@ -694,69 +765,82 @@ void MQTTreconnect() {
     }
 
     // Check if enough time has passed since the last attempt
-    if (millis() - lastReconnectAttempt > reconnectInterval) {
-        lastReconnectAttempt = millis(); // Update the last attempt time
-        Serial.println("Attempting MQTT connection...");
+    if (millis() - lastReconnectAttempt < reconnectInterval) {
+        return;
+    }
 
-        for (int i = 0; i < mqtt_servers_count; i++) {
-            // Set the server for the current configuration
-            mqtt_client.setServer(mqtt_configs[i].server, mqtt_configs[i].port);
-            mqtt_client.setCallback(callback);  // required to receive messages
+    lastReconnectAttempt = millis(); // Update the last attempt time
+    Serial.println("Attempting MQTT connection...");
 
-            // Create a unique client ID
-            String clientId = THIS_MQTT_CLIENT;
+    // Your existing single-server config
+    mqtt_client.setServer(mqtt_Server, mqtt_Port);
+    mqtt_client.setCallback(callback);  // required to receive messages
 
-            // Attempt to connect using the current server's credentials
-            Serial.printf("Trying MQTT server: %s:%d\n", mqtt_configs[i].server, mqtt_configs[i].port);
-            if (mqtt_client.connect(clientId.c_str(), mqtt_configs[i].username, mqtt_configs[i].password)) {
-                Serial.printf("Connected to MQTT server: %s\n", mqtt_configs[i].server);
-                
-                    // Display connection status
-                display.setTextSize(1);
-                display.setTextColor(WHITE);
-                display.setCursor(0,line5);
-                display.println("MQTT Connect");
-                display.display();    
-                Serial.println("connected!");
-                Serial.println("Waiting for Car");
-                // Once connected, publish an announcement…
-                publishMQTT(MQTT_PUB_HELLO, "Car Counter ONLINE!");
-                publishMQTT(MQTT_PUB_TEMP, String(tempF));
-                publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
-                publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
-                // GAL 25-11-18: announce firmware version
-                publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion));
-                // Subscribe to necessary topics
-                mqtt_client.subscribe(MQTT_PUB_HELLO);
-                mqtt_client.subscribe(MQTT_SUB_TOPIC1); // Reset Daily Count
-                mqtt_client.subscribe(MQTT_SUB_TOPIC2); // Reset Show Count
-                mqtt_client.subscribe(MQTT_SUB_TOPIC3); // Reset Day of Month
-                mqtt_client.subscribe(MQTT_SUB_TOPIC4); // Reset Days Running
-                mqtt_client.subscribe(MQTT_SUB_TOPIC5); // Update Car Counter Timeout
-                mqtt_client.subscribe(MQTT_SUB_TOPIC6); // Update Sensor Wait Duration
+    // Create a unique client ID
+    String clientId = THIS_MQTT_CLIENT;
 
-                // Log subscriptions
-                Serial.println("Subscribed to MQTT topics.");
-                publishMQTT(MQTT_DEBUG_LOG, "MQTT connected and topics subscribed.");
+    Serial.printf("Trying MQTT server: %s:%d\n", mqtt_Server, mqtt_Port);
 
-                return; // Exit loop on successful connection
-            } else {
-                // Log connection failure for the current server
-                Serial.printf("Failed to connect to MQTT server: %s (rc=%d)\n", mqtt_configs[i].server, mqtt_client.state());
-            }
-        }
+    if (mqtt_client.connect(clientId.c_str(), mqtt_UserName, mqtt_Password)) {
 
-        // If all servers fail
-        Serial.println("All MQTT server attempts failed. Will retry...");
-            display.setTextSize(1);
-            display.setTextColor(WHITE);
-            display.setCursor(0, line6);
-            display.println("MQTT Error");
-            display.display();
-        
+        Serial.printf("Connected to MQTT server: %s\n", mqtt_Server);
+
+        // Display connection status
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(0,line5);
+        display.println("MQTT Connect");
+        display.display();
+
+        Serial.println("connected!");
+        Serial.println("Waiting for Car");
+
+        // Once connected, publish an announcement…
+        publishMQTT(MQTT_PUB_HELLO, "Car Counter ONLINE!"); // NOT retained
+        publishMQTT(MQTT_PUB_TEMP, String(tempF), true);
+        publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
+        publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars), true);
+
+        // WiFi health immediately on connect (retained)
+        publishMQTT(MQTT_PUB_RSSI, String(WiFi.RSSI()), true);
+        publishMQTT(MQTT_PUB_SSID, String(WiFi.SSID()), true);
+        publishMQTT(MQTT_PUB_IP,   WiFi.localIP().toString(), true);
+
+        // GAL 25-11-18: announce firmware version
+        publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion)); // ok non-retained
+
+        // Subscribe to necessary topics
+        mqtt_client.subscribe(MQTT_PUB_HELLO);
+        mqtt_client.subscribe(MQTT_SUB_TOPIC1); // Reset Daily Count
+        mqtt_client.subscribe(MQTT_SUB_TOPIC2); // Reset Show Count
+        mqtt_client.subscribe(MQTT_SUB_TOPIC3); // Reset Day of Month
+        mqtt_client.subscribe(MQTT_SUB_TOPIC4); // Reset Days Running
+        mqtt_client.subscribe(MQTT_SUB_TOPIC5); // Update Car Counter Timeout
+        mqtt_client.subscribe(MQTT_SUB_TOPIC6); // Update Sensor Wait Duration
+
+        // Log subscriptions
+        Serial.println("Subscribed to MQTT topics.");
+        publishDebugLog("MQTT connected and topics subscribed.");
+
+        // Flush queued messages now that we're back online
+        publishQueuedMessages();
+
+        return;
+
+    } else {
+        Serial.printf("Failed to connect to MQTT server: %s (rc=%d)\n",
+                      mqtt_Server, mqtt_client.state());
+
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(0, line6);
+        display.println("MQTT Error");
+        display.display();
     }
 }
+
 /***** END MQTT SECTION *****/
+
 
 void checkWiFiConnection() {
 
@@ -1451,7 +1535,7 @@ void detectCar() {
             break;
 
         case BOTH_BEAMS_HIGH:
-            if (currentMillis - firstBeamTripTime == carCounterTimeout) {
+            if (currentMillis - firstBeamTripTime >= carCounterTimeout) {
                 // Set Alarm if car is stuck at car counter
                 publishMQTT(MQTT_PUB_HELLO, "Check Car Counter!");
             }         
@@ -1942,6 +2026,11 @@ void loop() {
     timeTriggeredEvents();    // Various functions/saves/resets based on time of day
 
     detectCar();              // Detect cars
+
+    // ----- IDLE PATTERN: run if no car for 30s -----
+    if (showTime && (millis() - noCarTimer) >= 30000UL) {
+        playPattern();
+    }
 
     //Added to kepp mqtt connection alive and periodically publish select values
     if ((millis() - start_MqttMillis) > (mqttKeepAlive * 1000)) {
