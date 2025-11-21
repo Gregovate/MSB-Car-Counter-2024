@@ -6,6 +6,9 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
 
 
 ## BEGIN CHANGELOG ##
+25.11.21.3 GAL: Updated WiFi setup for ESP32; removed unsupported setMinimumRSSI;
+                 added primary-first connection logic with WiFiMulti fallback. preferPrimaryIfAvailable()
+25.11.21.2 GAL: Changed order of SSID's in Secrets File
 25.11.21.1 GAL: Restored idle playPattern() timeout; added retained MQTT publishes
                  for counts/WiFi/buckets; added retain-capable publishMQTT(),
                  expanded MQTT queue with overflow protection and chunked flush.
@@ -124,7 +127,7 @@ Uses the existing car counter built by Andrew Bubb and outputs data to MQTT
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "25.11.21.1"  // Firmware Version
+#define FWVersion "25.11.21.3"  // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -400,44 +403,101 @@ void SetLocalTime()  {
   rtc.adjust(DateTime(timeStringBuff));
 }
 
+// WIFI Setup
+// WIFI Setup (Primary-first with Backup)
+// WIFI Setup (ESP32 primary-first with backup via WiFiMulti)
 void setup_wifi()  {
     Serial.println("Connecting to WiFi");
     display.println("Connecting to WiFi..");
     display.display();
-    while(wifiMulti.run(connectTimeOutPerAP) != WL_CONNECTED) {
-        Serial.print(".");
+
+    WiFi.mode(WIFI_STA);
+
+    // ----- Step 1: Scan once to see PRIMARY strength -----
+    int n = WiFi.scanNetworks(false, true);
+    int primaryRSSI = -127;
+    bool primarySeen = false;
+
+    for (int i = 0; i < n; i++) {
+        if (WiFi.SSID(i) == secret_ssid_AP_1) {
+            primaryRSSI = WiFi.RSSI(i);
+            primarySeen = true;
+            break;
+        }
     }
+
+    // ----- Step 2: If PRIMARY is seen and decent, connect to it directly -----
+    if (primarySeen && primaryRSSI > -75) {
+        WiFi.begin(secret_ssid_AP_1, secret_pass_AP_1);
+
+        unsigned long startAttempt = millis();
+        const unsigned long primaryTimeout = 8000;
+        while (WiFi.status() != WL_CONNECTED && (millis() - startAttempt) < primaryTimeout) {
+            delay(200);
+        }
+    }
+
+    // ----- Step 3: If not connected, fall back to WiFiMulti (PRIMARY+BACKUP) -----
+    if (WiFi.status() != WL_CONNECTED) {
+        while (wifiMulti.run(connectTimeOutPerAP) != WL_CONNECTED) {
+            Serial.print(".");
+            delay(200);
+        }
+    }
+
+    // ----- Display / log final connection -----
     Serial.println("Connected to the WiFi network");
     display.clearDisplay();
     display.setTextColor(WHITE);
     display.setTextSize(1);
     display.display();
-  
+
     display.setCursor(0, line1);
     display.print("SSID: ");
-    display.println(WiFi.SSID());   // print the SSID of the network you're attached to:
+    display.println(WiFi.SSID());
     Serial.print("SSID: ");
     Serial.println(WiFi.SSID());
-    
-    IPAddress ip = WiFi.localIP();  // print your board's IP address:
+
+    IPAddress ip = WiFi.localIP();
     Serial.print("IP: ");
     Serial.println(ip);
     display.setCursor(0, line2);
     display.print("IP: ");
     display.println(ip);
-    
+
     long rssi = WiFi.RSSI();
     Serial.print("signal strength (RSSI):");
     Serial.print(rssi);
     Serial.println(" dBm");
     display.setCursor(0, line3);
     display.print("signal: ");
-    display.print(rssi);  // print the received signal strength:
+    display.print(rssi);
     display.println(" dBm");
+
     display.display();
- 
     delay(1000);
-}  // END WiFi Setup
+}
+
+  // END WiFi Setup
+
+//WiFiMulti  actively switch back when MSB-CARCOUNTER returns
+void preferPrimaryIfAvailable() {
+if (WiFi.status() != WL_CONNECTED) return;
+    if (WiFi.SSID() == secret_ssid_AP_1) return;   // already on PRIMARY (MSB-CARCOUNTER)
+
+    // Scan for PRIMARY strength without wiping WiFi state
+    int n = WiFi.scanNetworks(false, true);
+        for (int i = 0; i < n; i++) {
+            if (WiFi.SSID(i) == secret_ssid_AP_1 && WiFi.RSSI(i) > -75) {
+                // Primary is detected AND strong → switch back
+                WiFi.disconnect(true);     // clear current connection
+                delay(200);
+                WiFi.begin(secret_ssid_AP_1, secret_pass_AP_1);
+                return;
+            }
+        }
+}
+
 
 // BEGIN OTA SD Card File Operations
 void listSDFiles(AsyncWebServerRequest *request) {
@@ -2022,6 +2082,12 @@ void loop() {
     updateDisplay();          // Update the display
 
     checkWiFiConnection();    // Check and maintain WiFi connection
+
+    static unsigned long lastPreferCheck = 0;
+    if (millis() - lastPreferCheck > 60000UL) {   // check once per minute
+        lastPreferCheck = millis();
+        preferPrimaryIfAvailable();
+    }
 
     timeTriggeredEvents();    // Various functions/saves/resets based on time of day
 
