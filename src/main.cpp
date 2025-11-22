@@ -1527,7 +1527,7 @@ void countTheCar() {
     }
 } /* END countTheCar*/
 
-/** State Machine to Detect and Count Cars */
+/** CarCounter State Machine to Detect and Count Cars */
 void detectCar() {
     unsigned long currentMillis = millis();
     bool rawFirstBeamState = digitalRead(firstBeamPin);
@@ -1629,7 +1629,7 @@ void detectCar() {
             break;
     }
 }
-// END CAR DETECTION
+// END CarCounter CAR DETECTION
 
 // CHECK AND CREATE FILES on SD Card and WRITE HEADERS if Needed
 // GAL 25-11-18: Make file creation non-fatal if SD has issues
