@@ -1,7 +1,43 @@
 {
+    // Keep your original associations
     "files.associations": {
         "*.cps": "javascript",
         "ostream": "cpp",
         "iosfwd": "cpp"
-    }
+    },
+
+    // ---------------------------------
+    // Visual differentiation (Car Counter = RED)
+    // ---------------------------------
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "#7a0000",        // deep red
+        "titleBar.inactiveBackground": "#4d0000",
+        "titleBar.activeForeground": "#ffffff",
+
+        "statusBar.background": "#7a0000",
+        "statusBar.noFolderBackground": "#7a0000",
+        "statusBar.foreground": "#ffffff",
+
+        "activityBar.background": "#4d0000",
+        "activityBar.foreground": "#ffffff",
+        "activityBar.inactiveForeground": "#ffaaaa",
+
+        "sideBar.background": "#1a0a0a"
+    },
+
+    // ---------------------------------
+    // Window title so you always know where you are
+    // ---------------------------------
+    "window.title": "🚗 CAR COUNTER — ${rootName}${separator}${activeEditorShort}",
+
+    // ---------------------------------
+    // Hide PlatformIO/VSCode junk
+    // ---------------------------------
+    "files.exclude": {
+        "**/.pio": true,
+        "**/.vscode/ipch": true
+    },
+
+    // Optional: if Peacock installed, match the same color
+    "peacock.color": "#7a0000"
 }
