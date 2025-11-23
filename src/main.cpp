@@ -5,7 +5,17 @@ Stores data on SD card in event of internet failure
 DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
 
 
-## BEGIN CHANGELOG ##
+## CAR COUNTER BEGIN CHANGELOG ##
+25.11.22.3  Removed heatbeat MQTT topic ccountcar() to KeepMqttAlive() function to publish current counts
+             every 30 seconds if no car is counted, ensuring remote dashboards
+25.11.22.2  Added boot timestamp capture using RTC/NTP and published
+             as part of the retained ONLINE banner. Added new retained
+             heartbeat topic including boot time, current RTC time,
+             enter/show counts, and WiFi RSSI for remote diagnostics.
+             Standardized temp/humidity JSON publish on connect.
+             Fixed publishDebugEvent() JSON time field to use RTC time.
+             No changes to car-detection logic.
+25.11.22.0 Bug fixes for MQTT publishes of temp & humidity as JSON
 25.11.21.3 GAL: Updated WiFi setup for ESP32; removed unsupported setMinimumRSSI;
                  added primary-first connection logic with WiFiMulti fallback. preferPrimaryIfAvailable()
 25.11.21.2 GAL: Changed order of SSID's in Secrets File
@@ -127,7 +137,7 @@ Uses the existing car counter built by Andrew Bubb and outputs data to MQTT
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "25.11.21.3"  // Firmware Version
+#define FWVersion "25.11.22.3"  // Firmware Version
 #define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
@@ -141,14 +151,17 @@ Uses the existing car counter built by Andrew Bubb and outputs data to MQTT
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
-// #define MQTT_KEEPALIVE 30 //removed 10/16/24
 
+
+//CAR COUNTER GLOBAL CONSTANTS FOR SHOW TIMES and SAFETY
 unsigned int waitDuration = 950; // minimum millis for secondBeam to be broken needed to detect a car
 const int showStartMin = 17*60; // Show (counting) starts at 5:00 pm
 const int showEndMin =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
+bool rtcReady = false;  // GAL 25-11-22: RTC boot-safety guard
+String bootTimestamp = "";  // GAL 25-11-22: Store boot timestamp for logging
 // **************************************************
 
-/***** MQTT TOPIC DEFINITIONS *****/
+/***** MQTT TOPIC DEFINITIONS for Car Counter*****/
 #define THIS_MQTT_CLIENT "espCarCounter" // Look at line 90 and set variable for WiFi Client secure & PubSubCLient 12/23/23
 int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client connected
 // Publishing Topics 
@@ -176,7 +189,7 @@ char topicBase[60];
 #define MQTT_PUB_RSSI "msb/traffic/CarCounter/wifi/rssi"
 #define MQTT_PUB_SSID "msb/traffic/CarCounter/wifi/ssid"
 #define MQTT_PUB_IP   "msb/traffic/CarCounter/wifi/ip"
-
+#define MQTT_PUB_HEARTBEAT "msb/traffic/CarCounter/heartbeat"
 // Subscribing Topics (to reset values)
 //#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
 #define MQTT_SUB_TOPIC1  "msb/traffic/CarCounter/resetDailyCount"    // Reset Daily counter
@@ -239,8 +252,6 @@ String currentDirectory = "/"; // Current working directory
 
 unsigned long ota_progress_millis = 0;
 
-//void saveHourlyCounts();  // forward declaration
-
 void onOTAStart() {
   // Log when OTA has started
   Serial.println("OTA update started!");
@@ -271,7 +282,21 @@ const char* ampm ="AM";
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = -21600;
 const int   daylightOffset_sec = 3600;
-//float tempF = 0.0;
+
+// GAL 25-11-22: DS3231 timestamp helper (use for GateCounter HELLO/debug)
+String getRtcTimestamp() {
+    if (!rtcReady) return "rtc-not-ready";  // GAL 25-11-22
+
+    DateTime now = rtc.now();
+
+    char buf[32];
+    snprintf(buf, sizeof(buf),
+             "%04d-%02d-%02d %02d:%02d:%02d",
+             now.year(), now.month(), now.day(),
+             now.hour(), now.minute(), now.second());
+
+    return String(buf);
+}
 
 // Initialize DHT sensor & Variables for temperature and humidity readTempandRH()
 DHT dht(DHTPIN, DHTTYPE);
@@ -706,7 +731,7 @@ void setupServer() {
 }
 
 
-/***** MQTT SECTION ******/
+/***** MQTT SECTION for Car Counter******/
 // Queue for offline MQTT publishes
 std::queue<String> publishQueue;
 
@@ -714,12 +739,14 @@ std::queue<String> publishQueue;
 const size_t MAX_QUEUE = 3000;
 const size_t MAX_FLUSH_PER_CALL = 150;   // prevents WDT resets
 
+
+
 // Helper to encode retain flag into queue "topic|message|retain"
 String encodeQueuedMessage(const char *topic, const String &msg, bool retainFlag) {
     return String(topic) + "|" + msg + "|" + (retainFlag ? "1" : "0");
 }
 
-// Overload allowing explicit retain flag
+// Car CounterOverload allowing explicit retain flag
 void publishMQTT(const char *topic, const String &message, bool retainFlag) {
     if (mqtt_client.connected()) {
         mqtt_client.publish(topic, message.c_str(), retainFlag);
@@ -775,23 +802,62 @@ void publishDebugLog(const String &message) {
     publishMQTT(MQTT_DEBUG_LOG, message);   // never retained
 }
 
+// =====================================================
+// GAL 25-11-22: MQTT Debug Event Publisher (remote console)
+// Uses MQTT_DEBUG_LOG topic you already have
+// =====================================================
+void publishDebugEvent(const char* event, const String& details, bool retainFlag = false) {
+    char buf[256];
 
-// ===========================
-// KEEPALIVE (every 30 sec)
-// ===========================
+    snprintf(buf, sizeof(buf),
+        "{"
+            "\"device\":\"%s\","
+            "\"event\":\"%s\","
+            "\"fw\":\"%s\","
+            "\"time\":\"%s\","
+            "\"details\":\"%s\""
+        "}",
+        THIS_MQTT_CLIENT,
+        event,
+        FWVersion,                     // <-- NO .c_str()
+        bootTimestamp.c_str(),
+        details.c_str()
+    );
+
+    publishMQTT(MQTT_DEBUG_LOG, String(buf), retainFlag);
+}
+
+// Used to publish current counts to update GATE Counter every 30 seconds if no car is counted
 void KeepMqttAlive() {
 
-    // ---- Retained core counts ----
-    publishMQTT(MQTT_PUB_TEMP,        String(tempF),          true);
-    publishMQTT(MQTT_PUB_ENTER_CARS,  String(totalDailyCars), true);
-    publishMQTT(MQTT_PUB_SHOWTOTAL,   String(totalShowCars),  true);
+    // ---- Heartbeat (retained, ONLY here to prevent show spam) ----
+    publishMQTT(
+        MQTT_PUB_HEARTBEAT,
+        String("{\"boot\":\"") + bootTimestamp +
+        "\",\"now\":\"" + getRtcTimestamp() +
+        "\",\"enter\":" + totalDailyCars +
+        ",\"show\":" + totalShowCars +
+        ",\"rssi\":" + WiFi.RSSI() +
+        "}",
+        true
+    );
 
-    // ---- WiFi Diagnostics (Retained) ----
+    // ---- Retained Temp/RH JSON ----
+    char jsonPayload[100];
+    snprintf(jsonPayload, sizeof(jsonPayload),
+            "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
+    publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
+
+    // ---- Retained core counts ----
+    publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
+    publishMQTT(MQTT_PUB_SHOWTOTAL,  String(totalShowCars),  true);
+
+    // ---- WiFi Diagnostics (retained) ----
     publishMQTT(MQTT_PUB_RSSI, String(WiFi.RSSI()), true);
-    publishMQTT(MQTT_PUB_SSID, String(WiFi.SSID()), true);
+    publishMQTT(MQTT_PUB_SSID, WiFi.SSID(),        true);
     publishMQTT(MQTT_PUB_IP,   WiFi.localIP().toString(), true);
 
-    // ---- Hourly Snapshot for HA/DB Backfill ----
+    // ---- Hourly Snapshot (retained, unchanged) ----
     char buckets[180];
     snprintf(buckets, sizeof(buckets),
         "[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
@@ -802,11 +868,11 @@ void KeepMqttAlive() {
         hourlyCount[16], hourlyCount[17], hourlyCount[18], hourlyCount[19],
         hourlyCount[20], hourlyCount[21], hourlyCount[22], hourlyCount[23]
     );
-
     publishMQTT(MQTT_PUB_HOURLY_JSON, String(buckets), true);
 
     start_MqttMillis = millis();
 }
+
 
 
 // ===========================
@@ -856,8 +922,12 @@ void MQTTreconnect() {
         Serial.println("Waiting for Car");
 
         // Once connected, publish an announcement…
-        publishMQTT(MQTT_PUB_HELLO, "Car Counter ONLINE!"); // NOT retained
-        publishMQTT(MQTT_PUB_TEMP, String(tempF), true);
+        publishMQTT(MQTT_PUB_HELLO, String("Car Counter ONLINE @ ") + bootTimestamp);
+        // GAL 25-11-22: publish temp/RH as JSON (match HA templates)
+        char jsonPayload[100];
+        snprintf(jsonPayload, sizeof(jsonPayload),
+                "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
+        publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
         publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
         publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars), true);
 
@@ -865,6 +935,15 @@ void MQTTreconnect() {
         publishMQTT(MQTT_PUB_RSSI, String(WiFi.RSSI()), true);
         publishMQTT(MQTT_PUB_SSID, String(WiFi.SSID()), true);
         publishMQTT(MQTT_PUB_IP,   WiFi.localIP().toString(), true);
+
+        // GAL 25-11-22: retained online snapshot for remote debugging
+        publishDebugEvent(
+            "online",
+            "ssid=" + WiFi.SSID() +
+            " rssi=" + String(WiFi.RSSI()) +
+            " ip=" + WiFi.localIP().toString(),
+            true
+        );
 
         // GAL 25-11-18: announce firmware version
         publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion)); // ok non-retained
@@ -1516,9 +1595,13 @@ void countTheCar() {
         Serial.print(F(" Car "));
         Serial.print(totalDailyCars);
         Serial.println(F(" Logged to SD Card."));
-        publishMQTT(MQTT_PUB_HELLO, "Car Counter Working");
-        publishMQTT(MQTT_PUB_TEMP, String(tempF));
-        publishMQTT(MQTT_PUB_TIME, now.toString(buf2));
+        char jsonPayload[64];
+        snprintf(jsonPayload, sizeof(jsonPayload),
+                "{\"tempF\": %.1f, \"humidity\": %.1f}",
+                tempF, humidity);
+
+        publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
+        publishMQTT(MQTT_PUB_TIME, getRtcTimestamp());
         publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
         start_MqttMillis = millis();
     } else {
@@ -1745,7 +1828,7 @@ void initSDCard() {
     display.display();
 }
 
-
+//Car Counter Temperature and Humidity Reading
 void readTempandRH() {
     static unsigned long lastDHTReadMillis = 0;    // Last time temperature was read
     static unsigned long lastDHTPrintMillis = 0;   // Last time temperature was printed
@@ -1791,7 +1874,6 @@ void readTempandRH() {
             char jsonPayload[100];
             snprintf(jsonPayload, sizeof(jsonPayload), "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
             publishMQTT(MQTT_PUB_TEMP, String(jsonPayload));
-            //publishDebugLog("Temperature and humidity published: " + String(jsonPayload));
 
             // Forward valid readings to the hourly average system
             averageHourlyTemp(); // Ensure the reading is processed for summaries
@@ -1989,11 +2071,11 @@ void setup() {
     //mqtt_client.setServer(mqtt_server, mqtt_port);
     //mqtt_client.setCallback(callback);
 
-    // MQTT Reconnection with login credentials
-    MQTTreconnect(); // Ensure MQTT is connected
+
 
     //If RTC not present, stop and check battery
     if (! rtc.begin()) {
+        rtcReady = false;
         Serial.println("Could not find RTC! Check circuit.");
         display.clearDisplay();
         display.setTextSize(1);
@@ -2001,13 +2083,32 @@ void setup() {
         display.setCursor(0,line1);
         display.println("Clock DEAD");
         display.display();
-        while (1);
+        publishMQTT(MQTT_DEBUG_LOG, "ENTER RTC BEGIN FAILED", true);
+        } else {
+        rtcReady = true;   // GAL 25-11-22
     }
 
     // Get NTP time from Time Server 
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     SetLocalTime();
+    DateTime now = rtc.now();
+
+    // Save boot timestamp
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
+            now.year(), now.month(), now.day(),
+            now.hour(), now.minute(), now.second());
+
+    // If RTC failed earlier, keep placeholder instead of junk time
+    if (rtcReady) {
+        bootTimestamp = String(buf);
+    } else {
+        bootTimestamp = "rtc-not-ready";
+    }
     
+    // MQTT Reconnection with login credentials
+    MQTTreconnect(); // Ensure MQTT is connected
+
     //Set Input Pins
     pinMode(firstBeamPin, INPUT_PULLDOWN);
     pinMode(secondBeamPin, INPUT_PULLDOWN);
