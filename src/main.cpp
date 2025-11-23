@@ -831,6 +831,8 @@ void publishDebugEvent(const char* event, const String& details, bool retainFlag
 void KeepMqttAlive() {
 
     // ---- Heartbeat (retained, ONLY here to prevent show spam) ----
+    // GAL 25-11-22.3: keep firmware visible for dashboards (retained overwrite)
+    publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion), true);
     publishMQTT(
         MQTT_PUB_HEARTBEAT,
         String("{\"boot\":\"") + bootTimestamp +
@@ -945,8 +947,7 @@ void MQTTreconnect() {
             true
         );
 
-        // GAL 25-11-18: announce firmware version
-        publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion)); // ok non-retained
+        publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion), true);
 
         // Subscribe to necessary topics
         mqtt_client.subscribe(MQTT_PUB_HELLO);
