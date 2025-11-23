@@ -2,10 +2,25 @@
 Car counter Interface to MQTT by Greg Liebig greg@engrinnovations.com
 Initial Build 12/5/2023 12:15 pm
 Stores data on SD card in event of internet failure
-DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
+DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
+// IMPORTANT: Update FWVersion each time a new changelog entry is added
+#define OTA_Title "Car Counter" // OTA Title
+#define FWVersion "25.11.23.0"  // Firmware Version
 
-## CAR COUNTER BEGIN CHANGELOG ##
+/* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.23.0  Restored proper 10-minute temperature/humidity publish interval
+                (per 24.12.16.1) by removing all temp/RH MQTT publishes from
+                readTempandRH() and KeepMqttAlive(). Added dedicated 10-minute
+                temp/RH publish timer with retained JSON format.
+             Added independent KeepMqttAlive() timer so heartbeat and retained
+                count updates fire every 30 seconds regardless of other publishes;
+                eliminated starvation caused by publishMQTT() resetting
+                start_MqttMillis.
+             Updated mqttKeepAlive variable comment to reflect heartbeat interval
+                only (no longer tied to temp publishing).
+             General cleanup of temp/RH logic, reduced MQTT spam, ensured only
+                retained temp/RH JSON is published at 10-minute cadence.
 25.11.22.3  Removed heatbeat MQTT topic ccountcar() to KeepMqttAlive() function to publish current counts
              every 30 seconds if no car is counted, ensuring remote dashboards
 25.11.22.2  Added boot timestamp capture using RTC/NTP and published
@@ -70,7 +85,7 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
 24.11.19.1 Added boolean to print daily summary once
 24.11.18.1 Added method to update counts using MQTT, Added additional topics for Show Totals, days running
 24.11.16.4 16.3 didn't write daily summary. Changed that code for test 11.17
-24.11.16.3 Changed write daily summar printing dayHour array
+24.11.16.3 Changed write daily summary printing dayHour array
 24.11.16.2 Added Time to Pass topic. Write totals not working.
 24.11.16.1 Trying reset for 2nd beam timer, Fixed serial print logging
 24.11.15.3 Fixed show minutes to report cars during show, increase car detect millis to 750
@@ -88,14 +103,14 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth
 24.10.25.1 Turn arches on during show added to end of loop
 24.10.24.2 fixed publish dailytot on correct topic to keep gate counter in sync
 24.10.24.1 Added enable arches between 4:30 pm & 9:30 pm
-24.10.23.5 Bug fixes with missing {} clarified prodecure names, added reset at midnight
+24.10.23.5 Bug fixes with missing {} clarified procedure names, added reset at midnight
 24.10.23.4 Added update/reset check in loop for date changes. Created initSDCard()
 24.10.23.3 Added update/reset check in loop for date changes
-24.10.23.2 Updated totals, bug fixes, files ops comparrison to Gate counter 
-24.10.23.1 Updated totals, bug fixes, files ops comparrison to Gate counter 
+24.10.23.2 Updated totals, bug fixes, files ops comparison to Gate counter 
+24.10.23.1 Updated totals, bug fixes, files ops comparison to Gate counter 
 24.10.22.4 Testing Elegant OTA auto reboot
 24.10.22.3 Added & debugged mqtt keep alive timer
-24.10.21 Multiple bug fixes including ineverting beam signals, Display, MQTT Keep Alive
+24.10.21 Multiple bug fixes including inverting beam signals, Display, MQTT Keep Alive
 24.10.21 Include FS.h
 24.10.19 Used the ESP32 MQTT Program as a base and merged Andrew Bubb's code into it. The sdin, sdout
 and serial writes used in the Arduino program were impossible to correct for ESP32. Spent
@@ -137,8 +152,6 @@ Uses the existing car counter built by Andrew Bubb and outputs data to MQTT
 #include <queue>  // Include queue for storing messages
 
 // ******************** CONSTANTS *******************
-#define FWVersion "25.11.22.3"  // Firmware Version
-#define OTA_Title "Car Counter" // OTA Title
 #define DS3231_I2C_ADDRESS 0x68 // Real Time Clock
 #define firstBeamPin 33
 #define secondBeamPin 32
@@ -159,11 +172,18 @@ const int showStartMin = 17*60; // Show (counting) starts at 5:00 pm
 const int showEndMin =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
 bool rtcReady = false;  // GAL 25-11-22: RTC boot-safety guard
 String bootTimestamp = "";  // GAL 25-11-22: Store boot timestamp for logging
+
+// GLOBAL VARIABLES and TIMERS
+// GAL 25-11-22.4: independent timers for keepalive and temp publish
+unsigned long lastKeepAliveMillis = 0;
+const unsigned long TEMP_PUB_INTERVAL_MS = 10UL * 60UL * 1000UL;  // 10 minutes
+unsigned long lastTempPubMillis = 0;
+int mqttKeepAlive = 30;  // GAL 25-11-22.4: heartbeat interval (seconds)
 // **************************************************
 
 /***** MQTT TOPIC DEFINITIONS for Car Counter*****/
 #define THIS_MQTT_CLIENT "espCarCounter" // Look at line 90 and set variable for WiFi Client secure & PubSubCLient 12/23/23
-int mqttKeepAlive = 30; // publish temp every x seconds to keep MQTT client connected
+
 // Publishing Topics 
 char topic[60];
 char topicBase[60];
@@ -211,6 +231,7 @@ enum PatternState {
     GREEN_OFF_RED_ON
 };
 
+// Pattern State Machine Variables
 PatternState currentPatternState = INITIAL_OFF;
 unsigned long patternModeMillis = 0;
 
@@ -223,6 +244,7 @@ enum CarDetectState {
     CAR_DETECTED
 };
 
+// Car Detection State Machine Variables
 CarDetectState currentCarDetectState = WAITING_FOR_CAR;
 bool carPresentFlag = false; // Flag to ensure a car is only counted once
 unsigned long firstBeamTripTime = 0;
@@ -848,7 +870,8 @@ void KeepMqttAlive() {
     char jsonPayload[100];
     snprintf(jsonPayload, sizeof(jsonPayload),
             "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
-    publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
+// GAL 25-11-22.4: temp/RH publish removed from KeepMqttAlive; now on 10-min timer
+// publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
 
     // ---- Retained core counts ----
     publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
@@ -947,7 +970,9 @@ void MQTTreconnect() {
             true
         );
 
-        publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion), true);
+        // GAL 25-11-18: announce firmware version
+// GAL 25-11-22.4: firmware publish retained for dashboards
+        publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion), true); // ok non-retained
 
         // Subscribe to necessary topics
         mqtt_client.subscribe(MQTT_PUB_HELLO);
@@ -1874,7 +1899,8 @@ void readTempandRH() {
             // Publish the temperature and humidity as JSON to MQTT
             char jsonPayload[100];
             snprintf(jsonPayload, sizeof(jsonPayload), "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
-            publishMQTT(MQTT_PUB_TEMP, String(jsonPayload));
+// GAL 25-11-22.4: temp/RH publish moved to 10-min timer in loop to reduce spam
+// publishMQTT(MQTT_PUB_TEMP, String(jsonPayload));
 
             // Forward valid readings to the hourly average system
             averageHourlyTemp(); // Ensure the reading is processed for summaries
@@ -2171,6 +2197,22 @@ void setup() {
 } /***** END SETUP ******/
 
 void loop() {
+
+  // GAL 25-11-22.4: keepalive on its own clock (not starved by other publishes)
+  if (millis() - lastKeepAliveMillis >= (unsigned long)mqttKeepAlive * 1000UL) {
+      lastKeepAliveMillis = millis();
+      KeepMqttAlive();
+  }
+
+  // GAL 25-11-22.4: publish temp/RH JSON every 10 minutes (retained)
+  if (millis() - lastTempPubMillis >= TEMP_PUB_INTERVAL_MS) {
+      lastTempPubMillis = millis();
+      char jsonPayload[100];
+      snprintf(jsonPayload, sizeof(jsonPayload),
+               "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
+      publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
+  }
+
     DateTime now = rtc.now();
 
     currentTimeMinute = now.hour()*60 + now.minute(); // convert time to minutes since midnight
@@ -2200,10 +2242,10 @@ void loop() {
         playPattern();
     }
 
-    //Added to kepp mqtt connection alive and periodically publish select values
-    if ((millis() - start_MqttMillis) > (mqttKeepAlive * 1000)) {
-        KeepMqttAlive();
-    }
+    // //Added to kepp mqtt connection alive and periodically publish select values
+    // if ((millis() - start_MqttMillis) > (mqttKeepAlive * 1000)) {
+    //     KeepMqttAlive();
+    // }
 
 } 
 /***** Repeat Loop *****/
