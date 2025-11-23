@@ -45,10 +45,23 @@
         .file-actions {
             margin-top: 10px;
         }
+
+        /* GAL 25-11-23.x: small spacing for top nav buttons */
+        .top-buttons {
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
     <h1>File Management System Car Counter</h1>
+
+    <!-- GAL 25-11-23.x: Quick access to Show Summary page -->
+    <div class="top-buttons">
+        <button onclick="window.location.href='/showSummary.html'">
+            View Show Summary
+        </button>
+    </div>
 
     <div class="file-manager">
         <h2>Available Files</h2>

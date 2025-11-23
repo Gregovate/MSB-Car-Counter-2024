@@ -38,22 +38,19 @@
     <h1>Show Summary</h1>
     <table id="showSummaryTable">
         <thead>
-            <tr id="tableHeader">
-                <!-- Header will be populated dynamically -->
-            </tr>
+            <tr id="tableHeader"></tr>
         </thead>
-        <tbody id="tableBody">
-            <!-- Table data will be populated dynamically -->
-        </tbody>
+        <tbody id="tableBody"></tbody>
     </table>
 
     <script>
         // Fetch and display the ShowSummary.csv data
         function fetchShowSummary() {
-            fetch('/ShowSummary.csv') // Adjusted to fetch data from the root folder
+            // This now retrieves the season-based file via the ESP32 route
+            fetch('/ShowSummary.csv')
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error('Network response was not ok ' + response.statusText);
+                        throw new Error('Network error: ' + response.statusText);
                     }
                     return response.text();
                 })
@@ -65,17 +62,15 @@
                 });
         }
 
-        // Parse and display the CSV data in the table
         function displayTable(csvData) {
             const rows = csvData.split('\n').filter(row => row.trim() !== '');
             const tableHeader = document.getElementById('tableHeader');
             const tableBody = document.getElementById('tableBody');
 
-            // Clear existing table content
             tableHeader.innerHTML = '';
             tableBody.innerHTML = '';
 
-            // Populate table header
+            // Create header row
             const headers = rows[0].split(',');
             headers.forEach(header => {
                 const th = document.createElement('th');
@@ -83,11 +78,10 @@
                 tableHeader.appendChild(th);
             });
 
-            // Populate table body
+            // Create data rows
             rows.slice(1).forEach(row => {
-                const rowData = row.split(',');
                 const tr = document.createElement('tr');
-                rowData.forEach(cell => {
+                row.split(',').forEach(cell => {
                     const td = document.createElement('td');
                     td.textContent = cell.trim();
                     tr.appendChild(td);
@@ -96,7 +90,6 @@
             });
         }
 
-        // Fetch the data when the page loads
         window.onload = fetchShowSummary;
     </script>
 </body>
