@@ -227,6 +227,7 @@ char topicBase[60];
 #define MQTT_PUB_SSID "msb/traffic/CarCounter/wifi/ssid"
 #define MQTT_PUB_IP   "msb/traffic/CarCounter/wifi/ip"
 #define MQTT_PUB_HEARTBEAT "msb/traffic/CarCounter/heartbeat"
+#define MQTT_PUB_SD_STATUS "msb/traffic/CarCounter/sd/status"
 // Subscribing Topics (to reset values)
 //#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
 #define MQTT_SUB_SHOWSTART "msb/traffic/CarCounter/showStartDate"    // Set Show Start Time
@@ -797,6 +798,19 @@ void setupServer() {
     // ----------------------------
     server.on("/listFiles", HTTP_GET, listSDFiles);
     server.on("/download", HTTP_GET, downloadSDFile);
+    // Simple upload page for /uploadToData (so browser GET doesn't 500)
+    server.on("/uploadToData", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html",
+            "<!doctype html><html><body>"
+            "<h3>Upload UI files to /data</h3>"
+            "<form method='POST' action='/uploadToData' enctype='multipart/form-data'>"
+            "<input type='file' name='file' multiple>"
+            "<input type='submit' value='Upload to /data'>"
+            "</form>"
+            "<p>After upload, go back to <a href='/'>home</a>.</p>"
+            "</body></html>"
+        );
+    });
 
     server.on("/upload", HTTP_POST,
         [](AsyncWebServerRequest *request) {},
@@ -2157,52 +2171,56 @@ void createAndInitializeHourlyFile(const String &fileName) {
 
 /** Initilaize microSD card */
 // GAL 25-11-18: Make SD init non-blocking; device runs even if SD is missing
+/** Initialize microSD card */
+// GAL 25-11-23.x: Non-blocking SD init + MQTT telemetry
 void initSDCard() {
     sdAvailable = false;  // pessimistic default
 
     if (!SD.begin(PIN_SPI_CS)) {
         Serial.println("Card Mount Failed");
+
+        // OLED quick indicator
         display.clearDisplay();
         display.setTextSize(1);
         display.setTextColor(WHITE);
         display.setCursor(0, line1);
         display.println("SD ERROR");
         display.display();
-        // GAL 25-11-18: Do NOT while(1); keep running without SD
+
+        // MQTT retained status (so HA / you can SEE it)
+        publishMQTT(MQTT_PUB_SD_STATUS, "FAIL_MOUNT", true);
+        publishMQTT(MQTT_DEBUG_LOG, "SD FAIL: mount failed", false);
         return;
     }
 
     uint8_t cardType = SD.cardType();
-
     if (cardType == CARD_NONE) {
         Serial.println("No SD card attached");
-        // GAL 25-11-18: also keep running without SD
+        publishMQTT(MQTT_PUB_SD_STATUS, "FAIL_NO_CARD", true);
+        publishMQTT(MQTT_DEBUG_LOG, "SD FAIL: no card", false);
         return;
     }
 
-    sdAvailable = true;  // SD is present and responding
+    sdAvailable = true;
 
-    Serial.print("SD Card Type: ");
-    if (cardType == CARD_MMC) {
-        Serial.println("MMC");
-    } else if (cardType == CARD_SD) {
-        Serial.println("SDSC");
-    } else if (cardType == CARD_SDHC) {
-        Serial.println("SDHC");
-    } else {
-        Serial.println("UNKNOWN");
-    }
-    uint64_t cardSize = SD.cardSize() / (1024ULL * 1024ULL);
+    uint64_t cardSizeMB = SD.cardSize() / (1024ULL * 1024ULL);
+    Serial.printf("SD Card Size: %lluMB\n", cardSizeMB);
 
-    Serial.printf("SD Card Size: %lluMB\n", cardSize);
-    Serial.println(F("SD CARD INITIALIZED."));
+    // OLED OK indicator
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(0, line1);
-    display.printf("SD Card Size: %lluMB\n", cardSize);
+    display.printf("SD OK: %lluMB", cardSizeMB);
     display.display();
+
+    // MQTT retained OK + size
+    publishMQTT(MQTT_PUB_SD_STATUS,
+        String("OK_") + String(cardSizeMB) + "MB", true);
+    publishMQTT(MQTT_DEBUG_LOG,
+        String("SD OK: ") + String(cardSizeMB) + "MB", false);
 }
+
 
 //Car Counter Temperature and Humidity Reading
 void readTempandRH() {
