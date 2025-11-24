@@ -231,6 +231,7 @@ char topicBase[60];
 // GAL 25-11-23: detailed SD health breadcrumbs for troubleshooting
 #define MQTT_PUB_SD_DIAG "msb/traffic/CarCounter/sdDiag"
 #define MQTT_PUB_SD_STATUS "msb/traffic/CarCounter/sd/status"
+
 // Subscribing Topics (to reset values)
 //#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
 #define MQTT_SUB_SHOWSTART "msb/traffic/CarCounter/showStartDate"    // Set Show Start Time
@@ -2206,10 +2207,9 @@ void createAndInitializeHourlyFile(const String &fileName) {
 }
 
 
-/** Initilaize microSD card */
-// GAL 25-11-18: Make SD init non-blocking; device runs even if SD is missing
 /** Initialize microSD card */
-// GAL 25-11-23.x: Non-blocking SD init + MQTT telemetry
+// GAL 25-11-18: Make SD init non-blocking; device runs even if SD is missing
+// GAL 25-11-23.2: Add boot-time SD path checks + write/readback test + retained sdDiag
 void initSDCard() {
     sdAvailable = false;  // pessimistic default
 
@@ -2227,6 +2227,9 @@ void initSDCard() {
         // MQTT retained status (so HA / you can SEE it)
         publishMQTT(MQTT_PUB_SD_STATUS, "FAIL_MOUNT", true);
         publishMQTT(MQTT_DEBUG_LOG, "SD FAIL: mount failed", false);
+
+        // Retained diag breadcrumb
+        publishSdDiag_("init", "", "", "mount_fail");
         return;
     }
 
@@ -2235,28 +2238,110 @@ void initSDCard() {
         Serial.println("No SD card attached");
         publishMQTT(MQTT_PUB_SD_STATUS, "FAIL_NO_CARD", true);
         publishMQTT(MQTT_DEBUG_LOG, "SD FAIL: no card", false);
+
+        publishSdDiag_("init", "", "", "no_card");
         return;
     }
-
-    sdAvailable = true;
 
     uint64_t cardSizeMB = SD.cardSize() / (1024ULL * 1024ULL);
     Serial.printf("SD Card Size: %lluMB\n", cardSizeMB);
 
-    // OLED OK indicator
+    // ---- Validate critical folders/files ----
+    bool dataDirExists = SD.exists("/data");
+    bool uiIndexExists = SD.exists("/data/index.html");   // if your UI entry file differs, we’ll adjust later
+
+    // Ensure /CC exists
+    bool ccDirExists = SD.exists("/CC");
+    if (!ccDirExists) {
+        ccDirExists = SD.mkdir("/CC");
+        if (ccDirExists) {
+            publishMQTT(MQTT_DEBUG_LOG, "Created /CC directory", false);
+        } else {
+            publishMQTT(MQTT_DEBUG_LOG, "SD FAIL: unable to create /CC", false);
+        }
+    }
+
+    // Create season folder (uses your global seasonFolder buffer)
+    int seasonYear = determineSeasonYear();
+    snprintf(seasonFolder, sizeof(seasonFolder), "/CC/%04d", seasonYear);
+
+    bool seasonDirExists = SD.exists(seasonFolder);
+    if (!seasonDirExists) {
+        seasonDirExists = SD.mkdir(seasonFolder);
+        if (seasonDirExists) {
+            publishMQTT(MQTT_DEBUG_LOG,
+                String("Created season folder: ") + seasonFolder, false);
+        } else {
+            publishMQTT(MQTT_DEBUG_LOG,
+                String("SD FAIL: unable to create season folder: ") + seasonFolder, false);
+        }
+    }
+
+    // ---- Lightweight write/readback test ----
+    bool writeTestOK = false;
+    const char* testFile = "/sd_test.txt";
+
+    File tf = SD.open(testFile, FILE_WRITE);
+    if (tf) {
+        size_t n = tf.print("test\n");
+        tf.flush();
+        tf.close();
+
+        if (n > 0) {
+            File rf = SD.open(testFile, FILE_READ);
+            if (rf) {
+                String s = rf.readStringUntil('\n');
+                rf.close();
+                writeTestOK = (s == "test");
+            }
+        }
+
+        SD.remove(testFile);
+    }
+
+    // Determine availability based on actual usability
+    sdAvailable = (dataDirExists && uiIndexExists && ccDirExists && seasonDirExists && writeTestOK);
+
+    // OLED indicator
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(0, line1);
-    display.printf("SD OK: %lluMB", cardSizeMB);
+    if (sdAvailable) {
+        display.printf("SD OK: %lluMB", cardSizeMB);
+    } else {
+        display.println("SD DEGRADED");
+    }
     display.display();
 
-    // MQTT retained OK + size
-    publishMQTT(MQTT_PUB_SD_STATUS,
-        String("OK_") + String(cardSizeMB) + "MB", true);
-    publishMQTT(MQTT_DEBUG_LOG,
-        String("SD OK: ") + String(cardSizeMB) + "MB", false);
+    // MQTT retained OK + size OR degraded flag
+    if (sdAvailable) {
+        publishMQTT(MQTT_PUB_SD_STATUS,
+            String("OK_") + String(cardSizeMB) + "MB", true);
+        publishMQTT(MQTT_DEBUG_LOG,
+            String("SD OK: ") + String(cardSizeMB) + "MB", false);
+    } else {
+        publishMQTT(MQTT_PUB_SD_STATUS, "FAIL_DEGRADED", true);
+        publishMQTT(MQTT_DEBUG_LOG, "SD FAIL: degraded (see sdDiag)", false);
+    }
+
+    // Retained structured diag
+    char diag2[220];
+    snprintf(diag2, sizeof(diag2),
+        "{\"sizeMB\":%llu,\"dataDir\":%s,\"uiIndex\":%s,\"ccDir\":%s,\"seasonDir\":%s,\"writeTest\":%s}",
+        cardSizeMB,
+        dataDirExists ? "true" : "false",
+        uiIndexExists ? "true" : "false",
+        ccDirExists ? "true" : "false",
+        seasonDirExists ? "true" : "false",
+        writeTestOK ? "true" : "false"
+    );
+    publishMQTT(MQTT_PUB_SD_DIAG, String(diag2), true);
+
+    // Also publish a simple step breadcrumb as last-known state
+    publishSdDiag_("init", "", "", sdAvailable ? "ok" : "degraded");
 }
+
 
 
 //Car Counter Temperature and Humidity Reading
