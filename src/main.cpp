@@ -219,6 +219,7 @@ char topicBase[60];      // keep until confirmed unused
 #define MQTT_PUB_FW_VERSION     "msb/traffic/CarCounter/System/firmware"
 #define MQTT_PUB_TIME           "msb/traffic/CarCounter/System/time"
 #define MQTT_DEBUG_LOG          "msb/traffic/CarCounter/System/debug" 
+#define MQTT_PUB_ALARM         "msb/traffic/CarCounter/System/alarm"
 
 /* Environment (temp + humidity, retained JSON) */
 #define MQTT_PUB_TEMP           "msb/traffic/CarCounter/Env/temp"
@@ -246,6 +247,7 @@ char topicBase[60];      // keep until confirmed unused
 #define MQTT_PUB_SSID          "msb/traffic/CarCounter/System/wifi/ssid"
 #define MQTT_PUB_IP            "msb/traffic/CarCounter/System/wifi/ip"
 #define MQTT_PUB_HEARTBEAT     "msb/traffic/CarCounter/System/heartbeat"
+
 
 /* SD Diagnostics (Retained JSON) */
 #define MQTT_PUB_SD_DIAG       "msb/traffic/CarCounter/System/sdDiag"
@@ -1942,66 +1944,98 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
     if (strcmp(topic, MQTT_SUB_TOPIC1) == 0)  {
         /* Topic used to manually reset Enter Daily Cars */
-        totalDailyCars = atoi((char *)payload);
+        totalDailyCars = atoi(message);
         saveDailyTotal();
         Serial.println(F(" Car Counter Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Daily Total Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC2) == 0)  {
         /* Topic used to manually reset Total Show Cars */
-        totalShowCars = atoi((char *)payload);
+        totalShowCars = atoi(message);
         saveShowTotal();
         Serial.println(F(" Show Counter Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Show Counter Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC3) == 0)  {
         /* Topic used to manually reset Calendar Day */
-        dayOfMonth = atoi((char *)payload);
+        dayOfMonth = atoi(message);
         saveDayOfMonth();
         Serial.println(F(" Calendar Day of Month Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Calendar Day Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC4) == 0)  {
         /* Topic used to manually reset Days Running */
-        daysRunning = atoi((char *)payload);
+        daysRunning = atoi(message);
         saveDaysRunning();
         Serial.println(F(" Days Running Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Days Running Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)  {
-        // Topic used to change car counter timeout
-        carCounterTimeout = atoi((char *)payload);
+        // Topic used to change car counter timeout (ms)
+        unsigned long v = strtoul(message, nullptr, 10);
+        if (v < 5000) v = 5000;        // floor 5s
+        if (v > 600000) v = 600000;    // ceiling 10 min
+        carCounterTimeout = v;
+
         Serial.println(F(" Counter Alarm Timer Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Car Counter Timeout Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)  {
-        // Topic used to change car counter timeout
-        waitDuration = atoi((char *)payload);
-        Serial.println(F(" Beam Sensor Durtion Updated"));
-        publishMQTT(MQTT_PUB_HELLO, "Beam Sensor Duration Updated"); 
+        // Topic used to change beam stuck-high duration (ms)
+        unsigned long v = strtoul(message, nullptr, 10);
+        if (v < 5000) v = 5000;
+        if (v > 600000) v = 600000;
+        waitDuration = v;
+
+        Serial.println(F(" Beam Sensor Duration Updated"));
+        publishMQTT(MQTT_PUB_HELLO, "Beam Sensor Duration Updated");
 
     } else if (strcmp(topic, MQTT_SUB_SHOWSTART) == 0) {
         // Set Show Start Date (YYYY-MM-DD)
         int y, m, d;
+
         if (sscanf(message, "%d-%d-%d", &y, &m, &d) == 3) {
+
+            // ---- guard against junk / uninitialized dates ----
+            bool valid =
+                (y >= 2020 && y <= 2100) &&
+                (m >= 1 && m <= 12) &&
+                (d >= 1 && d <= 31);
+
+            if (!valid) {
+                publishMQTT(MQTT_DEBUG_LOG,
+                    String("Invalid ShowStartDate payload (range): ") + message);
+                return;   // don't overwrite stored values
+            }
+
+            // ---- idempotent guard: same date => do nothing ----
+            if (showStartDateValid &&
+                y == showStartY && m == showStartM && d == showStartD) {
+                publishMQTT(MQTT_DEBUG_LOG,
+                    String("ShowStartDate unchanged, ignoring: ") + message);
+                return;   // prevents side effects from HA reasserts
+            }
+
+            // ---- accept NEW date ----
             showStartY = y;
             showStartM = m;
             showStartD = d;
             showStartDateValid = true;
 
-            // GAL 25-11-23.x: update SD season folder now that we know showStartY
+            // update SD season folder only on real change
             ensureSeasonFolderExists();
             publishMQTT(MQTT_DEBUG_LOG,
                 String("SD season folder updated to: ") + seasonFolder);
 
-            // GAL 25-11-23.x: snap DaysRunning into sync immediately
+            // recompute derived values ONLY (no resets here)
             daysRunning = computeDaysRunning();
             saveDaysRunning();   // publishes retained DaysRunning
             publishMQTT(MQTT_DEBUG_LOG,
                 "ShowStartDate received, DaysRunning recomputed: " + String(daysRunning));
+
         } else {
             publishMQTT(MQTT_DEBUG_LOG,
-                String("Invalid ShowStartDate payload: ") + message);
+                String("Invalid ShowStartDate payload (parse): ") + message);
         }
 
     } else if (strcmp(topic, MQTT_SUB_SHOWSTARTTIME) == 0) {
@@ -2287,16 +2321,33 @@ void detectCar() {
             }
             break;
 
-        case BOTH_BEAMS_HIGH:
-            if (currentMillis - firstBeamTripTime >= carCounterTimeout) {
-                // Set Alarm if car is stuck at car counter
-                publishMQTT(MQTT_PUB_HELLO, "Check Car Counter!");
-            }         
-            if (secondBeamState == 0 && carPresentFlag) {
-                currentCarDetectState = CAR_DETECTED;
-                publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected");
+            case BOTH_BEAMS_HIGH: {
+                static bool stuckAlarmSent = false;
+
+                if (currentMillis - firstBeamTripTime >= carCounterTimeout) {
+                    if (!stuckAlarmSent) {
+                        // Alarm event (non-retained)
+                        publishMQTT(MQTT_PUB_ALARM, "ALARM_CAR_STUCK", false);
+
+                        // Optional: keep legacy text on HELLO during transition
+                        // publishMQTT(MQTT_PUB_HELLO, "Check Car Counter!", false);
+
+                        publishMQTT(MQTT_COUNTER_LOG, "Alarm: Car stuck at car counter", false);
+                        stuckAlarmSent = true;
+                    }
+                }
+
+                // Clear alarm latch when beam clears
+                if (secondBeamState == 0) {
+                    stuckAlarmSent = false;
+                }
+
+                if (secondBeamState == 0 && carPresentFlag) {
+                    currentCarDetectState = CAR_DETECTED;
+                    publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
+                }
+                break;
             }
-            break;
 
         case CAR_DETECTED:
             if (carPresentFlag) {
