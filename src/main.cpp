@@ -2238,7 +2238,20 @@ void createAndInitializeHourlyFile(const String &fileName) {
 void initSDCard() {
     sdAvailable = false;  // pessimistic default
 
-    if (!SD.begin(PIN_SPI_CS)) {
+    // ---- SD MOUNT RETRY ----
+    // GAL 25-11-23.2: some cards need delay/retry and lower SPI freq on ESP32
+    bool mountedOK = false;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        delay(150);  // give card time to wake up
+        if (SD.begin(PIN_SPI_CS, SPI, 10000000)) {  // 10 MHz instead of default
+            mountedOK = true;
+            break;
+        }
+        publishMQTT(MQTT_DEBUG_LOG,
+            String("SD mount attempt ") + attempt + " failed", false);
+    }
+
+    if (!mountedOK) {
         Serial.println("Card Mount Failed");
 
         // OLED quick indicator
@@ -2249,14 +2262,13 @@ void initSDCard() {
         display.println("SD ERROR");
         display.display();
 
-        // MQTT retained status (so HA / you can SEE it)
         publishMQTT(MQTT_PUB_SD_STATUS, "FAIL_MOUNT", true);
         publishMQTT(MQTT_DEBUG_LOG, "SD FAIL: mount failed", false);
 
-        // Retained diag breadcrumb
         publishSdDiag_("init", "", "", "mount_fail");
         return;
     }
+
 
     uint8_t cardType = SD.cardType();
     if (cardType == CARD_NONE) {
@@ -2268,7 +2280,8 @@ void initSDCard() {
         return;
     }
 
-    uint64_t cardSizeMB = SD.cardSize() / (1024ULL * 1024ULL);
+    // GAL 25-11-23.2: SD.cardSize() can return 0 on ESP32 SPI; use totalBytes()
+    uint64_t cardSizeMB = SD.totalBytes() / (1024ULL * 1024ULL);
     Serial.printf("SD Card Size: %lluMB\n", cardSizeMB);
 
     // ---- Validate critical folders/files ----
