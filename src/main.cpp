@@ -183,12 +183,16 @@ Uses the existing car counter built by Andrew Bubb and outputs data to MQTT
 
 //CAR COUNTER GLOBAL CONSTANTS FOR SHOW TIMES and SAFETY
 unsigned int waitDuration = 950; // minimum millis for secondBeam to be broken needed to detect a car
-const int showStartMin = 17*60; // Show (counting) starts at 5:00 pm
-const int showEndMin =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
+const int showStartMinDefault = 17*60;      // default 5:00 pm
+const int showEndMinDefault   = 21*60 + 10; // default 9:10 pm
+
+int showStartMin = showStartMinDefault;    // live value (HA can override)
+int showEndMin   = showEndMinDefault;      // live value (HA can override later)
 bool rtcReady = false;  // GAL 25-11-22: RTC boot-safety guard
 String bootTimestamp = "";  // GAL 25-11-22: Store boot timestamp for logging
 volatile bool pendingSaveDaily = false; // GAL 25-11-23.x: Flag to defer daily save to safe context
 volatile bool pendingSaveShow  = false; // GAL 25-11-23.x: Flag to defer show summary save to safe context
+volatile bool pendingSaveHourly = false; // GAL 25-11-24: Flag to defer hourly save to safe context
 
 // GLOBAL VARIABLES and TIMERS
 // GAL 25-11-22.4: independent timers for keepalive and temp publish
@@ -203,48 +207,70 @@ int mqttKeepAlive = 30;  // GAL 25-11-22.4: heartbeat interval (seconds)
 #define THIS_MQTT_CLIENT "espCarCounter" // Look at line 90 and set variable for WiFi Client secure & PubSubCLient 12/23/23
 
 /***** MQTT TOPIC DEFINITIONS for Car Counter*****/
+
 // Publishing Topics 
-char topic[60];
-char topicBase[60];
+char topic[60];          // keep for dynamic hourly topic building
+char topicBase[60];      // keep until confirmed unused
+
 #define topic_base_path "msb/traffic/CarCounter"
-#define MQTT_PUB_HELLO "msb/traffic/CarCounter/hello"
-#define MQTT_PUB_TEMP "msb/traffic/CarCounter/temp"
-#define MQTT_PUB_TIME "msb/traffic/CarCounter/time"
-#define MQTT_PUB_ENTER_CARS "msb/traffic/CarCounter/EnterTotal"
-#define MQTT_PUB_CARS_HOURLY  "msb/traffic/CarCounter/Cars"
-#define MQTT_PUB_SUMMARY "msb/traffic/CarCounter/Summary"
-#define MQTT_PUB_DAYOFMONTH  "msb/traffic/CarCounter/DayOfMonth"
-#define MQTT_PUB_SHOWTOTAL  "msb/traffic/CarCounter/ShowTotal"
-#define MQTT_FIRST_BEAM_SENSOR_STATE "msb/traffic/CarCounter/firstBeamSensorState"
-#define MQTT_SECOND_BEAM_SENSOR_STATE "msb/traffic/CarCounter/secondBeamSensorState"
-#define MQTT_PUB_TTP "msb/traffic/CarCounter/TTP"
-#define MQTT_PUB_DAYSRUNNING "msb/traffic/CarCounter/DaysRunning"
-#define MQTT_COUNTER_LOG "msb/traffic/CarCounter/CounterLog"
-#define MQTT_DEBUG_LOG "msb/traffic/CarCounter/debuglog"
-#define MQTT_PUB_TIMEBETWEENCARS "msb/traffic/CarCounter/timeBetweenCars"
-#define MQTT_PUB_HOURLY_JSON "msb/traffic/CarCounter/Cars/hourly_json"
-// GAL 25-11-18: Publish firmware version to MQTT on boot
-#define MQTT_PUB_FW_VERSION "msb/traffic/CarCounter/firmware"
-#define MQTT_PUB_RSSI "msb/traffic/CarCounter/wifi/rssi"
-#define MQTT_PUB_SSID "msb/traffic/CarCounter/wifi/ssid"
-#define MQTT_PUB_IP   "msb/traffic/CarCounter/wifi/ip"
-#define MQTT_PUB_HEARTBEAT "msb/traffic/CarCounter/heartbeat"
-// ---- SD Diagnostics (Retained JSON) ----
-// GAL 25-11-23: detailed SD health breadcrumbs for troubleshooting
-#define MQTT_PUB_SD_DIAG "msb/traffic/CarCounter/sd/sdDiag"
-#define MQTT_PUB_SD_STATUS "msb/traffic/CarCounter/sd/status"
 
-// Subscribing Topics (to reset values)
-//#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
-#define MQTT_SUB_SHOWSTART "msb/traffic/CarCounter/showStartDate"    // Set Show Start Time
-#define MQTT_SUB_TOPIC1  "msb/traffic/CarCounter/resetDailyCount"    // Reset Daily counter
-#define MQTT_SUB_TOPIC2  "msb/traffic/CarCounter/resetShowCount"     // Resets Show Counter
-#define MQTT_SUB_TOPIC3  "msb/traffic/CarCounter/resetDayOfMonth"    // Reset Calendar Day
-#define MQTT_SUB_TOPIC4  "msb/traffic/CarCounter/resetDaysRunning"   // Reset Days Running
-#define MQTT_SUB_TOPIC5  "msb/traffic/CarCounter/carCounterTimeout"  // Reset Timeout if car leaves detection Zone
-#define MQTT_SUB_TOPIC6  "msb/traffic/CarCounter/waitDuration"       // Reset time from firstBeamSensor trip to secondBeamSensor Active
+/* System / Status */
+#define MQTT_PUB_HELLO          "msb/traffic/CarCounter/System/hello"
+#define MQTT_PUB_FW_VERSION     "msb/traffic/CarCounter/System/firmware"
+#define MQTT_PUB_TIME           "msb/traffic/CarCounter/System/time"
+#define MQTT_DEBUG_LOG          "msb/traffic/CarCounter/System/debug" 
+
+/* Environment (temp + humidity, retained JSON) */
+#define MQTT_PUB_TEMP           "msb/traffic/CarCounter/Env/temp"
+
+/* Car Counts */
+#define MQTT_PUB_ENTER_CARS     "msb/traffic/CarCounter/Cars/EnterTotal"
+#define MQTT_PUB_SHOWTOTAL      "msb/traffic/CarCounter/Cars/ShowTotal"
+#define MQTT_PUB_CARS_HOURLY    "msb/traffic/CarCounter/Cars/hour"
+#define MQTT_PUB_HOURLY_JSON    "msb/traffic/CarCounter/Cars/hourly_json"
+#define MQTT_PUB_TTP            "msb/traffic/CarCounter/Cars/TTP"
+#define MQTT_PUB_TIMEBETWEENCARS "msb/traffic/CarCounter/Cars/timeBetweenCars"
+
+/* Calendar + Show Tracking */
+#define MQTT_PUB_DAYOFMONTH     "msb/traffic/CarCounter/Calendar/dayOfMonth"
+#define MQTT_PUB_DAYSRUNNING    "msb/traffic/CarCounter/Calendar/daysRunning"
+#define MQTT_PUB_SUMMARY        "msb/traffic/CarCounter/Calendar/showSummary"
+
+/* Beam Sensors */
+#define MQTT_FIRST_BEAM_SENSOR_STATE   "msb/traffic/CarCounter/Sensors/beam1"
+#define MQTT_SECOND_BEAM_SENSOR_STATE  "msb/traffic/CarCounter/Sensors/beam2"
+#define MQTT_COUNTER_LOG "msb/traffic/CarCounter/Sensors/counterLog"
+
+/* WiFi Diagnostics */
+#define MQTT_PUB_RSSI          "msb/traffic/CarCounter/System/wifi/rssi"
+#define MQTT_PUB_SSID          "msb/traffic/CarCounter/System/wifi/ssid"
+#define MQTT_PUB_IP            "msb/traffic/CarCounter/System/wifi/ip"
+#define MQTT_PUB_HEARTBEAT     "msb/traffic/CarCounter/System/heartbeat"
+
+/* SD Diagnostics (Retained JSON) */
+#define MQTT_PUB_SD_DIAG       "msb/traffic/CarCounter/System/sdDiag"
+#define MQTT_PUB_SD_STATUS     "msb/traffic/CarCounter/System/sdStatus"
+
+/* Echoed Config (useful for dashboards + Gate Counter offset) */
+#define MQTT_PUB_SHOW_START_DATE "msb/traffic/CarCounter/Config/showStartDate"
+#define MQTT_PUB_SHOW_START_MIN  "msb/traffic/CarCounter/Config/showStartMin"
+#define MQTT_PUB_SHOW_END_MIN    "msb/traffic/CarCounter/Config/showEndMin"
 
 
+/***** SUBSCRIBE TOPICS *****/
+
+/* Show Start Parameters */
+#define MQTT_SUB_SHOWSTART     "msb/traffic/CarCounter/Config/showStartDate"    // Set Show Start Date (YYYY-MM-DD)
+#define MQTT_SUB_SHOWSTARTTIME "msb/traffic/CarCounter/Config/showStartTime"    // Set Show Start Time (HH:MM)
+#define MQTT_SUB_SHOWENDTIME   "msb/traffic/CarCounter/Config/showEndTime"      // Set Show End Time (HH:MM)
+
+/* Manual resets */
+#define MQTT_SUB_TOPIC1        "msb/traffic/CarCounter/resetDailyCount"      // Reset Daily counter
+#define MQTT_SUB_TOPIC2        "msb/traffic/CarCounter/resetShowCount"       // Resets Show Counter
+#define MQTT_SUB_TOPIC3        "msb/traffic/CarCounter/resetDayOfMonth"      // Reset Calendar Day
+#define MQTT_SUB_TOPIC4        "msb/traffic/CarCounter/resetDaysRunning"     // Reset Days Running
+#define MQTT_SUB_TOPIC5        "msb/traffic/CarCounter/carCounterTimeout"    // Reset Timeout if car leaves detection Zone
+#define MQTT_SUB_TOPIC6        "msb/traffic/CarCounter/waitDuration"         // Reset time from firstBeamSensor trip to secondBeamSensor Active
 
 
 /** State Machine Enum to represent the different states of the play pattern */
@@ -429,6 +455,7 @@ void ensureSeasonFolderExists();
 // ---- Forward declarations (needed because KeepMqttAlive uses these) ----
 void saveDailyTotal();
 void saveShowTotal();
+void saveHourlyCounts();
 
 void publishMQTT(const char *topic, const String &message, bool retainFlag);
 void publishMQTT(const char *topic, const String &message);
@@ -1045,6 +1072,15 @@ void KeepMqttAlive() {
     publishMQTT(MQTT_PUB_SSID, WiFi.SSID(),        true);
     publishMQTT(MQTT_PUB_IP,   WiFi.localIP().toString(), true);
 
+    // ---- Retained show window + date (for HA dashboards / GateCounter offset) ----
+    // ---- Retained show window + date (for HA dashboards / GateCounter offset) ----
+    char showStartDateBuf[11];
+    snprintf(showStartDateBuf, sizeof(showStartDateBuf), "%04d-%02d-%02d",
+            showStartY, showStartM, showStartD);
+    publishMQTT(MQTT_PUB_SHOW_START_DATE, showStartDateBuf, true); // "YYYY-MM-DD"
+    publishMQTT(MQTT_PUB_SHOW_START_MIN,  String(showStartMin), true);
+    publishMQTT(MQTT_PUB_SHOW_END_MIN,    String(showEndMin), true);
+
     // ---- Hourly Snapshot (retained, unchanged) ----
     char buckets[180];
     snprintf(buckets, sizeof(buckets),
@@ -1071,6 +1107,11 @@ void KeepMqttAlive() {
         if (pendingSaveShow) {
             saveShowTotal();
             pendingSaveShow = false;
+        }
+
+        if (pendingSaveHourly) {
+            saveHourlyCounts();
+            pendingSaveHourly = false;
         }
     }
     start_MqttMillis = millis();
@@ -1203,6 +1244,8 @@ void MQTTreconnect() {
         mqtt_client.subscribe(MQTT_SUB_TOPIC5); // Update Car Counter Timeout
         mqtt_client.subscribe(MQTT_SUB_TOPIC6); // Update Sensor Wait Duration
         mqtt_client.subscribe(MQTT_SUB_SHOWSTART); // Set Show Start Time
+        mqtt_client.subscribe(MQTT_SUB_SHOWSTARTTIME); // Set Show Start Time Detailed
+        mqtt_client.subscribe(MQTT_SUB_SHOWENDTIME); // Set Show End Time Detailed
 
         // Log subscriptions
         Serial.println("Subscribed to MQTT topics.");
@@ -1683,7 +1726,7 @@ void saveHourlyCounts() {
                 // Publish current hour via MQTT
                 char topic[60];
                 snprintf(topic, sizeof(topic),
-                         "%s/hour%02d", MQTT_PUB_CARS_HOURLY, currentHour);
+                        "%s%02d", MQTT_PUB_CARS_HOURLY, currentHour);
                 publishMQTT(topic, String(hourlyCount[currentHour]));
 
             } else {
@@ -1707,7 +1750,7 @@ void saveHourlyCounts() {
 
         char topic[60];
         snprintf(topic, sizeof(topic),
-                 "%s/hour%02d", MQTT_PUB_CARS_HOURLY, currentHour);
+                 "%s%02d", MQTT_PUB_CARS_HOURLY, currentHour);
         publishMQTT(topic, String(hourlyCount[currentHour]));
 
         char debugMessage[100];
@@ -1889,12 +1932,13 @@ void getSavedValuesOnReboot() {
 
 /***** END OF DATA STORAGE & RETRIEVAL OPS *****/
 
-/*** MQTT CALLBACK TOPICS for Reveived messages ****/
+/*** MQTT CALLBACK TOPICS for Received messages ****/
 void callback(char* topic, byte* payload, unsigned int length) {
 
+    // Copy payload into a safe, null-terminated buffer
     char message[length + 1];
     strncpy(message, (char*)payload, length);
-    message[length] = '\0'; // Safely null-terminate the payload
+    message[length] = '\0';
 
     if (strcmp(topic, MQTT_SUB_TOPIC1) == 0)  {
         /* Topic used to manually reset Enter Daily Cars */
@@ -1902,35 +1946,42 @@ void callback(char* topic, byte* payload, unsigned int length) {
         saveDailyTotal();
         Serial.println(F(" Car Counter Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Daily Total Updated");
+
     } else if (strcmp(topic, MQTT_SUB_TOPIC2) == 0)  {
         /* Topic used to manually reset Total Show Cars */
         totalShowCars = atoi((char *)payload);
         saveShowTotal();
         Serial.println(F(" Show Counter Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Show Counter Updated");
+
     } else if (strcmp(topic, MQTT_SUB_TOPIC3) == 0)  {
         /* Topic used to manually reset Calendar Day */
         dayOfMonth = atoi((char *)payload);
         saveDayOfMonth();
         Serial.println(F(" Calendar Day of Month Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Calendar Day Updated");
+
     } else if (strcmp(topic, MQTT_SUB_TOPIC4) == 0)  {
         /* Topic used to manually reset Days Running */
         daysRunning = atoi((char *)payload);
         saveDaysRunning();
         Serial.println(F(" Days Running Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Days Running Updated");
+
     } else if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)  {
         // Topic used to change car counter timeout
         carCounterTimeout = atoi((char *)payload);
         Serial.println(F(" Counter Alarm Timer Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Car Counter Timeout Updated");
+
     } else if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)  {
         // Topic used to change car counter timeout
         waitDuration = atoi((char *)payload);
         Serial.println(F(" Beam Sensor Durtion Updated"));
         publishMQTT(MQTT_PUB_HELLO, "Beam Sensor Duration Updated"); 
+
     } else if (strcmp(topic, MQTT_SUB_SHOWSTART) == 0) {
+        // Set Show Start Date (YYYY-MM-DD)
         int y, m, d;
         if (sscanf(message, "%d-%d-%d", &y, &m, &d) == 3) {
             showStartY = y;
@@ -1948,10 +1999,48 @@ void callback(char* topic, byte* payload, unsigned int length) {
             saveDaysRunning();   // publishes retained DaysRunning
             publishMQTT(MQTT_DEBUG_LOG,
                 "ShowStartDate received, DaysRunning recomputed: " + String(daysRunning));
+        } else {
+            publishMQTT(MQTT_DEBUG_LOG,
+                String("Invalid ShowStartDate payload: ") + message);
+        }
+
+    } else if (strcmp(topic, MQTT_SUB_SHOWSTARTTIME) == 0) {
+        // Update show start time (minutes since midnight)
+        // Expect hh:mm
+        int hh = 0, mm = 0;
+        if (sscanf(message, "%d:%d", &hh, &mm) == 2) {
+            showStartMin = hh * 60 + mm;
+
+            Serial.printf("Show Start Time Updated → %02d:%02d (%d minutes)\n",
+                          hh, mm, showStartMin);
+
+            publishMQTT(MQTT_DEBUG_LOG,
+                        String("Show Start Time Updated to ") + message);
+        } else {
+            publishMQTT(MQTT_DEBUG_LOG,
+                        String("Invalid ShowStartTime payload: ") + message);
+        }
+
+    } else if (strcmp(topic, MQTT_SUB_SHOWENDTIME) == 0) {
+        // Update show end time (minutes since midnight)
+        // Expect hh:mm
+        int hh = 0, mm = 0;
+        if (sscanf(message, "%d:%d", &hh, &mm) == 2) {
+            showEndMin = hh * 60 + mm;
+
+            Serial.printf("Show End Time Updated → %02d:%02d (%d minutes)\n",
+                          hh, mm, showEndMin);
+
+            publishMQTT(MQTT_DEBUG_LOG,
+                        String("Show End Time Updated to ") + message);
+        } else {
+            publishMQTT(MQTT_DEBUG_LOG,
+                        String("Invalid ShowEndTime payload: ") + message);
         }
     }
- }
- /***** END OF CALLBACK TOPICS *****/
+}
+/***** END OF CALLBACK TOPICS *****/
+
 
 /***** IDLE STUFF  *****/
 // Flash an alternating pattern on the arches (called if a car hasn't been detected for over 30 seconds)
@@ -2083,13 +2172,14 @@ void countTheCar() {
     // Increment hourly car count
     int currentHour = now.hour();
     hourlyCount[currentHour]++;
+    pendingSaveHourly = true;   // defer SD hourly write
     //saveDailyTotal(); // DEFERREDUpdate Daily Total on SD Card to retain numbers with reboot
     pendingSaveDaily = true;   // <-- new global flag we will handle next step
     //saveHourlyCounts(); // removed for SD Card hot-path safety
 
     // Construct the MQTT topic dynamically
     char topic[60];
-    snprintf(topic, sizeof(topic), "%s/hour%02d", MQTT_PUB_CARS_HOURLY, currentHour);
+    snprintf(topic, sizeof(topic), "%s%02d", MQTT_PUB_CARS_HOURLY, currentHour);
     // Publish current hour's data to MQTT
     publishMQTT(topic, String(hourlyCount[currentHour]));
 
@@ -2560,67 +2650,69 @@ void resetHourlyCounts() {
 /* Resets counts at Start of Show and Midnight */
 void timeTriggeredEvents() {
     DateTime now = rtc.now();
-    //currentHr24 = now.hour();
-    // Reset hourly counts at midnight
+
+    // ---------------------------
+    // Midnight reset
+    // ---------------------------
     if (now.hour() == 23 && now.minute() == 59 && !flagMidnightReset) { 
         saveHourlyCounts();
-        totalDailyCars = 0;   // Reset total daily cars to 0 at midnight
+        totalDailyCars = 0;
         saveDailyTotal();
-        resetHourlyCounts();  // Reset array for collecting hourly car counts 
+        resetHourlyCounts();
         publishMQTT(MQTT_DEBUG_LOG, "Total cars reset at Midnight");
         flagMidnightReset = true;
     }
     
     // =========================================================
-    // GAL 25-11-23.x: DaysRunning computed from showStartDate.
-    // Christmas Eve gap is preserved inside computeDaysRunning().
+    // DaysRunning computed from showStartDate (Christmas Eve gap honored)
     // =========================================================
     if (now.day() != lastDayOfMonth) {
 
-        // Only update once per day rollover
         if (!flagDaysRunningReset) {
-
-            int newDaysRunning = computeDaysRunning();  // returns 0 pre-show/invalid
-
+            int newDaysRunning = computeDaysRunning();
             if (newDaysRunning > 0 && newDaysRunning != daysRunning) {
                 daysRunning = newDaysRunning;
-                saveDaysRunning();  // also publishes retained DaysRunning
+                saveDaysRunning();
                 publishMQTT(MQTT_DEBUG_LOG,
                             "DaysRunning (computed): " + String(daysRunning));
             }
         }
 
-    if (!flagDaysRunningReset) {
-        // Legacy DayOfMonth logic stays (used elsewhere)
-        dayOfMonth = now.day();
-        saveDayOfMonth();
-        getDayOfMonth();
-        publishMQTT(MQTT_DEBUG_LOG, "Day of month: " + String(dayOfMonth));
-
-        // IMPORTANT: lock in the new day so this block runs once
-        lastDayOfMonth = now.day();
-
-        flagDaysRunningReset = true;
+        if (!flagDaysRunningReset) {
+            dayOfMonth = now.day();
+            saveDayOfMonth();
+            getDayOfMonth();
+            publishMQTT(MQTT_DEBUG_LOG, "Day of month: " + String(dayOfMonth));
+            lastDayOfMonth = now.day();
+            flagDaysRunningReset = true;
+        }
     }
 
-    }
-
-    // Reset total daily cars for show to 0 at 4:59 PM
-    if (now.hour() == 16 && now.minute() == 59 && !flagDailyShowStartReset) {
+    // =========================================================
+    // **MICROSTEP #2 — dynamic show-start reset**
+    // Reset 1 minute before showStartMin
+    // =========================================================
+    int minutesNow = now.hour() * 60 + now.minute();
+    if (minutesNow == (showStartMin - 1) && !flagDailyShowStartReset) {
         totalDailyCars = 0;
         saveDailyTotal();
-        publishMQTT(MQTT_DEBUG_LOG, "Total cars reset at 4:59 PM");
+        publishMQTT(MQTT_DEBUG_LOG, "Daily total reset (showStartMin-1)");
         flagDailyShowStartReset = true;
     }
 
-    // Save daily summary at 9:10 PM
-    if (now.hour() == 21 && now.minute() == 10 && !flagDailyShowSummarySaved) {
+    // =========================================================
+    // **MICROSTEP #3 — dynamic show-end summary**
+    // Save summary EXACTLY at showEndMin
+    // =========================================================
+    if (minutesNow == showEndMin && !flagDailyShowSummarySaved) {
         saveDailyShowSummary();
-        publishMQTT(MQTT_DEBUG_LOG, "Daily Show Summary Saved");
+        publishMQTT(MQTT_DEBUG_LOG, "Daily Show Summary Saved (showEndMin)");
         flagDailyShowSummarySaved = true;
     }
 
-    // Reset flags for the next day at 12:01:01 AM
+    // ---------------------------
+    // Reset daily flags at 12:01:01 AM
+    // ---------------------------
     if (now.hour() == 0 && now.minute() == 1 && now.second() == 1 && !resetFlagsOnce) { 
         flagDaysRunningReset = false;
         flagMidnightReset = false;
@@ -2629,14 +2721,15 @@ void timeTriggeredEvents() {
         flagDailyShowSummarySaved = false;
         flagHourlyReset = false;
         publishMQTT(MQTT_DEBUG_LOG, "Run once flags reset for new day");
-        resetFlagsOnce = true; // Prevent further execution within the same day
+        resetFlagsOnce = true;
     }
 
-    // Reset the `resetFlagsOnce` at 12:02:00 AM to allow it to run the next day
+    // Allow next day’s reset
     if (now.hour() == 0 && now.minute() == 2 && now.second() == 0) {
-        resetFlagsOnce = false; // Allow reset logic to run again the next day
+        resetFlagsOnce = false;
     }
 }
+
 
 
 // Update OLED Display while running
@@ -2828,6 +2921,13 @@ void setup() {
     //on reboot, get totals saved on SD Card
     getSavedValuesOnReboot();  // Update/reset counts based on reboot day
 
+    // ---- Sync retained per-hour MQTT topics to current hourlyCount[] on boot ----
+    for (int i = 0; i < 24; i++) {
+        char t[80];
+        snprintf(t, sizeof(t), "%s%02d", MQTT_PUB_CARS_HOURLY, i);
+        publishMQTT(t, String(hourlyCount[i]), true);   // retained
+    }
+
     // Setup MDNS
     if (!MDNS.begin(THIS_MQTT_CLIENT)) {
         Serial.println("Error starting mDNS");
@@ -2858,7 +2958,17 @@ void loop() {
 
     currentTimeMinute = now.hour()*60 + now.minute(); // convert time to minutes since midnight
 
-    showTime = (currentTimeMinute >= showStartMin && currentTimeMinute <= showEndMin); // show is running and save counts
+    // Date guard: only count show cars on/after showStartY/M/D
+    bool dateOk = false;
+    if (showStartDateValid && rtcReady) {
+        DateTime today(now.year(), now.month(), now.day(), 0, 0, 0);
+        DateTime start(showStartY, showStartM, showStartD, 0, 0, 0);
+        dateOk = (today.unixtime() >= start.unixtime());
+    }
+
+    showTime = (dateOk &&
+                currentTimeMinute >= showStartMin &&
+                currentTimeMinute <= showEndMin);
 
     readTempandRH();          // Get Temperature and Humidity
 
