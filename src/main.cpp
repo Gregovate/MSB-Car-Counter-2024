@@ -229,7 +229,7 @@ char topicBase[60];
 #define MQTT_PUB_HEARTBEAT "msb/traffic/CarCounter/heartbeat"
 // ---- SD Diagnostics (Retained JSON) ----
 // GAL 25-11-23: detailed SD health breadcrumbs for troubleshooting
-#define MQTT_PUB_SD_DIAG "msb/traffic/CarCounter/sdDiag"
+#define MQTT_PUB_SD_DIAG "msb/traffic/CarCounter/sd/sdDiag"
 #define MQTT_PUB_SD_STATUS "msb/traffic/CarCounter/sd/status"
 
 // Subscribing Topics (to reset values)
@@ -1453,28 +1453,53 @@ void saveDailyTotal() {
 }
 
 /* Save the grand total cars file for season  */
-void saveShowTotal() {  
+// GAL 25-11-23.2: add step-specific SD diagnostics for show total writes
+void saveShowTotal() {
+
     if (!sdAvailable) {
         Serial.println("saveShowTotal skipped - SD not available");
+        publishSdDiag_("open", "", "w", "skip_sdUnavailable");
         return;
     }
 
     // Build full seasonal path: /CC/YYYY/<fileName2>
     String fullPath = String(seasonFolder) + "/" + fileName2;
 
+    // ---- OPEN ----
     myFile = SD.open(fullPath, FILE_WRITE);  // overwrite, same as before
-    if (myFile) {
-        myFile.print(totalShowCars);  // only count cars between 4:55 pm and 9:10 pm
-        myFile.close();
-    } 
-    else {
+    if (!myFile) {
         Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fullPath);
-        publishMQTT(MQTT_DEBUG_LOG, "SD Write Failure: Unable to save show total.");
+
+        publishMQTT(MQTT_DEBUG_LOG,
+            String("SD FAIL saveShowTotal open: ") + fullPath, false);
+
+        publishSdDiag_("open", fullPath.c_str(), "w", "open_fail");
+        // still publish MQTT total even if SD fails
+        publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
+        return;
     }
 
-    publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));  
+    // ---- WRITE ----
+    size_t n = myFile.print(totalShowCars);  // only count cars between 4:55 pm and 9:10 pm
+
+    // ---- FLUSH/CLOSE ----
+    myFile.flush();
+    myFile.close();
+
+    if (n == 0) {
+        publishMQTT(MQTT_DEBUG_LOG,
+            String("SD FAIL saveShowTotal write0: ") + fullPath, false);
+
+        publishSdDiag_("write", fullPath.c_str(), "w", "write_0");
+    } else {
+        // Optional: breadcrumb success (retained)
+        publishSdDiag_("write", fullPath.c_str(), "w", "ok");
+    }
+
+    publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
 }
+
 
 // Save the calendar day to file
 void saveDayOfMonth() {
