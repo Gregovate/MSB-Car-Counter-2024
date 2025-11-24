@@ -2689,21 +2689,32 @@ void setup() {
     //Initialize SD Card
     // GAL 25-11-18: initSDCard() now calls SD.begin() and will not block on failure
     initSDCard();  // Initialize SD card and ready for Read/Write
-    ensureSeasonFolderExists();
-    checkAndCreateFile("/data/"); // Ensure /data/ directory exists
-    // Check and create Required Data files
-    checkAndCreateFile(fileName1);
-    checkAndCreateFile(fileName2);
-    checkAndCreateFile(fileName3);
-    checkAndCreateFile(fileName4);
-    //checkAndCreateFile(fileName5, "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23");
-    checkAndCreateFile(fileName6, "Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
-    checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
-    checkAndCreateFile(fileName8);
-    checkAndCreateFile(fileName9);
 
-    // Required Hourly Data Files
-    createAndInitializeHourlyFile(fileName5);
+    if (sdAvailable) {
+        ensureSeasonFolderExists();
+
+        // Ensure /data directory exists (folder, not file)
+        if (!SD.exists("/data")) {
+            SD.mkdir("/data");
+            publishMQTT(MQTT_DEBUG_LOG, "Created /data directory", false);
+        }
+
+        // Check and create Required Data files
+        checkAndCreateFile(fileName1);
+        checkAndCreateFile(fileName2);
+        checkAndCreateFile(fileName3);
+        checkAndCreateFile(fileName4);
+        checkAndCreateFile(fileName6, "Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
+        checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
+        checkAndCreateFile(fileName8);
+        checkAndCreateFile(fileName9);
+
+        // Required Hourly Data Files
+        createAndInitializeHourlyFile(fileName5);
+    } else {
+        publishMQTT(MQTT_DEBUG_LOG, "SD init failed - skipping SD file setup", false);
+    }
+
 
     // Initialize Server
     setupServer();
