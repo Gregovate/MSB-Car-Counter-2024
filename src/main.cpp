@@ -1470,9 +1470,6 @@ void saveShowTotal() {
 
     String fullPath = folder + fname;
 
-    // Build full seasonal path: /CC/YYYY/<fileName2>
-    String fullPath = String(seasonFolder) + "/" + fileName2;
-
     // ---- OPEN ----
     myFile = SD.open(fullPath, FILE_WRITE);  // overwrite, same as before
     if (!myFile) {
@@ -2173,18 +2170,26 @@ void checkAndCreateFile(const String &fileName, const String &header = "") {
         return;
     }
 
-    // GAL 25-11-23.2: normalize path join to avoid double slashes
-    String folder = String(seasonFolder);
-    if (folder.endsWith("/")) {
-        folder.remove(folder.length() - 1);
-    }
+    // GAL 25-11-23.2: /data/* files live at SD root; everything else in season folder
+    String fullPath;
 
-    String fname = String(fileName);
-    if (!fname.startsWith("/")) {
-        fname = "/" + fname;
-    }
+    if (fileName.startsWith("/data/")) {
+        fullPath = fileName;  // absolute path at root (UI files)
+    } else {
+        // normalize seasonal join to avoid double slashes
+        String folder = String(seasonFolder);
+        if (folder.endsWith("/")) {
+            folder.remove(folder.length() - 1);
+        }
 
-    String fullPath = folder + fname;
+        // fileName already starts with "/" in your constants, but keep this safe
+        String fname = String(fileName);
+        if (!fname.startsWith("/")) {
+            fname = "/" + fname;
+        }
+
+        fullPath = folder + fname;
+    }
 
     if (!SD.exists(fullPath)) {
         Serial.printf("%s not found. Creating...\n", fullPath.c_str());
