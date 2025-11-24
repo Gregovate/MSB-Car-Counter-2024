@@ -6,9 +6,20 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.23.2-SDdiag"
+#define FWVersion "25.11.24.2-MQTTfix"
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.24.2  Fixed incorrect brace nesting in MQTT callback that caused
+                SHOWSTARTTIME and SHOWENDTIME handlers to be unreachable.
+             Replaced all raw payload parsing (`atoi((char*)payload)`) with
+                safe, null-terminated `message` buffer throughout callback.
+             Hardened ShowStartDate handler with full YYYY-MM-DD validation and
+                idempotency guard to ignore unchanged dates and prevent SD churn.
+             Added min/max clamps to carCounterTimeout and waitDuration to avoid
+                invalid or extreme configuration values being applied.
+             Ensured all callback branches close cleanly and improved config
+                update logging for clarity and stability during HA retained
+                publishes.
 25.11.23.1  Added season-based SD folder structure (/CC/YYYY/) and updated all
                 SD read/write functions to use seasonal paths. Implemented
                 determineSeasonYear() and ensureSeasonFolderExists() on boot.
