@@ -6,7 +6,7 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.23.1"  // Firmware Version
+#define FWVersion "25.11.23.2-SDdiag"
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
 25.11.23.1  Added season-based SD folder structure (/CC/YYYY/) and updated all
@@ -227,6 +227,9 @@ char topicBase[60];
 #define MQTT_PUB_SSID "msb/traffic/CarCounter/wifi/ssid"
 #define MQTT_PUB_IP   "msb/traffic/CarCounter/wifi/ip"
 #define MQTT_PUB_HEARTBEAT "msb/traffic/CarCounter/heartbeat"
+// ---- SD Diagnostics (Retained JSON) ----
+// GAL 25-11-23: detailed SD health breadcrumbs for troubleshooting
+#define MQTT_PUB_SD_DIAG "msb/traffic/CarCounter/sdDiag"
 #define MQTT_PUB_SD_STATUS "msb/traffic/CarCounter/sd/status"
 // Subscribing Topics (to reset values)
 //#define MQTT_SUB_TOPIC0  "msb/traffic/CarCounter/EnterTotal"
@@ -424,6 +427,40 @@ void ensureSeasonFolderExists();
 void publishMQTT(const char *topic, const String &message, bool retainFlag);
 void publishMQTT(const char *topic, const String &message);
 
+// =====================================================
+// SD Diagnostics Helper (Retained JSON)
+// GAL 25-11-23: publish detailed SD status so failures are self-explaining
+// step: "init", "open", "write", "ui_check", etc.
+// file: path involved ("" if none)
+// mode: "r", "w", "a" ("" if none)
+// err : short error code/message ("" if OK)
+// =====================================================
+void publishSdDiag_(const char* step, const char* file, const char* mode, const char* err) {
+
+    bool mounted = (SD.cardType() != CARD_NONE);
+    bool dataDirExists = SD.exists("/data");
+    bool uiIndexExists = SD.exists("/data/index.html");  // adjust later if needed
+
+    uint64_t totalMB = SD.totalBytes() / (1024ULL * 1024ULL);
+    uint64_t usedMB  = SD.usedBytes()  / (1024ULL * 1024ULL);
+    uint64_t freeMB  = (totalMB > usedMB) ? (totalMB - usedMB) : 0;
+
+    char diag[220];
+    snprintf(diag, sizeof(diag),
+        "{\"mounted\":%s,\"step\":\"%s\",\"file\":\"%s\",\"mode\":\"%s\",\"err\":\"%s\","
+        "\"dataDir\":%s,\"uiIndex\":%s,\"freeMB\":%llu}",
+        mounted ? "true" : "false",
+        step ? step : "",
+        file ? file : "",
+        mode ? mode : "",
+        err  ? err  : "",
+        dataDirExists ? "true" : "false",
+        uiIndexExists ? "true" : "false",
+        (unsigned long long)freeMB
+    );
+
+    publishMQTT(MQTT_PUB_SD_DIAG, String(diag), true);
+}
 
 // **********FILE NAMES FOR SD CARD *********
 char seasonFolder[32] = "/CC/0000";   // default, updated at boot
