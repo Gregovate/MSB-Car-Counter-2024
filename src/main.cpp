@@ -187,6 +187,8 @@ const int showStartMin = 17*60; // Show (counting) starts at 5:00 pm
 const int showEndMin =  21*60 + 10;  // Show (counting) ends at 9:10 pm 
 bool rtcReady = false;  // GAL 25-11-22: RTC boot-safety guard
 String bootTimestamp = "";  // GAL 25-11-22: Store boot timestamp for logging
+volatile bool pendingSaveDaily = false; // GAL 25-11-23.x: Flag to defer daily save to safe context
+volatile bool pendingSaveShow  = false; // GAL 25-11-23.x: Flag to defer show summary save to safe context
 
 // GLOBAL VARIABLES and TIMERS
 // GAL 25-11-22.4: independent timers for keepalive and temp publish
@@ -424,6 +426,9 @@ bool sdAvailable = false;
 // ===========================
 int determineSeasonYear();
 void ensureSeasonFolderExists();
+// ---- Forward declarations (needed because KeepMqttAlive uses these) ----
+void saveDailyTotal();
+void saveShowTotal();
 
 void publishMQTT(const char *topic, const String &message, bool retainFlag);
 void publishMQTT(const char *topic, const String &message);
@@ -1053,6 +1058,21 @@ void KeepMqttAlive() {
     );
     publishMQTT(MQTT_PUB_HOURLY_JSON, String(buckets), true);
 
+    // =====================================
+    // Deferred SD writes (safe, non-hot-path)
+    // =====================================
+    if (sdAvailable) {
+
+        if (pendingSaveDaily) {
+            saveDailyTotal();
+            pendingSaveDaily = false;
+        }
+
+        if (pendingSaveShow) {
+            saveShowTotal();
+            pendingSaveShow = false;
+        }
+    }
     start_MqttMillis = millis();
 }
 
@@ -1204,9 +1224,7 @@ void MQTTreconnect() {
         display.display();
     }
 }
-
 /***** END MQTT SECTION *****/
-
 
 void checkWiFiConnection() {
 
@@ -1241,8 +1259,14 @@ void getDailyTotal() {
         return;
     }
 
-    // Build full seasonal path
-    String fullPath = String(seasonFolder) + "/" + fileName1;
+    // GAL 25-11-23.x: normalize path join to avoid double slashes
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName1);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     myFile = SD.open(fullPath, FILE_READ);
 
@@ -1263,6 +1287,7 @@ void getDailyTotal() {
     }
 }
 
+
 /** Get season total cars since show opened */
 void getShowTotal() {
     if (!sdAvailable) {
@@ -1270,8 +1295,14 @@ void getShowTotal() {
         return;
     }
 
-    // Build full seasonal path
-    String fullPath = String(seasonFolder) + "/" + fileName2;
+    // GAL 25-11-23.x: normalize path join to avoid double slashes
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName2);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     myFile = SD.open(fullPath, FILE_READ);
     if (myFile) {
@@ -1290,6 +1321,7 @@ void getShowTotal() {
     }
 }
 
+
 // get the last calendar day used for reset daily counts
 void getDayOfMonth() {
     if (!sdAvailable) {
@@ -1297,8 +1329,14 @@ void getDayOfMonth() {
         return;
     }
 
-    // Build full seasonal path: /CC/YYYY/<fileName3>
-    String fullPath = String(seasonFolder) + "/" + fileName3;
+    // GAL 25-11-23.x: normalize path join to avoid double slashes
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName3);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     myFile = SD.open(fullPath, FILE_READ);
     if (myFile) {
@@ -1319,6 +1357,7 @@ void getDayOfMonth() {
 }
 
 
+
 // Days the show has been running
 void getDaysRunning() {
     if (!sdAvailable) {
@@ -1326,8 +1365,14 @@ void getDaysRunning() {
         return;
     }
 
-    // Build full seasonal path: /CC/YYYY/<fileName4>
-    String fullPath = String(seasonFolder) + "/" + fileName4;
+    // GAL 25-11-23.x: normalize path join to avoid double slashes
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName4);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     myFile = SD.open(fullPath, FILE_READ);
     if (myFile) {
@@ -1347,6 +1392,7 @@ void getDaysRunning() {
 }
 
 
+
 /** Get hourly car counts on reboot */
 void getHourlyData() {
     if (!sdAvailable) {
@@ -1359,12 +1405,20 @@ void getHourlyData() {
     snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d",
              now.year(), now.month(), now.day());
 
-    // ---------------------------------------------
-    // Build full seasonal path: /CC/YYYY/<fileName5>
-    // ---------------------------------------------
-    String fullPath = String(seasonFolder) + "/" + fileName5;
+    // -------------------------------
+    // Normalize seasonFolder + file
+    // -------------------------------
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
 
-    // Open the file for reading
+    String fname = String(fileName5);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
+
+    // -------------------------------
+    // Open file
+    // -------------------------------
     File file = SD.open(fullPath, FILE_READ);
     if (!file) {
         Serial.println("Failed to open hourly file. Resetting hourly data.");
@@ -1379,8 +1433,8 @@ void getHourlyData() {
     // Read the file line by line
     while (file.available()) {
         String line = file.readStringUntil('\n');
-        if (line.startsWith(dateBuffer)) {
 
+        if (line.startsWith(dateBuffer)) {
             rowFound = true;
 
             int parsedValues = sscanf(
@@ -1392,21 +1446,13 @@ void getHourlyData() {
                 &hourlyCount[8], &hourlyCount[9], &hourlyCount[10], &hourlyCount[11],
                 &hourlyCount[12], &hourlyCount[13], &hourlyCount[14], &hourlyCount[15],
                 &hourlyCount[16], &hourlyCount[17], &hourlyCount[18], &hourlyCount[19],
-                &hourlyCount[20], &hourlyCount[21], &hourlyCount[22], &hourlyCount[23]);
+                &hourlyCount[20], &hourlyCount[21], &hourlyCount[22], &hourlyCount[23]
+            );
 
             if (parsedValues == 24) {
-
                 Serial.println("Successfully loaded hourly data for today.");
                 publishMQTT(MQTT_DEBUG_LOG,
                             "Successfully loaded hourly data for today.");
-
-                for (int i = 0; i < 24; i++) {
-                    Serial.printf("Hour %02d: %d cars\n", i, hourlyCount[i]);
-                    char debugMsg[50];
-                    snprintf(debugMsg, sizeof(debugMsg),
-                             "Hour %02d: %d cars", i, hourlyCount[i]);
-                    publishMQTT(MQTT_DEBUG_LOG, String(debugMsg));
-                }
             }
             else {
                 Serial.println("Error parsing today's row. Resetting hourly data.");
@@ -1415,7 +1461,7 @@ void getHourlyData() {
                 memset(hourlyCount, 0, sizeof(hourlyCount));
             }
 
-            break; // Done after today's row
+            break; // done after today's row
         }
     }
 
@@ -1430,6 +1476,7 @@ void getHourlyData() {
 }
 
 
+
 /***** UPDATE and SAVE TOTALS TO SD CARD *****/
 /** Save the daily Total of cars counted */
 void saveDailyTotal() {
@@ -1438,8 +1485,12 @@ void saveDailyTotal() {
         return;
     }
 
-    // Build full seasonal path: /CC/YYYY/<fileName1>
-    String fullPath = String(seasonFolder) + "/" + fileName1;
+    // Build full seasonal path safely (fileName1 already starts with '/')
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fullPath = folder + fileName1;
+
 
     myFile = SD.open(fullPath, FILE_WRITE);  // overwrite same as before
     if (myFile) {
@@ -1513,8 +1564,14 @@ void saveDayOfMonth() {
         return;
     }
 
-    // Build full seasonal path: /CC/YYYY/<fileName3>
-    String fullPath = String(seasonFolder) + "/" + fileName3;
+    // GAL 25-11-23.x: normalize path join to avoid double slashes
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName3);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     myFile = SD.open(fullPath, FILE_WRITE);  // overwrite, same as before
     if (myFile) {
@@ -1529,6 +1586,7 @@ void saveDayOfMonth() {
     publishMQTT(MQTT_PUB_DAYOFMONTH, String(dayOfMonth));
 }
 
+
 /** Save number of days the show has been running */
 void saveDaysRunning() {
     if (!sdAvailable) {
@@ -1536,8 +1594,14 @@ void saveDaysRunning() {
         return;
     }
 
-    // Build full seasonal path: /CC/YYYY/<fileName4>
-    String fullPath = String(seasonFolder) + "/" + fileName4;
+    // GAL 25-11-23.x: normalize path join to avoid double slashes
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName4);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     myFile = SD.open(fullPath, FILE_WRITE);
     if (myFile) {
@@ -1545,8 +1609,8 @@ void saveDaysRunning() {
         myFile.close();
     } else {
         Serial.print(F("SD Card: Cannot open the file: "));
-        Serial.println(fullPath);   // <-- FIXED (was fileName4)
-        publishMQTT(MQTT_DEBUG_LOG, 
+        Serial.println(fullPath);
+        publishMQTT(MQTT_DEBUG_LOG,
             "SD Write Failure: Unable to save days running.");
     }
 
@@ -1554,6 +1618,8 @@ void saveDaysRunning() {
 }
 
 
+// Save cars counted each hour in the event of a reboot
+// Refactored saveHourlyCounts function (season-folder aware)
 // Save cars counted each hour in the event of a reboot
 // Refactored saveHourlyCounts function (season-folder aware)
 void saveHourlyCounts() {
@@ -1570,9 +1636,15 @@ void saveHourlyCounts() {
     int currentHour = now.hour(); // Get the current hour (0-23)
 
     // -------------------------------------------------
-    // Build full seasonal path: /CC/YYYY/<fileName5>
+    // Normalize folder + fileName5
     // -------------------------------------------------
-    String fullPath = String(seasonFolder) + "/" + fileName5;
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName5);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     // -------------------------------------------------
     // READ EXISTING FILE
@@ -1587,11 +1659,10 @@ void saveHourlyCounts() {
 
             if (line.startsWith(dateBuffer)) {
                 rowExists = true;
-                updatedContent += dateBuffer;  // Start new row with date
+                updatedContent += dateBuffer;
 
                 int lastCommaIndex = line.indexOf(",") + 1;
 
-                // Parse 24 hours and replace the current hour
                 for (int i = 0; i < 24; i++) {
                     int nextCommaIndex = line.indexOf(",", lastCommaIndex);
                     String currentValue = (nextCommaIndex != -1)
@@ -1602,34 +1673,31 @@ void saveHourlyCounts() {
                         ? nextCommaIndex + 1
                         : lastCommaIndex;
 
-                    // Replace only the current hour
                     updatedContent += (i == currentHour)
                         ? "," + String(hourlyCount[i])
                         : "," + currentValue;
                 }
+
                 updatedContent += "\n";
 
-                // Publish current hour's data via MQTT
+                // Publish current hour via MQTT
                 char topic[60];
                 snprintf(topic, sizeof(topic),
                          "%s/hour%02d", MQTT_PUB_CARS_HOURLY, currentHour);
                 publishMQTT(topic, String(hourlyCount[currentHour]));
 
             } else {
-                // Keep all other rows untouched
                 updatedContent += line + "\n";
             }
         }
-
         file.close();
     }
 
     // -------------------------------------------------
-    // NO ROW FOR TODAY → CREATE A NEW ONE
+    // NO ROW FOR TODAY → CREATE NEW ROW
     // -------------------------------------------------
     if (!rowExists) {
         updatedContent += dateBuffer;
-
         for (int i = 0; i < 24; i++) {
             updatedContent += (i == currentHour)
                 ? "," + String(hourlyCount[i])
@@ -1637,7 +1705,6 @@ void saveHourlyCounts() {
         }
         updatedContent += "\n";
 
-        // MQTT publish for new row
         char topic[60];
         snprintf(topic, sizeof(topic),
                  "%s/hour%02d", MQTT_PUB_CARS_HOURLY, currentHour);
@@ -1650,7 +1717,7 @@ void saveHourlyCounts() {
     }
 
     // -------------------------------------------------
-    // WRITE UPDATED CONTENT BACK TO FILE
+    // WRITE UPDATED FILE BACK
     // -------------------------------------------------
     file = SD.open(fullPath, FILE_WRITE);
     if (file) {
@@ -1663,6 +1730,7 @@ void saveHourlyCounts() {
                     "SD Write Failure: Unable to save hourly counts.");
     }
 }
+
 
 // Save and Publish Show Totals
 void saveDailyShowSummary() {
@@ -1681,7 +1749,7 @@ void saveDailyShowSummary() {
 
     // Calculate total cars counted before the show starts
     int totalBefore5 = 0;
-    for (int i = 0; i < 17; i++) { // Loop from hour 0 to hour 16
+    for (int i = 0; i < 17; i++) {
         totalBefore5 += hourlyCount[i];
     }
 
@@ -1693,20 +1761,24 @@ void saveDailyShowSummary() {
     // Calculate the average temperature during show hours (5 PM to 9 PM)
     float showTempSum = 0.0;
     int showTempCount = 0;
-
-    for (int i = 17; i <= 20; i++) { // Loop only between 5 PM and 9 PM
-        if (hourlyTemp[i] != 0.0) {  // Include valid temperature readings
+    for (int i = 17; i <= 20; i++) {
+        if (hourlyTemp[i] != 0.0) {
             showTempSum += hourlyTemp[i];
             showTempCount++;
         }
     }
-
     float showAverageTemp = (showTempCount > 0) ? (showTempSum / showTempCount) : 0.0;
 
     // -------------------------------------------------
-    // Build full seasonal path: /CC/YYYY/<fileName7>
+    // Build full seasonal path safely: /CC/YYYY/<fileName7>
     // -------------------------------------------------
-    String fullPath = String(seasonFolder) + "/" + fileName7;
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName7);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     // Open file for appending
     File summaryFile = SD.open(fullPath, FILE_APPEND);
@@ -1724,15 +1796,15 @@ void saveDailyShowSummary() {
 
     // Append the show summary data
     summaryFile.printf("%s,%d,%d,%d,%d,%d,%d,%d,%.1f\n",
-                       dateBuffer,       // Current date
-                       daysRunning,      // Total days running (Christmas Eve gap preserved upstream)
-                       totalBefore5,     // Cars counted before 5pm
-                       cumulative6PM,    // Cumulative total up to 6 PM
-                       cumulative7PM,    // Cumulative total up to 7 PM
-                       cumulative8PM,    // Cumulative total up to 8 PM
-                       cumulative9PM,    // Cumulative total up to 9 PM, incl 9:10 PM cars
-                       totalShowCars,    // Total show cars
-                       showAverageTemp); // Average temperature during show hours
+                       dateBuffer,
+                       daysRunning,
+                       totalBefore5,
+                       cumulative6PM,
+                       cumulative7PM,
+                       cumulative8PM,
+                       cumulative9PM,
+                       totalShowCars,
+                       showAverageTemp);
     summaryFile.close();
 
     // Publish show summary data to MQTT
@@ -2011,8 +2083,10 @@ void countTheCar() {
     // Increment hourly car count
     int currentHour = now.hour();
     hourlyCount[currentHour]++;
-    saveDailyTotal(); // Update Daily Total on SD Card to retain numbers with reboot
-    saveHourlyCounts();
+    //saveDailyTotal(); // DEFERREDUpdate Daily Total on SD Card to retain numbers with reboot
+    pendingSaveDaily = true;   // <-- new global flag we will handle next step
+    //saveHourlyCounts(); // removed for SD Card hot-path safety
+
     // Construct the MQTT topic dynamically
     char topic[60];
     snprintf(topic, sizeof(topic), "%s/hour%02d", MQTT_PUB_CARS_HOURLY, currentHour);
@@ -2023,7 +2097,8 @@ void countTheCar() {
     // increase Show Count only when show is open
     if (showTime == true) {
         totalShowCars ++;  // increase Show Count only when show is open
-        saveShowTotal(); // update show total count in event of power failure during show hours
+        //saveShowTotal(); // update show total count in event of power failure during show hours
+        pendingSaveShow = true;  // <-- new global flag we will handle next step
     }
     Serial.print(totalDailyCars) ;  
     // open file for writing Car Data
@@ -2163,7 +2238,8 @@ void detectCar() {
 // GAL 25-11-18: Make file creation non-fatal if SD has issues
 // CHECK AND CREATE FILES on SD Card and WRITE HEADERS if Needed
 // GAL 25-11-18: Make file creation non-fatal if SD has issues
-// GAL 25-11-23.x: All files now live in season folder (/CC/YYYY/)
+// GAL 25-11-23.2: Seasonal files live in season folder; /data/* files stay at SD root
+
 void checkAndCreateFile(const String &fileName, const String &header = "") {
     if (!sdAvailable) {
         Serial.printf("checkAndCreateFile skipped (%s) - SD not available\n", fileName.c_str());
@@ -2220,7 +2296,11 @@ void checkAndCreateFile(const String &fileName, const String &header = "") {
 // GAL 25-11-23.x: Hourly file now created/initialized in season folder (/CC/YYYY/)
 void createAndInitializeHourlyFile(const String &fileName) {
 
-    String fullPath = String(seasonFolder) + "/" + fileName;
+    // Build full seasonal path safely (fileName already starts with '/')
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fullPath = folder + fileName;
 
     if (!SD.exists(fullPath)) {
         Serial.printf("%s not found. Creating...\n", fullPath.c_str());
@@ -2263,9 +2343,9 @@ void initSDCard() {
     // ---- SD MOUNT RETRY ----
     // GAL 25-11-23.2: some cards need delay/retry and lower SPI freq on ESP32
     bool mountedOK = false;
-    for (int attempt = 1; attempt <= 3; attempt++) {
-        delay(150);  // give card time to wake up
-        if (SD.begin(PIN_SPI_CS, SPI, 10000000)) {  // 10 MHz instead of default
+    for (int attempt = 1; attempt <= 5; attempt++) {
+        delay(300);  // give card more wake-up time
+        if (SD.begin(PIN_SPI_CS, SPI, 4000000)) {  // 4 MHz (more reliable)
             mountedOK = true;
             break;
         }
@@ -2359,9 +2439,9 @@ void initSDCard() {
         SD.remove(testFile);
     }
 
-    // Determine availability based on actual usability
-    sdAvailable = (dataDirExists && uiIndexExists && ccDirExists && seasonDirExists && writeTestOK);
-
+// GAL 25-11-23.x: SD usable even if writeTest fails; writeTest is diagnostic only
+sdAvailable = (ccDirExists && seasonDirExists);
+    
     // OLED indicator
     display.clearDisplay();
     display.setTextSize(1);
@@ -2397,9 +2477,6 @@ void initSDCard() {
         writeTestOK ? "true" : "false"
     );
     publishMQTT(MQTT_PUB_SD_DIAG, String(diag2), true);
-
-    // Also publish a simple step breadcrumb as last-known state
-    publishSdDiag_("init", "", "", sdAvailable ? "ok" : "degraded");
 }
 
 
@@ -2513,13 +2590,19 @@ void timeTriggeredEvents() {
             }
         }
 
+    if (!flagDaysRunningReset) {
         // Legacy DayOfMonth logic stays (used elsewhere)
         dayOfMonth = now.day();
         saveDayOfMonth();
         getDayOfMonth();
         publishMQTT(MQTT_DEBUG_LOG, "Day of month: " + String(dayOfMonth));
 
+        // IMPORTANT: lock in the new day so this block runs once
+        lastDayOfMonth = now.day();
+
         flagDaysRunningReset = true;
+    }
+
     }
 
     // Reset total daily cars for show to 0 at 4:59 PM
