@@ -1461,6 +1461,14 @@ void saveShowTotal() {
         publishSdDiag_("open", "", "w", "skip_sdUnavailable");
         return;
     }
+    
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) folder.remove(folder.length() - 1);
+
+    String fname = String(fileName2);
+    if (!fname.startsWith("/")) fname = "/" + fname;
+
+    String fullPath = folder + fname;
 
     // Build full seasonal path: /CC/YYYY/<fileName2>
     String fullPath = String(seasonFolder) + "/" + fileName2;
@@ -2165,25 +2173,33 @@ void checkAndCreateFile(const String &fileName, const String &header = "") {
         return;
     }
 
-    // Build full seasonal path: "/CC/2025/<fileName>"
-    String fullPath = String(seasonFolder) + "/" + fileName;
+    // GAL 25-11-23.2: normalize path join to avoid double slashes
+    String folder = String(seasonFolder);
+    if (folder.endsWith("/")) {
+        folder.remove(folder.length() - 1);
+    }
+
+    String fname = String(fileName);
+    if (!fname.startsWith("/")) {
+        fname = "/" + fname;
+    }
+
+    String fullPath = folder + fname;
 
     if (!SD.exists(fullPath)) {
         Serial.printf("%s not found. Creating...\n", fullPath.c_str());
 
-        if (fileName.endsWith("/")) { // Create directory if it ends with '/'
+        if (fileName.endsWith("/")) { // Create directory if name ends with '/'
             if (!SD.mkdir(fullPath)) {
                 Serial.printf("Failed to create directory %s\n", fullPath.c_str());
-                // GAL 25-11-18: no while(1); just log and keep going
             } else {
                 Serial.printf("Directory %s created successfully\n", fullPath.c_str());
             }
 
-        } else { // Create file if not a directory
+        } else { // Create file
             File file = SD.open(fullPath, FILE_WRITE);
             if (!file) {
                 Serial.printf("Failed to create file %s\n", fullPath.c_str());
-                // GAL 25-11-18: no while(1); just log and keep going
             } else {
                 if (!header.isEmpty()) {
                     file.print(header);
@@ -2194,6 +2210,7 @@ void checkAndCreateFile(const String &fileName, const String &header = "") {
         }
     }
 }
+
 
 // GAL 25-11-23.x: Hourly file now created/initialized in season folder (/CC/YYYY/)
 void createAndInitializeHourlyFile(const String &fileName) {
@@ -2711,6 +2728,7 @@ void setup() {
 
         // Required Hourly Data Files
         createAndInitializeHourlyFile(fileName5);
+     
     } else {
         publishMQTT(MQTT_DEBUG_LOG, "SD init failed - skipping SD file setup", false);
     }
