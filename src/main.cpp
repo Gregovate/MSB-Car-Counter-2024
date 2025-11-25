@@ -1220,8 +1220,10 @@ void MQTTreconnect() {
         Serial.println("connected!");
         Serial.println("Waiting for Car");
 
-        // Once connected, publish an announcement…
-        publishMQTT(MQTT_PUB_HELLO, String("Car Counter ONLINE @ ") + bootTimestamp);
+        // Once connected, publish retained online status
+        publishMQTT(
+            MQTT_PUB_HELLO,
+            String("Car Counter ONLINE @ ") + bootTimestamp, true);
         // GAL 25-11-22: publish temp/RH as JSON (match HA templates)
         char jsonPayload[100];
         snprintf(jsonPayload, sizeof(jsonPayload),
@@ -1958,28 +1960,28 @@ void callback(char* topic, byte* payload, unsigned int length) {
         totalDailyCars = atoi(message);
         saveDailyTotal();
         Serial.println(F(" Car Counter Updated"));
-        publishMQTT(MQTT_PUB_HELLO, "Daily Total Updated");
+        publishMQTT(MQTT_DEBUG_LOG, "Daily Total Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC2) == 0)  {
         /* Topic used to manually reset Total Show Cars */
         totalShowCars = atoi(message);
         saveShowTotal();
         Serial.println(F(" Show Counter Updated"));
-        publishMQTT(MQTT_PUB_HELLO, "Show Counter Updated");
+        publishMQTT(MQTT_DEBUG_LOG, "Show Counter Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC3) == 0)  {
         /* Topic used to manually reset Calendar Day */
         dayOfMonth = atoi(message);
         saveDayOfMonth();
         Serial.println(F(" Calendar Day of Month Updated"));
-        publishMQTT(MQTT_PUB_HELLO, "Calendar Day Updated");
+        publishMQTT(MQTT_DEBUG_LOG, "Calendar Day Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC4) == 0)  {
         /* Topic used to manually reset Days Running */
         daysRunning = atoi(message);
         saveDaysRunning();
         Serial.println(F(" Days Running Updated"));
-        publishMQTT(MQTT_PUB_HELLO, "Days Running Updated");
+        publishMQTT(MQTT_DEBUG_LOG, "Days Running Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)  {
         // Topic used to change car counter timeout (ms)
@@ -1989,7 +1991,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         carCounterTimeout = v;
 
         Serial.println(F(" Counter Alarm Timer Updated"));
-        publishMQTT(MQTT_PUB_HELLO, "Car Counter Timeout Updated");
+        publishMQTT(MQTT_DEBUG_LOG, "Car Counter Timeout Updated");
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)  {
         // Topic used to change beam stuck-high duration (ms)
@@ -1999,7 +2001,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         waitDuration = v;
 
         Serial.println(F(" Beam Sensor Duration Updated"));
-        publishMQTT(MQTT_PUB_HELLO, "Beam Sensor Duration Updated");
+        publishMQTT(MQTT_DEBUG_LOG, "Beam Sensor Duration Updated");
 
     } else if (strcmp(topic, MQTT_SUB_SHOWSTART) == 0) {
         // Set Show Start Date (YYYY-MM-DD)
@@ -2341,7 +2343,7 @@ void detectCar() {
                         publishMQTT(MQTT_PUB_ALARM, "ALARM_CAR_STUCK", false);
 
                         // Optional: keep legacy text on HELLO during transition
-                        // publishMQTT(MQTT_PUB_HELLO, "Check Car Counter!", false);
+                        // publishMQTT(MQTT_DEBUG_LOG, "Check Car Counter!", false);
 
                         publishMQTT(MQTT_COUNTER_LOG, "Alarm: Car stuck at car counter", false);
                         stuckAlarmSent = true;
