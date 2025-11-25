@@ -19,7 +19,8 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
                 invalid or extreme configuration values being applied.
              Ensured all callback branches close cleanly and improved config
                 update logging for clarity and stability during HA retained
-                publishes.
+                publishes. Changed some HELLO messages to DEBUG_LOG for legacy
+             Set retained to true for beam sensor state publishes.
 25.11.23.1  Added season-based SD folder structure (/CC/YYYY/) and updated all
                 SD read/write functions to use seasonal paths. Implemented
                 determineSeasonYear() and ensureSeasonFolderExists() on boot.
@@ -2279,7 +2280,7 @@ void detectCar() {
             stableFirstBeamState = rawFirstBeamState;
             lastFirstBeamChangeTime = currentMillis;
             // Publish the state change only when it's stable
-            publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(stableFirstBeamState));
+            publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(stableFirstBeamState), true);
         }
     } else {
         lastFirstBeamChangeTime = currentMillis;
@@ -2291,7 +2292,7 @@ void detectCar() {
             stableSecondBeamState = rawSecondBeamState;
             lastSecondBeamChangeTime = currentMillis;
             // Publish the state change only when it's stable
-            publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(stableSecondBeamState));
+            publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(stableSecondBeamState), true);
         }
     } else {
         lastSecondBeamChangeTime = currentMillis;
@@ -2920,6 +2921,11 @@ void setup() {
     
     // MQTT Reconnection with login credentials
     MQTTreconnect(); // Ensure MQTT is connected
+
+    // After MQTT connect on Car Counter: publish current beam states as retained
+    publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(stableFirstBeamState), true);
+    publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(stableSecondBeamState), true);
+
 
     //Set Input Pins
     pinMode(firstBeamPin, INPUT_PULLDOWN);
