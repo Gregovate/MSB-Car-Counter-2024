@@ -21,6 +21,7 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
                 update logging for clarity and stability during HA retained
                 publishes. Changed some HELLO messages to DEBUG_LOG for legacy
              Set retained to true for beam sensor state publishes.
+             Set retained to true for timeBetweenCars publishes and Initialized at boot.
 25.11.23.1  Added season-based SD folder structure (/CC/YYYY/) and updated all
                 SD read/write functions to use seasonal paths. Implemented
                 determineSeasonYear() and ensureSeasonFolderExists() on boot.
@@ -2377,7 +2378,7 @@ void detectCar() {
 
                 // Record the time of detection for calculating time between cars
                 unsigned long timeBetweenCars = currentMillis - lastCarDetectedMillis;
-                publishMQTT(MQTT_PUB_TIMEBETWEENCARS, String(timeBetweenCars));
+                publishMQTT(MQTT_PUB_TIMEBETWEENCARS, String(timeBetweenCars), true);
                 lastCarDetectedMillis = currentMillis;
 
                 // Reset to waiting for a new car
@@ -2838,6 +2839,7 @@ void setup() {
     ElegantOTA.setAutoReboot(true);
     ElegantOTA.setFilesystemMode(true);
     Serial.println("Starting Car Counter...");
+    lastCarDetectedMillis = millis(); // Synced initial time at boot  //GAL 25-11-25
 
     //Initialize Display
     display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS);
