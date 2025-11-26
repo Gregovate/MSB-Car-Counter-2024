@@ -6,9 +6,22 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.24.2-MQTTfix"
+#define FWVersion "25.11.26.0-MQTTfix"
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.26.0  Major MQTT topic cleanup + timing diagnostics
+            - Normalized all MQTT topics under new 2025 tree:
+                /System /Env /Cars /Calendar /Sensors /Config
+            - Moved all reset topics into /Config hierarchy
+            - Standardized WiFi diagnostics under /System/wifi/
+            - Standardized hourly publish topic to /Cars/Hour/
+            - Added retained season metadata publishes:
+                System/seasonFolder, System/seasonYear
+            - Added missing dual-beam timing telemetry:
+                Sensors/beamAB_ms (A→B follow time)
+                Sensors/beamB_broken_ms (duration both beams high)
+            - Aligned TTP + timeBetweenCars publishes with GateCounter
+            - Cleaned up beam debounce → publish only on stable state changes
 25.11.24.2  Fixed incorrect brace nesting in MQTT callback that caused
                 SHOWSTARTTIME and SHOWENDTIME handlers to be unreachable.
              Replaced all raw payload parsing (`atoi((char*)payload)`) with
@@ -232,7 +245,12 @@ char topicBase[60];      // keep until confirmed unused
 #define MQTT_PUB_FW_VERSION     "msb/traffic/CarCounter/System/firmware"
 #define MQTT_PUB_TIME           "msb/traffic/CarCounter/System/time"
 #define MQTT_DEBUG_LOG          "msb/traffic/CarCounter/System/debug" 
-#define MQTT_PUB_ALARM         "msb/traffic/CarCounter/System/alarm"
+#define MQTT_PUB_ALARM          "msb/traffic/CarCounter/System/alarm"
+#define MQTT_PUB_HEARTBEAT      "msb/traffic/CarCounter/System/heartbeat"
+
+/* Season metadata (shared SD/season logic) */
+#define MQTT_PUB_SEASON_FOLDER  "msb/traffic/CarCounter/System/seasonFolder"
+#define MQTT_PUB_SEASON_YEAR    "msb/traffic/CarCounter/System/seasonYear"
 
 /* Environment (temp + humidity, retained JSON) */
 #define MQTT_PUB_TEMP           "msb/traffic/CarCounter/Env/temp"
@@ -240,26 +258,28 @@ char topicBase[60];      // keep until confirmed unused
 /* Car Counts */
 #define MQTT_PUB_ENTER_CARS     "msb/traffic/CarCounter/Cars/EnterTotal"
 #define MQTT_PUB_SHOWTOTAL      "msb/traffic/CarCounter/Cars/ShowTotal"
-#define MQTT_PUB_CARS_HOURLY    "msb/traffic/CarCounter/Cars/hour"
-#define MQTT_PUB_HOURLY_JSON    "msb/traffic/CarCounter/Cars/hourly_json"
-#define MQTT_PUB_TTP            "msb/traffic/CarCounter/Cars/TTP"
-#define MQTT_PUB_TIMEBETWEENCARS "msb/traffic/CarCounter/Cars/timeBetweenCars"
+#define MQTT_PUB_CARS_HOURLY    "msb/traffic/CarCounter/Cars/hour/"
+#define MQTT_PUB_HOURLY_JSON    "msb/traffic/CarCounter/Cars/hour/json"
+#define MQTT_PUB_BETWEENCARS_MS "msb/traffic/CarCounter/Cars/timeBetweenCars"
 
 /* Calendar + Show Tracking */
 #define MQTT_PUB_DAYOFMONTH     "msb/traffic/CarCounter/Calendar/dayOfMonth"
 #define MQTT_PUB_DAYSRUNNING    "msb/traffic/CarCounter/Calendar/daysRunning"
 #define MQTT_PUB_SUMMARY        "msb/traffic/CarCounter/Calendar/showSummary"
 
-/* Beam Sensors */
-#define MQTT_FIRST_BEAM_SENSOR_STATE   "msb/traffic/CarCounter/Sensors/beam1"
-#define MQTT_SECOND_BEAM_SENSOR_STATE  "msb/traffic/CarCounter/Sensors/beam2"
-#define MQTT_COUNTER_LOG "msb/traffic/CarCounter/Sensors/counterLog"
+/* Beam Sensors and Logs */
+#define MQTT_FIRST_BEAM_SENSOR_STATE    "msb/traffic/CarCounter/Sensors/beam1State"
+#define MQTT_SECOND_BEAM_SENSOR_STATE   "msb/traffic/CarCounter/Sensors/beam2State"
+#define MQTT_PUB_FIRST_BEAM_AB_MS       "msb/traffic/CarCounter/Sensors/beamAB_ms"
+#define MQTT_PUB_SECOND_BEAM_BROKEN_MS  "msb/traffic/CarCounter/Sensors/beamB_broken_ms"
+#define MQTT_PUB_TTP                    "msb/traffic/CarCounter/Sensors/TTP"
+#define MQTT_COUNTER_LOG                "msb/traffic/CarCounter/Sensors/counterLog"
 
 /* WiFi Diagnostics */
 #define MQTT_PUB_RSSI          "msb/traffic/CarCounter/System/wifi/rssi"
 #define MQTT_PUB_SSID          "msb/traffic/CarCounter/System/wifi/ssid"
 #define MQTT_PUB_IP            "msb/traffic/CarCounter/System/wifi/ip"
-#define MQTT_PUB_HEARTBEAT     "msb/traffic/CarCounter/System/heartbeat"
+
 
 
 /* SD Diagnostics (Retained JSON) */
@@ -280,12 +300,12 @@ char topicBase[60];      // keep until confirmed unused
 #define MQTT_SUB_SHOWENDTIME   "msb/traffic/CarCounter/Config/showEndTime"      // Set Show End Time (HH:MM)
 
 /* Manual resets */
-#define MQTT_SUB_TOPIC1        "msb/traffic/CarCounter/resetDailyCount"      // Reset Daily counter
-#define MQTT_SUB_TOPIC2        "msb/traffic/CarCounter/resetShowCount"       // Resets Show Counter
-#define MQTT_SUB_TOPIC3        "msb/traffic/CarCounter/resetDayOfMonth"      // Reset Calendar Day
-#define MQTT_SUB_TOPIC4        "msb/traffic/CarCounter/resetDaysRunning"     // Reset Days Running
-#define MQTT_SUB_TOPIC5        "msb/traffic/CarCounter/carCounterTimeout"    // Reset Timeout if car leaves detection Zone
-#define MQTT_SUB_TOPIC6        "msb/traffic/CarCounter/waitDuration"         // Reset time from firstBeamSensor trip to secondBeamSensor Active
+#define MQTT_SUB_TOPIC1        "msb/traffic/CarCounter/Config/resetDailyCount"      // Reset Daily counter
+#define MQTT_SUB_TOPIC2        "msb/traffic/CarCounter/Config/resetShowCount"       // Resets Show Counter
+#define MQTT_SUB_TOPIC3        "msb/traffic/CarCounter/Config/resetDayOfMonth"      // Reset Calendar Day
+#define MQTT_SUB_TOPIC4        "msb/traffic/CarCounter/Config/resetDaysRunning"     // Reset Days Running
+#define MQTT_SUB_TOPIC5        "msb/traffic/CarCounter/Config/carCounterTimeout"    // Reset Timeout if car leaves detection Zone
+#define MQTT_SUB_TOPIC6        "msb/traffic/CarCounter/Config/waitDuration"         // Reset time from firstBeamSensor trip to secondBeamSensor Active
 
 
 /** State Machine Enum to represent the different states of the play pattern */
@@ -2318,12 +2338,14 @@ void detectCar() {
             if (secondBeamState == 1) {
                 // Both beams have been tripped, measure time for validation
                 unsigned long timeBeamsHigh = currentMillis - firstBeamTripTime;
+                publishMQTT(MQTT_PUB_FIRST_BEAM_AB_MS, String(timeBeamsHigh));
+
                 // Only move to BOTH_BEAMS_BROKEN if the time exceeds minimum activation duration
                 if (timeBeamsHigh >= minActivationDuration && timeBeamsHigh >= waitDuration) {
                     bothBeamsHighTime = currentMillis; // Set the time when both beams are confirmed to be high
                     carPresentFlag = true;
                     currentCarDetectState = BOTH_BEAMS_HIGH;
-                    publishMQTT(MQTT_COUNTER_LOG, "State Changed Both Beams High");
+                    publishMQTT(MQTT_COUNTER_LOG, "State Changed: Both Beams High");
                     digitalWrite(greenArchPin, LOW);  // Turn off green arch
                     digitalWrite(redArchPin, HIGH);   // Turn on red arch
                  }
@@ -2355,9 +2377,27 @@ void detectCar() {
                 // Clear alarm latch when beam clears
                 if (secondBeamState == 0) {
                     stuckAlarmSent = false;
+
+
+
+
+
+
                 }
 
+
+
                 if (secondBeamState == 0 && carPresentFlag) {
+                    unsigned long brokenDuration = currentMillis - bothBeamsHighTime;
+
+                    publishMQTT(
+                        MQTT_COUNTER_LOG,
+                        "Beam B clear. Broken duration: " + String(brokenDuration) + " ms"
+                    );
+                    publishMQTT(MQTT_PUB_SECOND_BEAM_BROKEN_MS, String(brokenDuration));                    
+                        
+                    
+                    
                     currentCarDetectState = CAR_DETECTED;
                     publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
                 }
@@ -2378,7 +2418,7 @@ void detectCar() {
 
                 // Record the time of detection for calculating time between cars
                 unsigned long timeBetweenCars = currentMillis - lastCarDetectedMillis;
-                publishMQTT(MQTT_PUB_TIMEBETWEENCARS, String(timeBetweenCars), true);
+                publishMQTT(MQTT_PUB_BETWEENCARS_MS, String(timeBetweenCars), true);
                 lastCarDetectedMillis = currentMillis;
 
                 // Reset to waiting for a new car
@@ -2572,7 +2612,11 @@ void initSDCard() {
                 String("SD FAIL: unable to create season folder: ") + seasonFolder, false);
         }
     }
-
+    // GAL 25-11-26: publish season folder + year (retained)
+    if (seasonDirExists) {
+        publishMQTT(MQTT_PUB_SEASON_FOLDER, String(seasonFolder), true);
+        publishMQTT(MQTT_PUB_SEASON_YEAR,   String(seasonYear),   true);
+    }
     // ---- Lightweight write/readback test ----
     bool writeTestOK = false;
     const char* testFile = "/sd_test.txt";
@@ -2595,9 +2639,9 @@ void initSDCard() {
         SD.remove(testFile);
     }
 
-// GAL 25-11-23.x: SD usable even if writeTest fails; writeTest is diagnostic only
-sdAvailable = (ccDirExists && seasonDirExists);
-    
+    // GAL 25-11-23.x: SD usable even if writeTest fails; writeTest is diagnostic only
+    sdAvailable = (ccDirExists && seasonDirExists);
+        
     // OLED indicator
     display.clearDisplay();
     display.setTextSize(1);
