@@ -6,10 +6,15 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.26.1-MQTTfix"
+#define FWVersion "25.11.27.0-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.27.0  Fixed Car Counter config topics for alarm and beam wait tuning:
+            - Corrected MQTT_SUB_TOPIC5 to /Config/carCounterTimeout (ms) for stuck-car alarm.
+            - Corrected MQTT_SUB_TOPIC6 to /Config/beamWaitDuration (ms) for second-beam wait.
+            - No behavioral changes; timers still stored internally in milliseconds.
+
 25.11.26.1  Hardened SD/MQTT interaction for Car Counter:
             - Decoupled Calendar and totals MQTT publishes from SD availability
                 (saveDailyTotal, saveShowTotal, saveDayOfMonth, saveDaysRunning,
@@ -328,14 +333,15 @@ char topicBase[60];      // keep until confirmed unused
 #define MQTT_SUB_SHOWSTARTTIME "msb/traffic/CarCounter/Config/showStartTime"    // Set Show Start Time (HH:MM)
 #define MQTT_SUB_SHOWENDTIME   "msb/traffic/CarCounter/Config/showEndTime"      // Set Show End Time (HH:MM)
 
-/* Manual resets */
+/* Manual resets / config from Home Assistant */
 #define MQTT_SUB_TOPIC1        "msb/traffic/CarCounter/Config/resetDailyCount"      // Reset Daily counter
-#define MQTT_SUB_TOPIC2        "msb/traffic/CarCounter/Config/resetShowCount"       // Resets Show Counter
+#define MQTT_SUB_TOPIC2        "msb/traffic/CarCounter/Config/resetShowCount"       // Reset Show Counter
 #define MQTT_SUB_TOPIC3        "msb/traffic/CarCounter/Config/resetDayOfMonth"      // Reset Calendar Day
 #define MQTT_SUB_TOPIC4        "msb/traffic/CarCounter/Config/resetDaysRunning"     // Reset Days Running
-#define MQTT_SUB_TOPIC5        "msb/traffic/CarCounter/Config/carCounterTimeout"    // Reset Timeout if car leaves detection Zone
-#define MQTT_SUB_TOPIC6        "msb/traffic/CarCounter/Config/waitDuration"         // Reset time from firstBeamSensor trip to secondBeamSensor Active
 
+// Tuning topics (values in **milliseconds**)
+#define MQTT_SUB_TOPIC5        "msb/traffic/CarCounter/Config/carCounterTimeout"    // Stuck-car alarm timeout (ms)
+#define MQTT_SUB_TOPIC6        "msb/traffic/CarCounter/Config/beamWaitDuration"     // Min BOTH_BEAMS_HIGH duration (ms) for car detect
 
 /** State Machine Enum to represent the different states of the play pattern */
 enum PatternState {
@@ -377,8 +383,27 @@ int firstBeamState;  // Holds the current state of the FIRST IR receiver/Beam
 int secondBeamState;  // Holds the current state of the SECOND IR receiver/Beam
 int prevFirstBeamState = -1; // Holds the previous state of the FIRST IR receiver/Beam
 int prevSecondBeamState = -1; // Holds the previous state of the SECOND IR receiver/Beam 
-unsigned long debounceDelay = 50; // 50 ms debounce delay
-unsigned long minActivationDuration = 100; // 100ms Minimum duration for valid activation
+
+// GAL 25-11-27: CarCounter timing for 2025 season
+
+// Debounce on raw beam inputs. Proven values, DO NOT TOUCH MID-SEASON.
+unsigned long debounceDelay = 50;          // ms – IR input debounce
+unsigned long minActivationDuration = 100; // ms – minimum duration for valid activation
+
+// Stuck-car alarm timeout (HA-configurable; used only in BOTH_BEAMS_HIGH).
+// MQTT topic: msb/traffic/CarCounter/Config/carCounterTimeout
+// Meaning: if BOTH beams stay HIGH ≥ carCounterTimeout, raise ALARM_CAR_STUCK once.
+// Default: 60000 ms (60s). Clamped to 5000–600000 ms in MQTT callback.
+unsigned long carCounterTimeout = 60000;   // ms
+
+// // Future-use tuning from HA – currently NOT used in detection logic.
+// // Left in place only so we can see and adjust it for next season without
+// // touching the car detection state machine now.
+// unsigned long beamWaitDuration = 1000;  // ms, not referenced in detectCar() in 2025
+
+// Legacy / helper timer (used elsewhere, not part of the new stuck logic).
+unsigned long noCarTimer = 0;  // ms
+
 
 // Variables to store the stable state and last state change time
 bool stableFirstBeamState = LOW;
@@ -495,8 +520,6 @@ const unsigned long wifi_connectioncheckMillis = 5000; // check for connection e
 const unsigned long mqtt_connectionCheckMillis = 30000; // check for connection
 unsigned long start_MqttMillis; // for Keep Alive Timer
 unsigned long start_WiFiMillis; // for keep Alive Timer
-unsigned long carCounterTimeout = 60000; // default time for car counter alarm in millis
-unsigned long noCarTimer = 0;
 
 //***** DAILY RESET FLAGS *****
 bool flagDaysRunningReset = false;
@@ -1269,6 +1292,17 @@ int determineSeasonYear() {
     DateTime nowDT = rtc.now();
     return nowDT.year();
 }
+
+// GAL 25-11-27: Publish timing configuration (for MQTT/HA visibility)
+// Uses the same topics you subscribe to:
+//   msb/traffic/CarCounter/Config/carCounterTimeout
+//   msb/traffic/CarCounter/Config/beamWaitDuration
+static inline void publishTimingConfig() {
+  publishMQTT(MQTT_SUB_TOPIC5, String(carCounterTimeout), true);
+  publishMQTT(MQTT_SUB_TOPIC6, String(waitDuration),      true);
+}
+
+
 // ===========================
 // MQTT Reconnect Block
 // ===========================
@@ -2019,14 +2053,13 @@ void saveDailyShowSummary() {
 
     // GAL 25-11-26.x:
     // This summary is used for manual spreadsheets from SD, not HA/Calendar.
-    // We no longer publish MQTT_PUB_SUMMARY here to avoid polluting Calendar topics.
     char debugBuf[160];
     snprintf(debugBuf, sizeof(debugBuf),
              "Daily show summary written: %s, DaysRunning: %d, Before5: %d, "
              "6PM: %d, 7PM: %d, 8PM: %d, 9PM: %d, ShowTotal: %d, AvgTemp: %.1f",
              dateBuffer, daysRunning, totalBefore5, cumulative6PM, cumulative7PM,
              cumulative8PM, cumulative9PM, totalShowCars, showAverageTemp);
-    publishMQTT(MQTT_DEBUG_LOG, debugBuf);
+    publishMQTT(MQTT_PUB_SUMMARY, debugBuf);
 
     Serial.printf("Daily show summary written: %s, DaysRunning: %d, Before5: %d, 6PM: %d, 7PM: %d, 8PM: %d, 9PM: %d, ShowTotal: %d, Avg Temp: %.1f°F.\n",
                   dateBuffer, daysRunning, totalBefore5, cumulative6PM, cumulative7PM,
@@ -2186,6 +2219,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
         Serial.println(F(" Counter Alarm Timer Updated"));
         publishMQTT(MQTT_DEBUG_LOG, "Car Counter Timeout Updated");
 
+        // Echo updated timing config once
+        publishTimingConfig();
+
     } else if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)  {
         // Topic used to change beam stuck-high duration (ms)
         unsigned long v = strtoul(message, nullptr, 10);
@@ -2195,6 +2231,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
         Serial.println(F(" Beam Sensor Duration Updated"));
         publishMQTT(MQTT_DEBUG_LOG, "Beam Sensor Duration Updated");
+
+        // Echo updated timing config once
+        publishTimingConfig();
 
     } else if (strcmp(topic, MQTT_SUB_SHOWSTART) == 0) {
         // Set Show Start Date (YYYY-MM-DD)
@@ -3166,6 +3205,8 @@ void setup() {
     publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(stableFirstBeamState), true);
     publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(stableSecondBeamState), true);
 
+    // After initial retained publishes:
+    publishTimingConfig();
 
     //Set Input Pins
     pinMode(firstBeamPin, INPUT_PULLDOWN);
