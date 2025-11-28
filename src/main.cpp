@@ -407,9 +407,9 @@ unsigned long minActivationDuration = 100; // ms – minimum duration for valid 
 // Meaning: if BOTH beams stay HIGH ≥ carCounterTimeout, raise ALARM_CAR_STUCK once.
 // Default: 60000 ms (60s). Clamped to 5000–600000 ms in MQTT callback.
 unsigned long carCounterTimeout = 60000;   // ms
-// Stuck-car alarm latch: true = we've already sent the alarm for this event
-static bool stuckAlarmSent = false;
 
+// Car Counter stuck-vehicle alarm latch
+static bool carStuckAlarmActive = false;
 
 // // Future-use tuning from HA – currently NOT used in detection logic.
 // // Left in place only so we can see and adjust it for next season without
@@ -2488,8 +2488,11 @@ void countTheCar() {
         pendingSaveShow = true;  // <-- new global flag we will handle next step
     }
     Serial.print(totalDailyCars) ;  
+
+    // Build full path: /CC/2025/EnterLog.csv
+    String enterLogPath = String(seasonFolder) + fileName6;
     // open file for writing Car Data
-    myFile = SD.open(fileName6, FILE_APPEND); //Enterlog.csv
+    myFile = SD.open(enterLogPath.c_str(), FILE_APPEND); // EnterLog.csv in season folder
     if (myFile) {
         myFile.print(now.toString(buf2));
         myFile.print(", ");
@@ -2520,10 +2523,10 @@ void countTheCar() {
 /** CarCounter State Machine to Detect and Count Cars */
 void detectCar() {
     unsigned long currentMillis = millis();
-    bool rawFirstBeamState = digitalRead(firstBeamPin);
+    bool rawFirstBeamState  = digitalRead(firstBeamPin);
     bool rawSecondBeamState = digitalRead(secondBeamPin);
 
-    // Debounce first beam sensor
+    // ---- Debounce first beam sensor ----
     if (rawFirstBeamState != stableFirstBeamState) {
         if (currentMillis - lastFirstBeamChangeTime > debounceDelay) {
             stableFirstBeamState = rawFirstBeamState;
@@ -2535,7 +2538,7 @@ void detectCar() {
         lastFirstBeamChangeTime = currentMillis;
     }
 
-    // Debounce second beam sensor
+    // ---- Debounce second beam sensor ----
     if (rawSecondBeamState != stableSecondBeamState) {
         if (currentMillis - lastSecondBeamChangeTime > debounceDelay) {
             stableSecondBeamState = rawSecondBeamState;
@@ -2548,102 +2551,109 @@ void detectCar() {
     }
 
     // Use the stable beam states instead of the raw readings
-    firstBeamState = stableFirstBeamState;
+    firstBeamState  = stableFirstBeamState;
     secondBeamState = stableSecondBeamState;
 
-    // Handle detection states using the stable states
+    // ---- State machine ----
     switch (currentCarDetectState) {
+
         case WAITING_FOR_CAR:
+            // First beam goes HIGH (broken) -> possible car
             if (firstBeamState == 1) {
-                firstBeamTripTime = currentMillis; // Set the time when the first beam is tripped
+                firstBeamTripTime = currentMillis;
                 currentCarDetectState = FIRST_BEAM_HIGH;
                 publishMQTT(MQTT_COUNTER_LOG, "First Beam High");
-                digitalWrite(greenArchPin, HIGH); // Turn on green arch
+                digitalWrite(greenArchPin, HIGH);  // Green arch ON
             }
             break;
 
         case FIRST_BEAM_HIGH:
             if (secondBeamState == 1) {
-                // Both beams have been tripped, measure time for validation
+                // Both beams have been tripped, measure A->B time
                 unsigned long timeBeamsHigh = currentMillis - firstBeamTripTime;
                 publishMQTT(MQTT_PUB_FIRST_BEAM_AB_MS, String(timeBeamsHigh));
 
-                // Only move to BOTH_BEAMS_BROKEN if the time exceeds minimum activation duration
+                // Only move to BOTH_BEAMS_HIGH if duration exceeds activation thresholds
                 if (timeBeamsHigh >= minActivationDuration && timeBeamsHigh >= waitDuration) {
-                    bothBeamsHighTime = currentMillis; // Set the time when both beams are confirmed to be high
-                    carPresentFlag = true;
+                    bothBeamsHighTime   = currentMillis;
+                    carPresentFlag      = true;
                     currentCarDetectState = BOTH_BEAMS_HIGH;
                     publishMQTT(MQTT_COUNTER_LOG, "State Changed: Both Beams High");
-                    digitalWrite(greenArchPin, LOW);  // Turn off green arch
-                    digitalWrite(redArchPin, HIGH);   // Turn on red arch
-                 }
-                
+                    digitalWrite(greenArchPin, LOW);  // Green arch OFF
+                    digitalWrite(redArchPin, HIGH);   // Red arch ON
+                }
+
             } else if (firstBeamState == 0) {
-                // If the first beam is cleared before the second beam is triggered, reset
+                // First beam cleared before second beam ever went high -> reset
                 currentCarDetectState = WAITING_FOR_CAR;
                 publishMQTT(MQTT_COUNTER_LOG, "1st Beam Low, Changed Waiting for Car");
-                digitalWrite(greenArchPin, HIGH); // Turn on green arch
+                digitalWrite(greenArchPin, HIGH);    // Green arch ON
+                digitalWrite(redArchPin, LOW);       // Red arch OFF
             }
             break;
 
-            case BOTH_BEAMS_HIGH: {
-
-                // Check for stuck car
-                if (currentMillis - firstBeamTripTime >= carCounterTimeout) {
-                    if (!stuckAlarmSent) {
-                        // Alarm event (non-retained)
-                        publishMQTT(MQTT_COUNTER_LOG, "Sensor blocked", false);
-
-                        // Alarm topic for HA
-                        // Keep payload simple; you can change the string if HA is keying off it
-                        publishMQTT(MQTT_PUB_ALARM, "Sensor blocked", false);
-                        stuckAlarmSent = true;   // <<< latch so we don't spam
-                    }
-                        // Clear alarm latch when beam clears
-                        if (secondBeamState == 0) {
-                            stuckAlarmSent = false;
-    }
+        case BOTH_BEAMS_HIGH:
+            // Stuck-vehicle alarm using carCounterTimeout
+            if ((currentMillis - firstBeamTripTime) >= carCounterTimeout) {
+                if (!carStuckAlarmActive) {
+                    publishMQTT(MQTT_COUNTER_LOG, "Sensor blocked", false);
+                    publishMQTT(MQTT_PUB_ALARM, "ALARM_ENTER_STUCK", false);
+                    carStuckAlarmActive = true;   // latch so we don't spam
                 }
-
-                // Beam B cleared and we think a car is present -> end of event
-                if (secondBeamState == 0 && carPresentFlag) {
-                    unsigned long brokenDuration = currentMillis - bothBeamsHighTime;
-
-                    publishMQTT(
-                        MQTT_COUNTER_LOG,
-                        "Beam B clear. Broken duration: " + String(brokenDuration) + " ms"
-                    );
-                    publishMQTT(MQTT_PUB_SECOND_BEAM_BROKEN_MS, String(brokenDuration));
-
-                    currentCarDetectState = CAR_DETECTED;
-                    publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
-
-                    // Reset stuck alarm for the next car
-                    stuckAlarmSent = false;
-                }
-
-                break;
             }
 
+            // Beam B cleared and we think a car is present -> end of event
+            if (secondBeamState == 0 && carPresentFlag) {
+                unsigned long brokenDuration = currentMillis - bothBeamsHighTime;
+
+                publishMQTT(
+                    MQTT_COUNTER_LOG,
+                    "Beam B clear. Broken duration: " + String(brokenDuration) + " ms"
+                );
+                publishMQTT(MQTT_PUB_SECOND_BEAM_BROKEN_MS, String(brokenDuration));
+
+                // Validate duration of B broken as actual car
+                if (brokenDuration >= waitDuration) {
+                    currentCarDetectState = CAR_DETECTED;
+                    publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
+                } else {
+                    // Not a car → reset
+                    carPresentFlag = false;
+                    currentCarDetectState = WAITING_FOR_CAR;
+                    publishMQTT(MQTT_COUNTER_LOG, "No car detected (duration too short).");
+
+                    // Lights back to idle
+                    digitalWrite(redArchPin, LOW);
+                    digitalWrite(greenArchPin, HIGH);
+                }
+
+                // Clear alarm when the event ends (Beam B clear)
+                if (carStuckAlarmActive) {
+                    publishMQTT(MQTT_PUB_ALARM, "CLEAR", false);
+                    carStuckAlarmActive = false;
+                }
+            }
+            break;
 
         case CAR_DETECTED:
             if (carPresentFlag) {
-                countTheCar(); // Count the car and update files
+                // Count the car and update files
+                countTheCar();
                 unsigned long timeToPassMS = currentMillis - firstBeamTripTime;
                 publishMQTT(MQTT_PUB_TTP, String(timeToPassMS));
                 publishMQTT(MQTT_COUNTER_LOG, "Car Counted Successfully!!");
                 carPresentFlag = false;
 
-                // Update lights on successful detection
-                digitalWrite(redArchPin, LOW);  // Turn off red arch
-                digitalWrite(greenArchPin, HIGH); // Turn on green arch
+                // Lights on successful detection
+                digitalWrite(redArchPin, LOW);   // Red OFF
+                digitalWrite(greenArchPin, HIGH); // Green ON
 
-                // Record the time of detection for calculating time between cars
+                // Time between cars
                 unsigned long timeBetweenCars = currentMillis - lastCarDetectedMillis;
                 publishMQTT(MQTT_PUB_BETWEENCARS_MS, String(timeBetweenCars), true);
                 lastCarDetectedMillis = currentMillis;
 
-                // Reset to waiting for a new car
+                // Back to idle
                 currentCarDetectState = WAITING_FOR_CAR;
                 publishMQTT(MQTT_COUNTER_LOG, "Idle-Waiting For Car");
             }
