@@ -11,7 +11,8 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
 25.11.28.3  Increased DHT sensor read interval from 10 seconds to 60 seconds to 
-            reduce sensor polling frequency and added a warm-up period on boot.
+            reduce sensor polling frequency and added a warm-up period on boot. Took out
+            waitduration from Car Detection callback as it was not being used.
 25.11.28.2  Micro-change: remove the idempotent guard so any valid ShowStartDate always recomputes daysRunning.
 25.11.28.1  Removed feedback for Beamsensor duration and Car Counter Timeout updates
             to reduce MQTT spam during HA retained publishes.
@@ -406,6 +407,9 @@ unsigned long minActivationDuration = 100; // ms – minimum duration for valid 
 // Meaning: if BOTH beams stay HIGH ≥ carCounterTimeout, raise ALARM_CAR_STUCK once.
 // Default: 60000 ms (60s). Clamped to 5000–600000 ms in MQTT callback.
 unsigned long carCounterTimeout = 60000;   // ms
+// Stuck-car alarm latch: true = we've already sent the alarm for this event
+static bool stuckAlarmSent = false;
+
 
 // // Future-use tuning from HA – currently NOT used in detection logic.
 // // Left in place only so we can see and adjust it for next season without
@@ -2237,6 +2241,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
         // Echo updated timing config once
         // publishTimingConfig();
 
+    // *** DISABLE THIS FOR NOW ***
+    /*
     } else if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)  {
         // Topic used to change beam stuck-high duration (ms)
         unsigned long v = strtoul(message, nullptr, 10);
@@ -2246,10 +2252,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
         Serial.println(F(" Beam Sensor Duration Updated"));
         publishMQTT(MQTT_DEBUG_LOG, "Beam Sensor Duration Updated");
-
-        // Echo updated timing config once
-        //publishTimingConfig();
-
+    */
     } else if (strcmp(topic, MQTT_SUB_SHOWSTART) == 0) {
         // Set Show Start Date (YYYY-MM-DD)
         int y, m, d;
@@ -2584,20 +2587,25 @@ void detectCar() {
             break;
 
             case BOTH_BEAMS_HIGH: {
-                static bool stuckAlarmSent = false;
 
+                // Check for stuck car
                 if (currentMillis - firstBeamTripTime >= carCounterTimeout) {
                     if (!stuckAlarmSent) {
                         // Alarm event (non-retained)
                         publishMQTT(MQTT_COUNTER_LOG, "Sensor blocked", false);
+
+                        // Alarm topic for HA
+                        // Keep payload simple; you can change the string if HA is keying off it
+                        publishMQTT(MQTT_PUB_ALARM, "Sensor blocked", false);
+                        stuckAlarmSent = true;   // <<< latch so we don't spam
                     }
+                        // Clear alarm latch when beam clears
+                        if (secondBeamState == 0) {
+                            stuckAlarmSent = false;
+    }
                 }
 
-                // Clear alarm latch when beam clears
-                if (secondBeamState == 0) {
-                    stuckAlarmSent = false;
-                }
-
+                // Beam B cleared and we think a car is present -> end of event
                 if (secondBeamState == 0 && carPresentFlag) {
                     unsigned long brokenDuration = currentMillis - bothBeamsHighTime;
 
@@ -2605,13 +2613,18 @@ void detectCar() {
                         MQTT_COUNTER_LOG,
                         "Beam B clear. Broken duration: " + String(brokenDuration) + " ms"
                     );
-                    publishMQTT(MQTT_PUB_SECOND_BEAM_BROKEN_MS, String(brokenDuration));                    
-              
+                    publishMQTT(MQTT_PUB_SECOND_BEAM_BROKEN_MS, String(brokenDuration));
+
                     currentCarDetectState = CAR_DETECTED;
                     publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
+
+                    // Reset stuck alarm for the next car
+                    stuckAlarmSent = false;
                 }
+
                 break;
             }
+
 
         case CAR_DETECTED:
             if (carPresentFlag) {
