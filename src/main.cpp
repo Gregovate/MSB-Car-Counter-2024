@@ -6,10 +6,18 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.27.0-MQTTfix"
+#define FWVersion "25.11.28.1-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.28.1  Removed feedback for Beamsensor duration and Car Counter Timeout updates
+            to reduce MQTT spam during HA retained publishes.
+25.11.28.0  - Updated System/hello to publish JSON payload:
+                {"device":"espCarCounter","status":"online","fw":"<ver>","boot":"<ts>","msg":"Car Counter ONLINE"}
+            This aligns structure with Gate Counter and fixes HA status sensor.
+            - Standardized stuck/alarm human-readable message in BOTH_BEAMS_HIGH state:
+                publishMQTT(MQTT_COUNTER_LOG, "Sensor blocked", false);
+            Replaces old text "Alarm: Car stuck at car counter" and removed unused legacy HELLO debug line.
 25.11.27.0  Fixed Car Counter config topics for alarm and beam wait tuning:
             - Corrected MQTT_SUB_TOPIC5 to /Config/carCounterTimeout (ms) for stuck-car alarm.
             - Corrected MQTT_SUB_TOPIC6 to /Config/beamWaitDuration (ms) for second-beam wait.
@@ -1349,10 +1357,14 @@ void MQTTreconnect() {
         Serial.println("connected!");
         Serial.println("Waiting for Car");
 
-        // Once connected, publish retained online status
-        publishMQTT(
-            MQTT_PUB_HELLO,
-            String("Car Counter ONLINE @ ") + bootTimestamp, true);
+        // Once connected, publish retained online status (JSON for HA)
+        String helloPayload =
+            String("{\"device\":\"espCarCounter\",\"status\":\"online\",\"fw\":\"") +
+            FWVersion + "\",\"boot\":\"" + bootTimestamp +
+            "\",\"msg\":\"Car Counter ONLINE\"}";
+
+        publishMQTT(MQTT_PUB_HELLO, helloPayload, true);
+
         // GAL 25-11-22: publish temp/RH as JSON (match HA templates)
         char jsonPayload[100];
         snprintf(jsonPayload, sizeof(jsonPayload),
@@ -2220,7 +2232,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         publishMQTT(MQTT_DEBUG_LOG, "Car Counter Timeout Updated");
 
         // Echo updated timing config once
-        publishTimingConfig();
+        // publishTimingConfig();
 
     } else if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)  {
         // Topic used to change beam stuck-high duration (ms)
@@ -2233,7 +2245,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         publishMQTT(MQTT_DEBUG_LOG, "Beam Sensor Duration Updated");
 
         // Echo updated timing config once
-        publishTimingConfig();
+        //publishTimingConfig();
 
     } else if (strcmp(topic, MQTT_SUB_SHOWSTART) == 0) {
         // Set Show Start Date (YYYY-MM-DD)
@@ -2574,28 +2586,14 @@ void detectCar() {
                 if (currentMillis - firstBeamTripTime >= carCounterTimeout) {
                     if (!stuckAlarmSent) {
                         // Alarm event (non-retained)
-                        publishMQTT(MQTT_PUB_ALARM, "ALARM_CAR_STUCK", false);
-
-                        // Optional: keep legacy text on HELLO during transition
-                        // publishMQTT(MQTT_DEBUG_LOG, "Check Car Counter!", false);
-
-                        publishMQTT(MQTT_COUNTER_LOG, "Alarm: Car stuck at car counter", false);
-                        stuckAlarmSent = true;
+                        publishMQTT(MQTT_COUNTER_LOG, "Sensor blocked", false);
                     }
                 }
 
                 // Clear alarm latch when beam clears
                 if (secondBeamState == 0) {
                     stuckAlarmSent = false;
-
-
-
-
-
-
                 }
-
-
 
                 if (secondBeamState == 0 && carPresentFlag) {
                     unsigned long brokenDuration = currentMillis - bothBeamsHighTime;
@@ -2605,9 +2603,7 @@ void detectCar() {
                         "Beam B clear. Broken duration: " + String(brokenDuration) + " ms"
                     );
                     publishMQTT(MQTT_PUB_SECOND_BEAM_BROKEN_MS, String(brokenDuration));                    
-                        
-                    
-                    
+              
                     currentCarDetectState = CAR_DETECTED;
                     publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
                 }
