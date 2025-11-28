@@ -6,10 +6,13 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.28.1-MQTTfix"
+#define FWVersion "25.11.28.3-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.28.3  Increased DHT sensor read interval from 10 seconds to 60 seconds to 
+            reduce sensor polling frequency and added a warm-up period on boot.
+25.11.28.2  Micro-change: remove the idempotent guard so any valid ShowStartDate always recomputes daysRunning.
 25.11.28.1  Removed feedback for Beamsensor duration and Car Counter Timeout updates
             to reduce MQTT spam during HA retained publishes.
 25.11.28.0  - Updated System/hello to publish JSON payload:
@@ -472,8 +475,8 @@ String getRtcTimestamp() {
 
 // Initialize DHT sensor & Variables for temperature and humidity readTempandRH() and show start 
 DHT dht(DHTPIN, DHTTYPE);
-float tempF = 0.0;      // Temperature
-float humidity = 0.0;   // Humidity
+float tempF = -998.0;      // Temperature
+float humidity = -998.0;   // Humidity
 int showStartY = 0;     // Show Start Year
 int showStartM = 0;     // Show Start Month
 int showStartD = 0;     // Show Start Day
@@ -2265,13 +2268,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
                 return;   // don't overwrite stored values
             }
 
-            // ---- idempotent guard: same date => do nothing ----
-            if (showStartDateValid &&
-                y == showStartY && m == showStartM && d == showStartD) {
-                publishMQTT(MQTT_DEBUG_LOG,
-                    String("ShowStartDate unchanged, ignoring: ") + message);
-                return;   // prevents side effects from HA reasserts
-            }
+            // // ---- idempotent guard: same date => do nothing ----
+            // if (showStartDateValid &&
+            //     y == showStartY && m == showStartM && d == showStartD) {
+            //     publishMQTT(MQTT_DEBUG_LOG,
+            //         String("ShowStartDate unchanged, ignoring: ") + message);
+            //     return;   // prevents side effects from HA reasserts
+            // }
 
             // ---- accept NEW date ----
             showStartY = y;
@@ -2910,71 +2913,92 @@ void initSDCard() {
 
 
 
-//Car Counter Temperature and Humidity Reading
+// Car Counter Temperature and Humidity Reading
 void readTempandRH() {
-    static unsigned long lastDHTReadMillis = 0;    // Last time temperature was read
-    static unsigned long lastDHTPrintMillis = 0;   // Last time temperature was printed
-    const unsigned long dhtReadInterval = 10000;  // 10 seconds interval for reading temp
-    const unsigned long dhtPrintInterval = 600000; // 10 minutes interval for printing temp
+    // --- Non-blocking warmup and timing state (function-local statics) ---
+    static bool dhtWarmupDone = false;
+    static unsigned long dhtWarmupStart = 0;
+
+    static unsigned long lastDHTReadMillis  = 0;    // Last time temperature was read
+    static unsigned long lastDHTPrintMillis = 0;    // Last time temperature was printed
+
+    const unsigned long DHT_WARMUP_MS      = 10000;   // 10 seconds warmup
+    const unsigned long dhtReadInterval    = 60000;   // 60 seconds interval for reading temp
+    const unsigned long dhtPrintInterval   = 600000;  // 10 minutes interval for printing temp
+
     static bool tempOutOfRangeReported = false;
 
     unsigned long currentMillis = millis();
 
-    // Check if it's time to read the sensor
-    if (currentMillis - lastDHTReadMillis >= dhtReadInterval) {
-        lastDHTReadMillis = currentMillis;
-
-        // Read temperature and humidity
-        humidity = dht.readHumidity();
-        tempF = dht.readTemperature(true); // Read Fahrenheit directly
-
-        // Check if the readings are valid
-        if (isnan(tempF) || isnan(humidity)) {
-            Serial.println("Failed to read from DHT sensor!");
-            publishDebugLog("DHT sensor reading failed.");
-            tempF = -999;  // Use a sentinel value to indicate failure
-            humidity = -999;
-            return; // Exit function if the readings are invalid
+    // --- Warmup gate: don't touch tempF/humidity until sensor has stabilized ---
+    if (!dhtWarmupDone) {
+        if (dhtWarmupStart == 0) {
+            dhtWarmupStart = currentMillis;  // start warmup on first call
         }
-        // Check for temperature out of range
-        if (tempF < -40 || tempF > 120) {
-            if (!tempOutOfRangeReported) {
-                // Publish only if not already reported
-                Serial.println("Temperature out of range!");
-                publishDebugLog("DHT temperature out of range: " + String(tempF));
-                tempOutOfRangeReported = true; // Set flag to prevent duplicate reporting
-            }
-            tempF = -999; // Set to sentinel value for out-of-range condition
+        if (currentMillis - dhtWarmupStart < DHT_WARMUP_MS) {
+            return;  // too early, skip DHT entirely
+        }
+        dhtWarmupDone = true;  // from now on, reads are allowed
+    }
+
+    // --- Interval gate: only read every dhtReadInterval ms ---
+    if (currentMillis - lastDHTReadMillis < dhtReadInterval) {
+        return;
+    }
+    lastDHTReadMillis = currentMillis;
+
+    // Read temperature and humidity
+    humidity = dht.readHumidity();
+    tempF   = dht.readTemperature(true); // Read Fahrenheit directly
+
+    // Check if the readings are valid
+    if (isnan(tempF) || isnan(humidity)) {
+        Serial.println("Failed to read from DHT sensor!");
+        publishDebugLog("DHT sensor reading failed.");
+        tempF   = -999;  // sentinel
+        humidity = -999;
+        return; // Exit function if the readings are invalid
+    }
+
+    // Check for temperature out of range
+    if (tempF < -40 || tempF > 120) {
+        if (!tempOutOfRangeReported) {
+            Serial.println("Temperature out of range!");
+            publishDebugLog("DHT temperature out of range: " + String(tempF));
+            tempOutOfRangeReported = true; // prevent duplicate reporting
+        }
+        tempF = -999; // sentinel for out-of-range condition
+    } else {
+        // Reset the flag if temperature is back in range
+        if (tempOutOfRangeReported) {
+            Serial.println("Temperature back in range.");
+            tempOutOfRangeReported = false;
+        }
+
+        // Build JSON for temp/RH (actual MQTT publish happens elsewhere on your 10-min timer)
+        char jsonPayload[100];
+        snprintf(jsonPayload, sizeof(jsonPayload),
+                 "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
+        // GAL 25-11-22.4: temp/RH publish moved to 10-min timer in loop to reduce spam
+        // publishMQTT(MQTT_PUB_TEMP, String(jsonPayload));
+
+        // Forward valid readings to the hourly average system
+        averageHourlyTemp(); // Ensure the reading is processed for summaries
+    }
+
+    // --- 10-minute printout for serial diagnostics ---
+    if (currentMillis - lastDHTPrintMillis >= dhtPrintInterval) {
+        lastDHTPrintMillis = currentMillis;
+
+        if (tempF != -999 && humidity != -999) {
+            Serial.printf("Temperature: %.1f °F, Humidity: %.1f %%\n", tempF, humidity);
         } else {
-            // Reset the flag if temperature is back in range
-            if (tempOutOfRangeReported) {
-                Serial.println("Temperature back in range.");
-                tempOutOfRangeReported = false;
-            }
-
-            // Publish the temperature and humidity as JSON to MQTT
-            char jsonPayload[100];
-            snprintf(jsonPayload, sizeof(jsonPayload), "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
-// GAL 25-11-22.4: temp/RH publish moved to 10-min timer in loop to reduce spam
-// publishMQTT(MQTT_PUB_TEMP, String(jsonPayload));
-
-            // Forward valid readings to the hourly average system
-            averageHourlyTemp(); // Ensure the reading is processed for summaries
+            Serial.println("Temperature/Humidity data invalid. Check sensor.");
         }
-
-        // Check if it's time to print the readings
-        if (currentMillis - lastDHTPrintMillis >= dhtPrintInterval) {
-            lastDHTPrintMillis = currentMillis;
-
-            // Print temperature and humidity readings
-            if (tempF != -999 && humidity != -999) {
-                Serial.printf("Temperature: %.1f °F, Humidity: %.1f %%\n", tempF, humidity);
-            } else {
-                Serial.println("Temperature/Humidity data invalid. Check sensor.");
-            }
-        }
-    }   
+    }
 }
+
+
 
 /** Resets the hourly count array at midnight */
 void resetHourlyCounts() {
@@ -3155,12 +3179,6 @@ void setup() {
     wifiMulti.addAP(secret_ssid_AP_5, secret_pass_AP_5);
     setup_wifi();
 
-    // Initialize MQTT
-    //mqtt_client.setServer(mqtt_server, mqtt_port);
-    //mqtt_client.setCallback(callback);
-
-
-
     //If RTC not present, stop and check battery
     if (! rtc.begin()) {
         rtcReady = false;
@@ -3215,7 +3233,6 @@ void setup() {
     // Initialize DHT sensor
     dht.begin();
     Serial.println("DHT22 sensor initialized.");
-    readTempandRH();
 
     display.clearDisplay();
     display.setTextColor(WHITE);
