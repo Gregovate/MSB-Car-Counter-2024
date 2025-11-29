@@ -6,10 +6,21 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.29.1-MQTTfix"
+#define FWVersion "25.11.29.2-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.29.2   SD File Manager Path Normalization and Browser Download/Upload Fixes
+             - Corrected all SD file operations to use a unified buildPath() helper for directory-safe
+               path construction across browse, upload, download, delete, and directory navigation.
+             - Fixed missing slash issues (e.g., /cc/2025ShowSummary.csv) that caused false "File not found"
+               errors when accessing seasonal log files in /CC/YYYY.
+             - Updated downloadSDFile(), uploadSDFile(), deleteSDFile(), and changeDirectory() to ensure
+               consistent path handling, normalized leading slashes, and robust directory traversal.
+             - Restored full SD File Manager usability: listing, navigating, downloading, and uploading
+               files within seasonal folders works reliably again.
+             - No changes to beam logic, MQTT reporting, or SD core storage routines in this build.
+
 25.11.29.1   SD-Offline Hardening and MQTT Safety Fix
              - Removed all unintended MQTT publishes in the no-SD branch of getSavedValuesOnReboot().
              - Eliminated saveDayOfMonth() and saveDaysRunning() calls when SD is unavailable.
@@ -814,6 +825,17 @@ if (WiFi.status() != WL_CONNECTED) return;
         }
 }
 
+// ==========================================
+// SD Web File Manager Helper Functions
+// ==========================================
+
+// Join directory + filename safely
+String buildPath(const String &baseDir, const String &fileName) {
+    if (baseDir.endsWith("/")) {
+        return baseDir + fileName;
+    }
+    return baseDir + "/" + fileName;
+}
 
 // Creates season folder based on current year
 void ensureSeasonFolderExists() {
@@ -835,11 +857,16 @@ void ensureSeasonFolderExists() {
 
 // BEGIN OTA SD Card File Operations
 void listSDFiles(AsyncWebServerRequest *request) {
+    if (!sdAvailable) {
+        request->send(503, "text/plain", "SD not available");
+        return;
+    }
+
     String fileList = "Files in " + currentDirectory + ":\n";
 
     File root = SD.open(currentDirectory);
     if (!root || !root.isDirectory()) {
-        request->send(500, "text/plain", "Failed to open directory");
+        request->send(500, "text/plain", "Failed to open directory: " + currentDirectory);
         return;
     }
 
@@ -858,29 +885,56 @@ void downloadSDFile(AsyncWebServerRequest *request) {
         return;
     }
 
-    String filename = currentDirectory + request->getParam("filename")->value();
-    if (!SD.exists(filename)) {
-        request->send(404, "text/plain", "File not found");
+    String fileName = request->getParam("filename")->value();
+
+    // Build full path using helper
+    String fullPath = buildPath(currentDirectory, fileName);
+
+    // Normalize accidental double leading slash
+    if (fullPath.startsWith("//")) {
+        fullPath = fullPath.substring(1);
+    }
+
+    if (!SD.exists(fullPath)) {
+        request->send(404, "text/plain", "File not found: " + fullPath);
         return;
     }
 
-    // Add Content-Disposition header for proper filename handling
-    AsyncWebServerResponse *response = request->beginResponse(SD, filename, "application/octet-stream");
-    response->addHeader("Content-Disposition", "attachment; filename=\"" + String(request->getParam("filename")->value()) + "\"");
+    AsyncWebServerResponse *response =
+        request->beginResponse(SD, fullPath, "application/octet-stream");
+
+    response->addHeader(
+        "Content-Disposition",
+        "attachment; filename=\"" + fileName + "\""
+    );
 
     request->send(response);
 }
 
-void uploadSDFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+
+void uploadSDFile(AsyncWebServerRequest *request,
+                  String filename,
+                  size_t index,
+                  uint8_t *data,
+                  size_t len,
+                  bool final) {
+
     static File uploadFile; // Keep track of the currently uploading file
-    String fullPath = currentDirectory + "/" + filename; // Respect the current directory
+
+    // Build full path using helper so currentDirectory is respected
+    String fullPath = buildPath(currentDirectory, filename);
+    if (fullPath.startsWith("//")) {
+        fullPath = fullPath.substring(1);  // normalize leading //
+    }
 
     // Handle the start of the upload
     if (index == 0) {
         Serial.printf("Upload started: %s\n", fullPath.c_str());
+
         if (SD.exists(fullPath)) {
             SD.remove(fullPath); // Remove the file if it already exists
         }
+
         uploadFile = SD.open(fullPath, FILE_WRITE);
         if (!uploadFile) {
             Serial.printf("Failed to open file: %s\n", fullPath.c_str());
@@ -899,7 +953,8 @@ void uploadSDFile(AsyncWebServerRequest *request, String filename, size_t index,
         if (uploadFile) {
             uploadFile.close();
             Serial.printf("Upload completed: %s\n", fullPath.c_str());
-            request->send(200, "text/plain", "File uploaded successfully to " + currentDirectory);
+            request->send(200, "text/plain",
+                          "File uploaded successfully to " + currentDirectory);
         } else {
             Serial.printf("Upload failed: %s\n", fullPath.c_str());
             request->send(500, "text/plain", "Failed to write file");
@@ -907,23 +962,41 @@ void uploadSDFile(AsyncWebServerRequest *request, String filename, size_t index,
     }
 }
 
+
 void changeDirectory(AsyncWebServerRequest *request) {
     if (!request->hasParam("dir")) {
         request->send(400, "text/plain", "Directory name is required");
         return;
     }
 
-    String newDirectory = request->getParam("dir")->value();
-    if (newDirectory[0] != '/') {
-        newDirectory = currentDirectory + "/" + newDirectory;
+    String dir = request->getParam("dir")->value();
+    String target;
+
+    // If request gives absolute path (/cc/2025)
+    if (dir.startsWith("/")) {
+        target = dir;
+    }
+    else {
+        // Relative path (use helper for consistency)
+        target = buildPath(currentDirectory, dir);
     }
 
-    if (SD.exists(newDirectory) && SD.open(newDirectory).isDirectory()) {
-        currentDirectory = newDirectory;
-        request->send(200, "text/plain", "Changed directory to " + currentDirectory);
-    } else {
-        request->send(404, "text/plain", "Directory not found");
+    // Normalize accidental leading //
+    if (target.startsWith("//")) {
+        target = target.substring(1);
     }
+
+    // Must exist AND be a directory
+    if (SD.exists(target)) {
+        File f = SD.open(target);
+        if (f && f.isDirectory()) {
+            currentDirectory = target;
+            request->send(200, "text/plain", "Changed directory to " + currentDirectory);
+            return;
+        }
+    }
+
+    request->send(404, "text/plain", "Directory not found: " + target);
 }
 
 void deleteSDFile(AsyncWebServerRequest *request) {
@@ -933,11 +1006,13 @@ void deleteSDFile(AsyncWebServerRequest *request) {
     }
 
     String fileName = request->getParam("filename")->value();
-    String fullPath = currentDirectory + "/" + fileName; // Respect the current directory
 
-    // Normalize the file path
+    // Build the full path using the helper
+    String fullPath = buildPath(currentDirectory, fileName);
+
+    // Normalize accidental leading //
     if (fullPath.startsWith("//")) {
-        fullPath = fullPath.substring(1); // Remove redundant leading slashes
+        fullPath = fullPath.substring(1);
     }
 
     if (SD.exists(fullPath)) {
@@ -953,6 +1028,7 @@ void deleteSDFile(AsyncWebServerRequest *request) {
         request->send(404, "text/plain", "File not found: " + fullPath);
     }
 }
+
 //END OTA SD Card File Operations
 
 // HTML Content served from /data/index.html and /data/style.css
