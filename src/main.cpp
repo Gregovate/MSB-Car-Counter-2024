@@ -2143,6 +2143,7 @@ void getSavedValuesOnReboot() {
 
     // Load last day of month from SD
     getDayOfMonth();
+    dayOfMonth = lastDayOfMonth;  // <<< ensure we always have a valid day before publishing
 
     // Did we cross a day boundary?
     if (now2.day() != lastDayOfMonth) {
