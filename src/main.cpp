@@ -6,10 +6,21 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.29.0-MQTTfix"
+#define FWVersion "25.11.29.1-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.29.1   SD-Offline Hardening and MQTT Safety Fix
+             - Removed all unintended MQTT publishes in the no-SD branch of getSavedValuesOnReboot().
+             - Eliminated saveDayOfMonth() and saveDaysRunning() calls when SD is unavailable.
+               > This prevented DayOfMonth and DaysRunning from being reset in HA during SD failure.
+             - Added totalsInitialized flag to block KeepMqttAlive() and MQTTreconnect() from pushing
+               zero or uninitialized totals to HA.
+               > HA now retains last known totals when SD is offline instead of being overwritten.
+             - SD-available behavior unchanged: totals reload correctly from SD and publish normally.
+             - This closes the issue where any reboot with SD offline caused HA totals to reset to zero.
+             - Lays groundwork for future enhancement: restore from HA retained totals when SD unavailable.
+
 25.11.29.0   Restored 2024 car-detection behavior: removed Beam B "short duration" rejection.
             > Any valid A->B event that reaches BOTH_BEAMS_HIGH and clears B now counts a car.
             - Added Enter A->B timing metric (beamAB_ms) published to:
@@ -533,8 +544,10 @@ unsigned int currentMin;      // Current Minute
 unsigned int currentSec;      // Current Second
 unsigned int daysRunning;     // Number of days the show is running.
 unsigned int currentTimeMinute; // for converting clock time hh:mm to clock time min since midnight
+
 int totalDailyCars; // total cars counted per day 24/7 Needed for debugging
 int totalShowCars;  // total cars counted for durning show hours open (5:00 pm to 9:10 pm)
+bool totalsInitialized = false;   // GAL 25-11-29: true once loaded from SD or MQTT
 
 /***** TIME VARIABLES *****/
 const unsigned long wifi_connectioncheckMillis = 5000; // check for connection every 5 sec
@@ -1212,26 +1225,30 @@ void KeepMqttAlive() {
 // GAL 25-11-22.4: temp/RH publish removed from KeepMqttAlive; now on 10-min timer
 // publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
 
-    // ---- Retained core counts ----
-    publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
-    publishMQTT(MQTT_PUB_SHOWTOTAL,  String(totalShowCars),  true);
+
 
     // ---- WiFi Diagnostics (retained) ----
     publishMQTT(MQTT_PUB_RSSI, String(WiFi.RSSI()), true);
     publishMQTT(MQTT_PUB_SSID, WiFi.SSID(),        true);
     publishMQTT(MQTT_PUB_IP,   WiFi.localIP().toString(), true);
 
-    // ---- Retained show window + date (for HA dashboards / GateCounter offset) ----
-    // ---- Retained show window + date (for HA dashboards / GateCounter offset) ----
+     // ---- Retained show window + date (for HA dashboards / GateCounter offset) ----
     char showStartDateBuf[11];
     snprintf(showStartDateBuf, sizeof(showStartDateBuf), "%04d-%02d-%02d",
             showStartY, showStartM, showStartD);
     publishMQTT(MQTT_PUB_SHOW_START_DATE, showStartDateBuf, true); // "YYYY-MM-DD"
     publishMQTT(MQTT_PUB_SHOW_START_MIN,  String(showStartMin), true);
     publishMQTT(MQTT_PUB_SHOW_END_MIN,    String(showEndMin), true);
-        // Make sure Calendar branch exists & is retained on connect
+
+    // Make sure Calendar branch exists & is retained on connect
     publishMQTT(MQTT_PUB_DAYOFMONTH,  String(dayOfMonth),  true);
     publishMQTT(MQTT_PUB_DAYSRUNNING, String(daysRunning), true);
+
+    if (totalsInitialized) {
+        // ---- Retained core counts ----
+        publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
+        publishMQTT(MQTT_PUB_SHOWTOTAL,  String(totalShowCars),  true);
+    }
 
     // ---- Hourly Snapshot (retained, unchanged) ----
     char buckets[180];
@@ -1401,7 +1418,7 @@ void MQTTreconnect() {
         );
 
         // GAL 25-11-18: announce firmware version
-// GAL 25-11-22.4: firmware publish retained for dashboards
+        // GAL 25-11-22.4: firmware publish retained for dashboards
         publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion), true); // ok non-retained
 
         // Subscribe to necessary topics
@@ -2099,37 +2116,24 @@ void getSavedValuesOnReboot() {
     if (!sdAvailable) {
         Serial.println("getSavedValuesOnReboot: SD not available; using RTC + defaults.");
 
-        // Day-of-month from RTC
-        dayOfMonth = now.day();
+        // You can still compute these for internal use if you want:
+        dayOfMonth    = now.day();
         lastDayOfMonth = dayOfMonth;
-        saveDayOfMonth();   // will still MQTT-publish even if SD is down
 
-        // DaysRunning from calendar math if possible
         if (showStartDateValid && rtcReady && now.year() >= 2024) {
             daysRunning = computeDaysRunning();
-            saveDaysRunning();   // now always publishes MQTT even if SD is unavailable
-
             publishMQTT(MQTT_DEBUG_LOG,
-                "Reboot (no SD): DaysRunning recomputed = " + String(daysRunning));
+                "Reboot (no SD): DaysRunning recomputed (internal only) = " + String(daysRunning));
         } else {
-            // No valid showStartDate yet – leave daysRunning at its default (0)
             publishMQTT(MQTT_DEBUG_LOG,
-                "Reboot (no SD): showStartDate not set; DaysRunning held at 0.");
+                "Reboot (no SD): showStartDate not set; DaysRunning left at default.");
         }
 
-        // We have no way to recover totals/hourly without SD. They will be at
-        // their power-on defaults (usually 0), but we at least tell HA the truth.
+        // BUT: do NOT call saveDayOfMonth() or saveDaysRunning() here.
+        // They publish to MQTT and overwrite HA, which we do NOT want when SD is bad.
+
         publishMQTT(MQTT_DEBUG_LOG,
-            "Reboot (no SD): Daily/show totals and hourly counts not restored; data lost.");
-
-        publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
-        publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
-        publishMQTT(MQTT_PUB_DAYOFMONTH, String(dayOfMonth));
-        publishMQTT(MQTT_PUB_DAYSRUNNING, String(daysRunning));
-
-        // Optional: if you want hourly zeros explicitly pushed to MQTT,
-        // saveHourlyCounts() will now publish MQTT-only when sdAvailable == false.
-        // saveHourlyCounts();
+            "Reboot (no SD): Daily/show totals and hourly counts not restored; data lost. HA totals left unchanged.");
 
         return;
     }
@@ -2182,12 +2186,13 @@ void getSavedValuesOnReboot() {
         getShowTotal();
         getDaysRunning();
         getHourlyData();
-
+        dayOfMonth = lastDayOfMonth;  // <<< FIX: use the SD value we just loaded
         Serial.println("ESP32 reboot detected on same day. Reloading saved counts.");
         publishMQTT(MQTT_DEBUG_LOG, "Rebooted: Counts reloaded for same day.");
     }
 
     // After SD-based reload/update, make sure MQTT is in sync:
+    totalsInitialized = true;   // <<-- add this, SD path only
     publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
     publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars));
     publishMQTT(MQTT_PUB_DAYOFMONTH, String(dayOfMonth));
