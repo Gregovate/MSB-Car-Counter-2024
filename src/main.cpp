@@ -6,10 +6,16 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.28.3-MQTTfix"
+#define FWVersion "25.11.29.0-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.29.0   Restored 2024 car-detection behavior: removed Beam B "short duration" rejection.
+            > Any valid A->B event that reaches BOTH_BEAMS_HIGH and clears B now counts a car.
+            - Added Enter A->B timing metric (beamAB_ms) published to:
+                 msb/traffic/CarCounter/Sensors/beamAB_ms
+            - No changes to MQTT topic names or SD/RTC logic in this build.
+            Aligned MQTT Definitions to the gate counter for debugging sanity.
 25.11.28.3  Increased DHT sensor read interval from 10 seconds to 60 seconds to 
             reduce sensor polling frequency and added a warm-up period on boot. Took out
             waitduration from Car Detection callback as it was not being used.
@@ -313,10 +319,10 @@ char topicBase[60];      // keep until confirmed unused
 #define MQTT_PUB_SUMMARY        "msb/traffic/CarCounter/Calendar/showSummary"
 
 /* Beam Sensors and Logs */
-#define MQTT_FIRST_BEAM_SENSOR_STATE    "msb/traffic/CarCounter/Sensors/beam1State"
-#define MQTT_SECOND_BEAM_SENSOR_STATE   "msb/traffic/CarCounter/Sensors/beam2State"
-#define MQTT_PUB_FIRST_BEAM_AB_MS       "msb/traffic/CarCounter/Sensors/beamAB_ms"
-#define MQTT_PUB_SECOND_BEAM_BROKEN_MS  "msb/traffic/CarCounter/Sensors/beamB_broken_ms"
+#define MQTT_PUB_BEAM_A_STATE      "msb/traffic/CarCounter/Sensors/beam1State"
+#define MQTT_PUB_BEAM_B_STATE    "msb/traffic/CarCounter/Sensors/beam2State"
+#define MQTT_PUB_BEAM_AB_MS      "msb/traffic/CarCounter/Sensors/beamAB_ms"
+#define MQTT_PUB_BEAM_B_BROKEN_MS   "msb/traffic/CarCounter/Sensors/beamB_broken_ms"
 #define MQTT_PUB_TTP                    "msb/traffic/CarCounter/Sensors/TTP"
 #define MQTT_COUNTER_LOG                "msb/traffic/CarCounter/Sensors/counterLog"
 
@@ -2532,7 +2538,7 @@ void detectCar() {
             stableFirstBeamState = rawFirstBeamState;
             lastFirstBeamChangeTime = currentMillis;
             // Publish the state change only when it's stable
-            publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(stableFirstBeamState), true);
+            publishMQTT(MQTT_PUB_BEAM_A_STATE  , String(stableFirstBeamState), true);
         }
     } else {
         lastFirstBeamChangeTime = currentMillis;
@@ -2544,7 +2550,7 @@ void detectCar() {
             stableSecondBeamState = rawSecondBeamState;
             lastSecondBeamChangeTime = currentMillis;
             // Publish the state change only when it's stable
-            publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(stableSecondBeamState), true);
+            publishMQTT(MQTT_PUB_BEAM_B_STATE, String(stableSecondBeamState), true);
         }
     } else {
         lastSecondBeamChangeTime = currentMillis;
@@ -2571,7 +2577,7 @@ void detectCar() {
             if (secondBeamState == 1) {
                 // Both beams have been tripped, measure A->B time
                 unsigned long timeBeamsHigh = currentMillis - firstBeamTripTime;
-                publishMQTT(MQTT_PUB_FIRST_BEAM_AB_MS, String(timeBeamsHigh));
+                publishMQTT(MQTT_PUB_BEAM_AB_MS, String(timeBeamsHigh));
 
                 // Only move to BOTH_BEAMS_HIGH if duration exceeds activation thresholds
                 if (timeBeamsHigh >= minActivationDuration && timeBeamsHigh >= waitDuration) {
@@ -2604,28 +2610,19 @@ void detectCar() {
 
             // Beam B cleared and we think a car is present -> end of event
             if (secondBeamState == 0 && carPresentFlag) {
+                // Measure how long both beams / Beam B were high
                 unsigned long brokenDuration = currentMillis - bothBeamsHighTime;
 
                 publishMQTT(
                     MQTT_COUNTER_LOG,
                     "Beam B clear. Broken duration: " + String(brokenDuration) + " ms"
                 );
-                publishMQTT(MQTT_PUB_SECOND_BEAM_BROKEN_MS, String(brokenDuration));
+                publishMQTT(MQTT_PUB_BEAM_B_BROKEN_MS , String(brokenDuration));
 
-                // Validate duration of B broken as actual car
-                if (brokenDuration >= waitDuration) {
-                    currentCarDetectState = CAR_DETECTED;
-                    publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
-                } else {
-                    // Not a car → reset
-                    carPresentFlag = false;
-                    currentCarDetectState = WAITING_FOR_CAR;
-                    publishMQTT(MQTT_COUNTER_LOG, "No car detected (duration too short).");
-
-                    // Lights back to idle
-                    digitalWrite(redArchPin, LOW);
-                    digitalWrite(greenArchPin, HIGH);
-                }
+                // IMPORTANT: Always treat this as a real car if we got this far,
+                // just like the 2024 version. No gating on brokenDuration.
+                currentCarDetectState = CAR_DETECTED;
+                publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
 
                 // Clear alarm when the event ends (Beam B clear)
                 if (carStuckAlarmActive) {
@@ -3239,8 +3236,8 @@ void setup() {
     MQTTreconnect(); // Ensure MQTT is connected
 
     // After MQTT connect on Car Counter: publish current beam states as retained
-    publishMQTT(MQTT_FIRST_BEAM_SENSOR_STATE, String(stableFirstBeamState), true);
-    publishMQTT(MQTT_SECOND_BEAM_SENSOR_STATE, String(stableSecondBeamState), true);
+    publishMQTT(MQTT_PUB_BEAM_A_STATE, String(stableFirstBeamState), true);
+    publishMQTT(MQTT_PUB_BEAM_B_STATE , String(stableSecondBeamState), true);
 
     // After initial retained publishes:
     publishTimingConfig();
