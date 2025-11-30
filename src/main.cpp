@@ -6,10 +6,17 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.29.2-MQTTfix"
+#define FWVersion "25.11.29.3-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.29.3   ShowSummary Fail-Safe Append Logic (2025 Season Only)
+             - Hardened daily show summary logic so ShowSummary.csv always gets one row per
+               show night when the SD card is available.
+             - Primary trigger remains showEndMin; added a single fail-safe write if showEndMin
+               is missed but the system is still running later that evening.
+             - Prevents empty ShowSummary.csv for valid show nights without touching any 2024
+               data or existing rows in the 2025 file.
 25.11.29.2   SD File Manager Path Normalization and Browser Download/Upload Fixes
              - Corrected all SD file operations to use a unified buildPath() helper for directory-safe
                path construction across browse, upload, download, delete, and directory navigation.
@@ -1048,6 +1055,17 @@ void setupServer() {
         request->send(200, "text/plain",
                       "Hi! This is The Car Counter. UI not found in /data.");
     });
+
+    // ----------------------------
+    // Enable Reboot via HTTP
+    // ----------------------------
+
+    server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", "Car Counter rebooting...");
+        Serial.println("HTTP /reboot requested – restarting ESP32");
+        delay(200);
+        ESP.restart();
+    });    
 
     // ----------------------------
     // Serve CSS (fallback = 404)
@@ -3169,9 +3187,33 @@ void timeTriggeredEvents() {
     // **MICROSTEP #3 — dynamic show-end summary**
     // Save summary EXACTLY at showEndMin
     // =========================================================
-    if (minutesNow == showEndMin && !flagDailyShowSummarySaved) {
+    // Consider the show "active" once a valid showStartDate is set
+    bool showSeasonActive =
+        showStartDateValid &&
+        rtcReady &&
+        (now.year() >= showStartY);   // cheap check, you can tighten if needed
+
+    // Primary trigger: normal end-of-show save
+    if (sdAvailable &&
+        showSeasonActive &&
+        (minutesNow == showEndMin) &&
+        !flagDailyShowSummarySaved) {
+
         saveDailyShowSummary();
         publishMQTT(MQTT_DEBUG_LOG, "Daily Show Summary Saved (showEndMin)");
+        flagDailyShowSummarySaved = true;
+    }
+
+    // Fail-safe: if we missed the exact minute, still write ONE summary row later
+    if (sdAvailable &&
+        showSeasonActive &&
+        (minutesNow > showEndMin) &&
+        !flagDailyShowSummarySaved &&
+        now.hour() < 23) {
+
+        saveDailyShowSummary();
+        publishMQTT(MQTT_DEBUG_LOG,
+                    "Daily Show Summary Saved (failsafe after showEndMin)");
         flagDailyShowSummarySaved = true;
     }
 
