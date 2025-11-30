@@ -6,10 +6,14 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.29.3-MQTTfix"
+#define FWVersion "25.11.30.0-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.30.0   Replaced rtc.toString(buf2) in countTheCar() with explicit timestamp
+             formatting using snprintf() to prevent format-buffer mutation. Fixes
+             frozen timestamps in EnterLog.csv. No other functional changes.
+25.11.29.4  Fixed problem with files needing a header it wasn't creating a new line
 25.11.29.3   ShowSummary Fail-Safe Append Logic (2025 Season Only)
              - Hardened daily show summary logic so ShowSummary.csv always gets one row per
                show night when the SD card is available.
@@ -930,6 +934,7 @@ void uploadSDFile(AsyncWebServerRequest *request,
 
     // Build full path using helper so currentDirectory is respected
     String fullPath = buildPath(currentDirectory, filename);
+    
     if (fullPath.startsWith("//")) {
         fullPath = fullPath.substring(1);  // normalize leading //
     }
@@ -2565,11 +2570,19 @@ void countTheCar() {
 
     /*------Append to log file*/
     DateTime now = rtc.now();
-    char buf2[] = "YYYY-MM-DD hh:mm:ss";
-    Serial.print(now.toString(buf2));
+
+    // Build a fresh timestamp string (do NOT use now.toString here)
+    char timeBuf[25];
+    snprintf(timeBuf, sizeof(timeBuf),
+             "%04d-%02d-%02d %02d:%02d:%02d",
+             now.year(), now.month(), now.day(),
+             now.hour(), now.minute(), now.second());
+
+    Serial.print(timeBuf);
     Serial.print(", Temp = ");
     Serial.print(tempF);
     Serial.print(", ");
+
     // increase Count for Every car going through car counter regardless of time
     totalDailyCars ++;   
     // Increment hourly car count
@@ -2600,7 +2613,7 @@ void countTheCar() {
     // open file for writing Car Data
     myFile = SD.open(enterLogPath.c_str(), FILE_APPEND); // EnterLog.csv in season folder
     if (myFile) {
-        myFile.print(now.toString(buf2));
+        myFile.print(timeBuf); 
         myFile.print(", ");
         myFile.print (timeToPassMS) ; 
         myFile.print(", 1 , "); 
@@ -2819,7 +2832,7 @@ void checkAndCreateFile(const String &fileName, const String &header = "") {
                             String("Failed to create file: ") + fullPath);
             } else {
                 if (!header.isEmpty()) {
-                    file.print(header);
+                    file.println(header);
                 }
                 file.close();
                 Serial.printf("File %s created successfully\n", fullPath.c_str());
