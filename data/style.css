@@ -1,3 +1,5 @@
+/* ===== Global Styles (Show Summary + File Manager) ===== */
+
 body {
     font-family: Arial, sans-serif;
     text-align: center;
@@ -14,6 +16,8 @@ h1 {
     margin: 0;
     font-size: 2em;
 }
+
+/* ===== Show Summary Styles ===== */
 
 .file-list {
     text-align: left;
@@ -51,4 +55,129 @@ h1 {
 
 .file-list a:hover {
     text-decoration: underline;
+}
+
+/* ===== File Manager Container ===== */
+
+.file-manager {
+    text-align: left;
+    margin: 20px auto;
+    width: 80%;
+    max-width: 700px;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.file-manager h2,
+.file-manager h3 {
+    margin: 10px 0;
+}
+
+input {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 14px;
+    min-width: 220px;
+}
+
+/* ===== Buttons ===== */
+
+button,
+.btn {
+    display: inline-block;
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #fff;
+}
+
+/* Primary buttons */
+.btn-primary,
+button {
+    background-color: #1976d2;
+}
+
+.btn-primary:hover,
+button:hover {
+    background-color: #115293;
+}
+
+/* Delete button */
+.btn-danger,
+.delete-btn {
+    background-color: #d32f2f !important;
+}
+
+.btn-danger:hover,
+.delete-btn:hover {
+    background-color: #9a0007 !important;
+}
+
+/* Secondary button (Rename) */
+.btn-secondary {
+    background-color: #007bff;
+}
+
+.btn-secondary:hover {
+    background-color: #0056b3;
+}
+
+/* ===== Button Layout ===== */
+
+.button-row,
+.rename-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.button-row {
+    justify-content: flex-start;
+}
+
+.rename-row {
+    justify-content: flex-start;
+}
+
+/* --- Theme by device identity (Car vs Gate) --- */
+/* Car Counter = RED theme */
+body.theme-car h1 {
+    background-color: #b71c1c;  /* dark red header */
+}
+
+/* All non-danger buttons follow car accent color */
+body.theme-car button:not(.delete-btn) {
+    background-color: #c62828;
+    color: #ffffff;
+}
+body.theme-car button:not(.delete-btn):hover {
+    background-color: #8e0000;
+}
+
+/* Gate Counter = BLUE theme */
+body.theme-gate h1 {
+    background-color: #0d47a1;  /* dark blue header */
+}
+
+body.theme-gate button:not(.delete-btn) {
+    background-color: #1976d2;
+    color: #ffffff;
+}
+body.theme-gate button:not(.delete-btn):hover {
+    background-color: #115293;
+}
+
+/* Delete stays red everywhere (safety) */
+.delete-btn {
+    background-color: #d32f2f !important;
+    color: #ffffff !important;
+}
+.delete-btn:hover {
+    background-color: #9a0007 !important;
 }

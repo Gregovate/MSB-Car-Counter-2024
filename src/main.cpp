@@ -6,10 +6,22 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.30.1-MQTTfix"
+#define FWVersion "25.12.01.0-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.12.01.0   Added missing /delete route in setupServer() to fix SD file delete
+             failures (HTTP 500). Added new /rename route and renameSDFile()
+             handler for in-place file renames (e.g., *.csv → *.bak) without
+             pulling the SD card.
+             Updated file manager UI:
+             - index.html now uses /delete via GET and adds a Rename File UI
+               tied to /rename.
+             - All styling moved to /style.css (no inline <style>).
+             - New /identity endpoint returns espCarCounter and drives
+               identity-based theming (Car vs Gate) via body classes
+               theme-car / theme-gate.
+             - “Delete File” button is red and gated by a confirm dialog.
 25.11.30.1   Corrected A→B follow detection logic. Removed duplicate/multi-publish
              of beamAB_ms and replaced with single-capture abFollow_ms using
              global flag abFollowCaptured. Updated CAR_DETECTED to store the full
@@ -1050,6 +1062,52 @@ void deleteSDFile(AsyncWebServerRequest *request) {
     }
 }
 
+void renameSDFile(AsyncWebServerRequest *request) {
+    if (!sdAvailable) {
+        request->send(503, "text/plain", "SD not available");
+        return;
+    }
+
+    if (!request->hasParam("old") || !request->hasParam("new")) {
+        request->send(400, "text/plain", "Parameters 'old' and 'new' are required");
+        return;
+    }
+
+    String oldName = request->getParam("old")->value();
+    String newName = request->getParam("new")->value();
+
+    // Build full paths relative to currentDirectory
+    String oldPath = buildPath(currentDirectory, oldName);
+    String newPath = buildPath(currentDirectory, newName);
+
+    // Normalize accidental leading //
+    if (oldPath.startsWith("//"))  oldPath = oldPath.substring(1);
+    if (newPath.startsWith("//")) newPath = newPath.substring(1);
+
+    // Make sure source exists
+    if (!SD.exists(oldPath)) {
+        request->send(404, "text/plain", "Source file not found: " + oldPath);
+        return;
+    }
+
+    // Be conservative: refuse to overwrite an existing target
+    if (SD.exists(newPath)) {
+        request->send(409, "text/plain", "Target already exists: " + newPath);
+        return;
+    }
+
+    if (SD.rename(oldPath, newPath)) {
+        Serial.printf("File renamed: %s -> %s\n", oldPath.c_str(), newPath.c_str());
+        request->send(200, "text/plain",
+                      "File renamed: " + oldPath + " -> " + newPath);
+    } else {
+        Serial.printf("Failed to rename: %s -> %s\n", oldPath.c_str(), newPath.c_str());
+        request->send(500, "text/plain",
+                      "Failed to rename: " + oldPath + " -> " + newPath);
+    }
+}
+
+
 //END OTA SD Card File Operations
 
 // HTML Content served from /data/index.html and /data/style.css
@@ -1152,11 +1210,13 @@ void setupServer() {
         );
     });
 
+    // ----------------------------
+    // Handle file uploads to /data directory
+    // ----------------------------    
     server.on("/upload", HTTP_POST,
         [](AsyncWebServerRequest *request) {},
         uploadSDFile);
 
-    // Handle file uploads to /data directory
     server.on("/uploadToData", HTTP_POST,
         [](AsyncWebServerRequest *request) {},
         [](AsyncWebServerRequest *request, String filename, size_t index,
@@ -1193,7 +1253,25 @@ void setupServer() {
             }
         });
 
+    // ----------------------------
+    // Identity endpoint (Changing Directory)
+    // ----------------------------
     server.on("/changeDirectory", HTTP_GET, changeDirectory);
+
+    // ----------------------------
+    // NEW: delete and rename 25-12-01 GAL
+    // ----------------------------
+    server.on("/delete", HTTP_ANY, deleteSDFile);
+    server.on("/rename", HTTP_ANY, renameSDFile);
+
+    // ----------------------------
+    // Identity endpoint (for UI theming) 25-12-01 GAL
+    // ----------------------------
+    server.on("/identity", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // THIS_MQTT_CLIENT is already "CarCounter" or "GateCounter"
+        request->send(200, "text/plain", THIS_MQTT_CLIENT);
+    });
+
 
     // ----------------------------
     // Elegant OTA

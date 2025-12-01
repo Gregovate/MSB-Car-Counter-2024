@@ -4,54 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Management Car Counter</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        h1 {
-            color: #333;
-        }
-        .file-manager {
-            margin-top: 20px;
-        }
-        .file-item {
-            margin-bottom: 10px;
-        }
-        .buttons {
-            margin-top: 20px;
-        }
-        button {
-            margin-right: 10px;
-            padding: 10px 15px;
-            border: none;
-            background-color: #007BFF;
-            color: white;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        input {
-            margin-right: 10px;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        #fileList {
-            margin-top: 20px;
-        }
-        .file-actions {
-            margin-top: 10px;
-        }
-
-        /* GAL 25-11-23.x: small spacing for top nav buttons */
-        .top-buttons {
-            margin-top: 10px;
-            margin-bottom: 20px;
-        }
-    </style>
+    <!-- All styling now lives in /style.css -->
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <h1>File Management System Car Counter</h1>
@@ -71,9 +25,20 @@
 
         <div class="file-actions">
             <h3>Manage Files</h3>
-            <input type="text" id="fileName" placeholder="Enter file name">
-            <button onclick="deleteFile()">Delete File</button>
-            <button onclick="downloadFile()">Download File</button>
+
+            <input type="text" id="fileName" placeholder="Current file name">
+
+            <div class="button-row">
+                <button class="download-btn" onclick="downloadFile()">Download File</button>
+
+                <!-- MUCH SAFER: delete moved away + red -->
+                <button class="delete-btn" onclick="deleteFile()">Delete File</button>
+            </div>
+
+            <div class="rename-row">
+                <input type="text" id="newFileName" placeholder="New file name (for rename)">
+                <button onclick="renameFile()">Rename File</button>
+            </div>
         </div>
 
         <div class="buttons">
@@ -90,6 +55,25 @@
     </div>
 
     <script>
+        // Apply theme based on device identity (CarCounter vs GateCounter)
+        function applyThemeByIdentity() {
+            fetch('/identity')
+                .then(response => response.text())
+                .then(text => {
+                    const id = text.trim();  // kill \r\n etc
+                    console.log('Identity from /identity:', JSON.stringify(id));
+
+                    if (id.endsWith('CarCounter')) {
+                        document.body.classList.add('theme-car');
+                    } else if (id.endsWith('GateCounter')) {
+                        document.body.classList.add('theme-gate');
+                    } else {
+                        console.warn('Unknown identity:', id);
+                    }
+                })
+                .catch(err => console.error('Error fetching identity:', err));
+        }
+
         // Fetch the list of files from the server
         function fetchFileList() {
             fetch('/listFiles')
@@ -108,11 +92,17 @@
                 alert('Please enter a file name.');
                 return;
             }
-            fetch(`/delete?filename=${fileName}`, { method: 'DELETE' })
+
+            // SAFETY CONFIRMATION
+            if (!confirm(`Are you sure you want to DELETE "${fileName}"?\nThis cannot be undone.`)) {
+                return;
+            }
+
+            fetch(`/delete?filename=${encodeURIComponent(fileName)}`)
                 .then(response => response.text())
                 .then(data => {
                     alert(data);
-                    fetchFileList(); // Refresh file list
+                    fetchFileList(); // Refresh
                 })
                 .catch(err => console.error('Error deleting file:', err));
         }
@@ -124,7 +114,7 @@
                 alert('Please enter a file name.');
                 return;
             }
-            window.location.href = `/download?filename=${fileName}`;
+            window.location.href = `/download?filename=${encodeURIComponent(fileName)}`;
         }
 
         // Upload a file
@@ -157,7 +147,7 @@
                 alert('Please enter a directory name.');
                 return;
             }
-            fetch(`/changeDirectory?dir=${dirName}`)
+            fetch(`/changeDirectory?dir=${encodeURIComponent(dirName)}`)
                 .then(response => response.text())
                 .then(data => {
                     alert(data);
@@ -166,8 +156,36 @@
                 .catch(err => console.error('Error changing directory:', err));
         }
 
-        // Initialize file list on page load
-        window.onload = fetchFileList;
+        // Rename a file
+        function renameFile() {
+            const oldName = document.getElementById('fileName').value;
+            const newName = document.getElementById('newFileName').value;
+
+            if (!oldName) {
+                alert('Please enter the current file name.');
+                return;
+            }
+            if (!newName) {
+                alert('Please enter the new file name.');
+                return;
+            }
+
+            fetch(`/rename?old=${encodeURIComponent(oldName)}&new=${encodeURIComponent(newName)}`)
+                .then(response => response.text())
+                .then(data => {
+                    alert(data);
+                    fetchFileList(); // Refresh file list
+                })
+                .catch(err => console.error('Error renaming file:', err));
+        }
+
+        // Initialize on page load – CALL BOTH
+        window.onload = function () {
+            applyThemeByIdentity();
+            fetchFileList();
+        };
     </script>
+
+
 </body>
 </html>
