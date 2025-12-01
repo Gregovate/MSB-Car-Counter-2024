@@ -6,10 +6,17 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.11.30.0-MQTTfix"
+#define FWVersion "25.11.30.1-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.11.30.1   Corrected A→B follow detection logic. Removed duplicate/multi-publish
+             of beamAB_ms and replaced with single-capture abFollow_ms using
+             global flag abFollowCaptured. Updated CAR_DETECTED to store the full
+             pass time in global timeToPassMS instead of a local shadow variable.
+             EnterLog.csv format updated to:
+             "DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms,
+             Beam1_Trip_ms". Removed tempF/humidity from car-logging path.
 25.11.30.0   Replaced rtc.toString(buf2) in countTheCar() with explicit timestamp
              formatting using snprintf() to prevent format-buffer mutation. Fixes
              frozen timestamps in EnterLog.csv. No other functional changes.
@@ -329,7 +336,6 @@ char topicBase[60];      // keep until confirmed unused
 #define MQTT_PUB_FW_VERSION     "msb/traffic/CarCounter/System/firmware"
 #define MQTT_PUB_TIME           "msb/traffic/CarCounter/System/time"
 #define MQTT_DEBUG_LOG          "msb/traffic/CarCounter/System/debug" 
-#define MQTT_PUB_ALARM          "msb/traffic/CarCounter/System/alarm"
 #define MQTT_PUB_HEARTBEAT      "msb/traffic/CarCounter/System/heartbeat"
 
 /* Season metadata (shared SD/season logic) */
@@ -352,12 +358,13 @@ char topicBase[60];      // keep until confirmed unused
 #define MQTT_PUB_SUMMARY        "msb/traffic/CarCounter/Calendar/showSummary"
 
 /* Beam Sensors and Logs */
-#define MQTT_PUB_BEAM_A_STATE      "msb/traffic/CarCounter/Sensors/beam1State"
+#define MQTT_PUB_BEAM_A_STATE    "msb/traffic/CarCounter/Sensors/beam1State"
 #define MQTT_PUB_BEAM_B_STATE    "msb/traffic/CarCounter/Sensors/beam2State"
 #define MQTT_PUB_BEAM_AB_MS      "msb/traffic/CarCounter/Sensors/beamAB_ms"
 #define MQTT_PUB_BEAM_B_BROKEN_MS   "msb/traffic/CarCounter/Sensors/beamB_broken_ms"
-#define MQTT_PUB_TTP                    "msb/traffic/CarCounter/Sensors/TTP"
-#define MQTT_COUNTER_LOG                "msb/traffic/CarCounter/Sensors/counterLog"
+#define MQTT_PUB_TTP              "msb/traffic/CarCounter/Sensors/TTP"
+#define MQTT_COUNTER_LOG          "msb/traffic/CarCounter/Sensors/CounterLog"
+#define MQTT_PUB_ALARM            "msb/traffic/CarCounter/Sensors/Alarm"
 
 /* WiFi Diagnostics */
 #define MQTT_PUB_RSSI          "msb/traffic/CarCounter/System/wifi/rssi"
@@ -425,6 +432,8 @@ unsigned long firstBeamTripTime = 0;
 unsigned long bothBeamsHighTime = 0;
 unsigned long lastCarDetectedMillis = 0;
 unsigned long secondBeamTripTime = 0;
+bool abFollowCaptured = false;
+unsigned long abFollow_ms = 0; // Time in ms between first beam and second beam trip
 
 //const unsigned long personTimeout = 500;        // Time in ms considered too fast for a car, more likely a person
 //const unsigned long bothBeamsHighThreshold = 750;  // Time in ms for both beams high to consider a car is in the detection zone
@@ -2562,13 +2571,13 @@ void averageHourlyTemp() {
     }
 }
 
-// Car Counted, increment the counter by 1 and append to the Enterlog.csv log file on the SD card
+// Car Counted, increment the counter by 1 and append to the EnterLog.csv log file on the SD card
 void countTheCar() {
     /* COUNT SUCCESS */
 
     noCarTimer = millis();
 
-    /*------Append to log file*/
+    // RTC snapshot
     DateTime now = rtc.now();
 
     // Build a fresh timestamp string (do NOT use now.toString here)
@@ -2578,66 +2587,69 @@ void countTheCar() {
              now.year(), now.month(), now.day(),
              now.hour(), now.minute(), now.second());
 
+    // Serial log (no temp/humidity here either if you don't care)
     Serial.print(timeBuf);
-    Serial.print(", Temp = ");
-    Serial.print(tempF);
-    Serial.print(", ");
+    Serial.print(", EnterDailyTotal (before increment) = ");
+    Serial.println(totalDailyCars);
 
-    // increase Count for Every car going through car counter regardless of time
-    totalDailyCars ++;   
+    // Increase count for every car going through car counter regardless of time
+    totalDailyCars++;
+
     // Increment hourly car count
     int currentHour = now.hour();
     hourlyCount[currentHour]++;
     pendingSaveHourly = true;   // defer SD hourly write
-    //saveDailyTotal(); // DEFERREDUpdate Daily Total on SD Card to retain numbers with reboot
-    pendingSaveDaily = true;   // <-- new global flag we will handle next step
-    //saveHourlyCounts(); // removed for SD Card hot-path safety
+    pendingSaveDaily  = true;   // defer daily total write
 
     // Construct the MQTT topic dynamically
     char topic[60];
     snprintf(topic, sizeof(topic), "%s%02d", MQTT_PUB_CARS_HOURLY, currentHour);
-    // Publish current hour's data to MQTT
     publishMQTT(topic, String(hourlyCount[currentHour]));
 
-
-    // increase Show Count only when show is open
+    // Increase Show Count only when show is open
     if (showTime == true) {
-        totalShowCars ++;  // increase Show Count only when show is open
-        //saveShowTotal(); // update show total count in event of power failure during show hours
-        pendingSaveShow = true;  // <-- new global flag we will handle next step
+        totalShowCars++;
+        pendingSaveShow = true;  // defer show total write
     }
-    Serial.print(totalDailyCars) ;  
+
+    Serial.print(F("TotalDailyCars after increment: "));
+    Serial.println(totalDailyCars);
 
     // Build full path: /CC/2025/EnterLog.csv
     String enterLogPath = String(seasonFolder) + fileName6;
-    // open file for writing Car Data
+
+    // Open file for writing Car Data
     myFile = SD.open(enterLogPath.c_str(), FILE_APPEND); // EnterLog.csv in season folder
     if (myFile) {
-        myFile.print(timeBuf); 
+        // NEW CSV FORMAT:
+        // DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, Beam1_Trip_ms
+
+        myFile.print(timeBuf);
         myFile.print(", ");
-        myFile.print (timeToPassMS) ; 
-        myFile.print(", 1 , "); 
-        myFile.print (totalDailyCars) ; 
+        myFile.print(timeToPassMS);        // A->B broken -> B clear (set in CAR_DETECTED)
         myFile.print(", ");
-        myFile.println(tempF);
+        myFile.print(totalDailyCars);      // EnterDailyTotal
+        myFile.print(", ");
+        myFile.print(abFollow_ms);         // A->B follow time (Beam 2 first high)
+        myFile.print(", ");
+        myFile.println(firstBeamTripTime); // raw millis when Beam 1 first tripped
+
         myFile.close();
+
         Serial.print(F(" Car "));
         Serial.print(totalDailyCars);
         Serial.println(F(" Logged to SD Card."));
-        char jsonPayload[64];
-        snprintf(jsonPayload, sizeof(jsonPayload),
-                "{\"tempF\": %.1f, \"humidity\": %.1f}",
-                tempF, humidity);
 
-        publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
-        publishMQTT(MQTT_PUB_TIME, getRtcTimestamp());
+        // Only car-related MQTT here; env is handled by 10-minute task
+        publishMQTT(MQTT_PUB_TIME, timeBuf);
         publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars));
         start_MqttMillis = millis();
+
     } else {
         Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fileName6);
     }
-} /* END countTheCar*/
+} /* END countTheCar */
 
 /** CarCounter State Machine to Detect and Count Cars */
 void detectCar() {
@@ -2679,37 +2691,47 @@ void detectCar() {
         case WAITING_FOR_CAR:
             // First beam goes HIGH (broken) -> possible car
             if (firstBeamState == 1) {
-                firstBeamTripTime = currentMillis;
+                firstBeamTripTime  = currentMillis;
+                abFollowCaptured   = false;            // reset GLOBAL flag
                 currentCarDetectState = FIRST_BEAM_HIGH;
                 publishMQTT(MQTT_COUNTER_LOG, "First Beam High");
-                digitalWrite(greenArchPin, HIGH);  // Green arch ON
+                digitalWrite(greenArchPin, HIGH);      // Green arch ON
             }
             break;
 
         case FIRST_BEAM_HIGH:
             if (secondBeamState == 1) {
-                // Both beams have been tripped, measure A->B time
-                unsigned long timeBeamsHigh = currentMillis - firstBeamTripTime;
-                publishMQTT(MQTT_PUB_BEAM_AB_MS, String(timeBeamsHigh));
+
+                // First time Beam B follows Beam A → capture A→B follow ONCE
+                if (!abFollowCaptured) {
+                    abFollow_ms = currentMillis - firstBeamTripTime;           // uses your global
+                    publishMQTT(MQTT_PUB_BEAM_AB_MS, String(abFollow_ms));     // same topic as before
+                    abFollowCaptured = true;
+                }
+
+                // Use current time for activation thresholds
+                unsigned long timeBeamsHighNow = currentMillis - firstBeamTripTime;
 
                 // Only move to BOTH_BEAMS_HIGH if duration exceeds activation thresholds
-                if (timeBeamsHigh >= minActivationDuration && timeBeamsHigh >= waitDuration) {
-                    bothBeamsHighTime   = currentMillis;
-                    carPresentFlag      = true;
+                if (timeBeamsHighNow >= minActivationDuration &&
+                    timeBeamsHighNow >= waitDuration) {
+                    bothBeamsHighTime     = currentMillis;
+                    carPresentFlag        = true;
                     currentCarDetectState = BOTH_BEAMS_HIGH;
                     publishMQTT(MQTT_COUNTER_LOG, "State Changed: Both Beams High");
-                    digitalWrite(greenArchPin, LOW);  // Green arch OFF
-                    digitalWrite(redArchPin, HIGH);   // Red arch ON
+                    digitalWrite(greenArchPin, LOW);   // Green arch OFF
+                    digitalWrite(redArchPin, HIGH);    // Red arch ON
                 }
 
             } else if (firstBeamState == 0) {
                 // First beam cleared before second beam ever went high -> reset
                 currentCarDetectState = WAITING_FOR_CAR;
                 publishMQTT(MQTT_COUNTER_LOG, "1st Beam Low, Changed Waiting for Car");
-                digitalWrite(greenArchPin, HIGH);    // Green arch ON
-                digitalWrite(redArchPin, LOW);       // Red arch OFF
+                digitalWrite(greenArchPin, HIGH);      // Green arch ON
+                digitalWrite(redArchPin, LOW);         // Red arch OFF
             }
             break;
+
 
         case BOTH_BEAMS_HIGH:
             // Stuck-vehicle alarm using carCounterTimeout
@@ -2747,15 +2769,17 @@ void detectCar() {
 
         case CAR_DETECTED:
             if (carPresentFlag) {
-                // Count the car and update files
+                // Compute full pass time into GLOBAL timeToPassMS for logging
+                timeToPassMS = currentMillis - firstBeamTripTime;
+
+                // Count the car and update files (countTheCar() will log timeToPassMS)
                 countTheCar();
-                unsigned long timeToPassMS = currentMillis - firstBeamTripTime;
                 publishMQTT(MQTT_PUB_TTP, String(timeToPassMS));
                 publishMQTT(MQTT_COUNTER_LOG, "Car Counted Successfully!!");
                 carPresentFlag = false;
 
                 // Lights on successful detection
-                digitalWrite(redArchPin, LOW);   // Red OFF
+                digitalWrite(redArchPin, LOW);    // Red OFF
                 digitalWrite(greenArchPin, HIGH); // Green ON
 
                 // Time between cars
@@ -2768,7 +2792,8 @@ void detectCar() {
                 publishMQTT(MQTT_COUNTER_LOG, "Idle-Waiting For Car");
             }
             break;
-    }
+
+            }
 }
 // END CarCounter CAR DETECTION
 
@@ -3423,7 +3448,7 @@ void setup() {
         checkAndCreateFile(fileName2);
         checkAndCreateFile(fileName3);
         checkAndCreateFile(fileName4);
-        checkAndCreateFile(fileName6, "Date Time,TimeToPass,Car#,TotalDailyCars,Temp");
+        checkAndCreateFile(fileName6, "DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, Beam1_Trip_ms");
         checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
         checkAndCreateFile(fileName8);
         checkAndCreateFile(fileName9);
