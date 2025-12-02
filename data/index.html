@@ -54,137 +54,137 @@
         </div>
     </div>
 
-    <script>
-        // Apply theme based on device identity (CarCounter vs GateCounter)
-        function applyThemeByIdentity() {
-            fetch('/identity')
-                .then(response => response.text())
-                .then(text => {
-                    const id = text.trim();  // kill \r\n etc
-                    console.log('Identity from /identity:', JSON.stringify(id));
+<script>
+    // Apply theme based on device identity (CarCounter vs GateCounter)
+    function applyThemeByIdentity() {
+        fetch('/identity')
+            .then(response => response.text())
+            .then(text => {
+                const id = text.trim();  // kill \r\n etc
+                console.log('Identity from /identity:', JSON.stringify(id));
 
-                    if (id.endsWith('CarCounter')) {
-                        document.body.classList.add('theme-car');
-                    } else if (id.endsWith('GateCounter')) {
-                        document.body.classList.add('theme-gate');
-                    } else {
-                        console.warn('Unknown identity:', id);
-                    }
-                })
-                .catch(err => console.error('Error fetching identity:', err));
-        }
-
-        // Fetch the list of files from the server
-        function fetchFileList() {
-            fetch('/listFiles')
-                .then(response => response.text())
-                .then(data => {
-                    const fileListDiv = document.getElementById('fileList');
-                    fileListDiv.innerHTML = data.replace(/\n/g, '<br>');
-                })
-                .catch(err => console.error('Error fetching file list:', err));
-        }
-
-        // Delete a file
-        function deleteFile() {
-            const fileName = document.getElementById('fileName').value;
-            if (!fileName) {
-                alert('Please enter a file name.');
-                return;
-            }
-
-            // SAFETY CONFIRMATION
-            if (!confirm(`Are you sure you want to DELETE "${fileName}"?\nThis cannot be undone.`)) {
-                return;
-            }
-
-            fetch(`/delete?filename=${encodeURIComponent(fileName)}`)
-                .then(response => response.text())
-                .then(data => {
-                    alert(data);
-                    fetchFileList(); // Refresh
-                })
-                .catch(err => console.error('Error deleting file:', err));
-        }
-
-        // Download a file
-        function downloadFile() {
-            const fileName = document.getElementById('fileName').value;
-            if (!fileName) {
-                alert('Please enter a file name.');
-                return;
-            }
-            window.location.href = `/download?filename=${encodeURIComponent(fileName)}`;
-        }
-
-        // Upload a file
-        function uploadFile() {
-            const fileInput = document.getElementById('uploadFile');
-            if (fileInput.files.length === 0) {
-                alert('Please select a file to upload.');
-                return;
-            }
-            const file = fileInput.files[0];
-            const formData = new FormData();
-            formData.append('file', file);
-
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
+                if (id.endsWith('CarCounter')) {
+                    document.body.classList.add('theme-car');
+                } else if (id.endsWith('GateCounter')) {
+                    document.body.classList.add('theme-gate');
+                } else {
+                    console.warn('Unknown identity:', id);
+                }
             })
-                .then(response => response.text())
-                .then(data => {
-                    alert(data);
-                    fetchFileList(); // Refresh file list
-                })
-                .catch(err => console.error('Error uploading file:', err));
+            .catch(err => console.error('Error fetching identity:', err));
+    }
+
+    // Fetch the list of files from the server
+    function fetchFileList() {
+        fetch('/listFiles')
+            .then(response => response.text())
+            .then(data => {
+                const fileListDiv = document.getElementById('fileList');
+                fileListDiv.innerHTML = data.replace(/\n/g, '<br>');
+            })
+            .catch(err => console.error('Error fetching file list:', err));
+    }
+
+    // Delete a file
+    function deleteFile() {
+        const fileName = document.getElementById('fileName').value;
+        if (!fileName) {
+            alert('Please enter a file name.');
+            return;
         }
 
-        // Change directory
-        function changeDirectory() {
-            const dirName = document.getElementById('directoryName').value;
-            if (!dirName) {
-                alert('Please enter a directory name.');
-                return;
-            }
-            fetch(`/changeDirectory?dir=${encodeURIComponent(dirName)}`)
-                .then(response => response.text())
-                .then(data => {
-                    alert(data);
-                    fetchFileList(); // Refresh file list
-                })
-                .catch(err => console.error('Error changing directory:', err));
+        if (!confirm(`Are you sure you want to DELETE "${fileName}"?\nThis cannot be undone.`)) {
+            return;
         }
 
-        // Rename a file
-        function renameFile() {
-            const oldName = document.getElementById('fileName').value;
-            const newName = document.getElementById('newFileName').value;
+        fetch(`/delete?filename=${encodeURIComponent(fileName)}`)
+            .then(response => response.text())
+            .then(data => {
+                alert(data);
+                fetchFileList(); // Refresh
+            })
+            .catch(err => console.error('Error deleting file:', err));
+    }
 
-            if (!oldName) {
-                alert('Please enter the current file name.');
-                return;
-            }
-            if (!newName) {
-                alert('Please enter the new file name.');
-                return;
-            }
+    // Download a file
+    function downloadFile() {
+        const fileName = document.getElementById('fileName').value;
+        if (!fileName) {
+            alert('Please enter a file name.');
+            return;
+        }
+        window.location.href = `/download?filename=${encodeURIComponent(fileName)}`;
+    }
 
-            fetch(`/rename?old=${encodeURIComponent(oldName)}&new=${encodeURIComponent(newName)}`)
-                .then(response => response.text())
-                .then(data => {
-                    alert(data);
-                    fetchFileList(); // Refresh file list
-                })
-                .catch(err => console.error('Error renaming file:', err));
+    // Upload a file
+    function uploadFile() {
+        const fileInput = document.getElementById('uploadFile');
+        if (fileInput.files.length === 0) {
+            alert('Please select a file to upload.');
+            return;
+        }
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.text())
+            .then(data => {
+                alert(data);
+                fetchFileList(); // Refresh file list
+            })
+            .catch(err => console.error('Error uploading file:', err));
+    }
+
+    // Change directory
+    function changeDirectory() {
+        const dirName = document.getElementById('directoryName').value;
+        if (!dirName) {
+            alert('Please enter a directory name.');
+            return;
+        }
+        fetch(`/changeDirectory?dir=${encodeURIComponent(dirName)}`)
+            .then(response => response.text())
+            .then(data => {
+                alert(data);
+                fetchFileList(); // Refresh file list
+            })
+            .catch(err => console.error('Error changing directory:', err));
+    }
+
+    // Rename a file
+    function renameFile() {
+        const oldName = document.getElementById('fileName').value;
+        const newName = document.getElementById('newFileName').value;
+
+        if (!oldName) {
+            alert('Please enter the current file name.');
+            return;
+        }
+        if (!newName) {
+            alert('Please enter the new file name.');
+            return;
         }
 
-        // Initialize on page load – CALL BOTH
-        window.onload = function () {
-            applyThemeByIdentity();
-            fetchFileList();
-        };
-    </script>
+        fetch(`/rename?old=${encodeURIComponent(oldName)}&new=${encodeURIComponent(newName)}`)
+            .then(response => response.text())
+            .then(data => {
+                alert(data);
+                fetchFileList(); // Refresh file list
+            })
+            .catch(err => console.error('Error renaming file:', err));
+    }
+
+    // Initialize on page load – CALL BOTH
+    window.onload = function () {
+        applyThemeByIdentity();
+        fetchFileList();
+    };
+</script>
+
 
 
 </body>

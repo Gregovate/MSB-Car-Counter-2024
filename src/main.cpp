@@ -6,10 +6,11 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.12.02.0-MQTTfix"
+#define FWVersion "25.12.02.1-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.12.02.1  Disabled Failsafe to avoid writing duplicate summary rows 25.12.02.1-MQTTfix
 25.12.02.0  25.12.02.0   Added full beam-health protection and unified alarm handling.
              - Added Beam-1 idle fault detection in FIRST_BEAM_HIGH:
                Raises ALARM_ENTER_STUCK if Beam-1 stays HIGH and Beam-2
@@ -3379,18 +3380,18 @@ void timeTriggeredEvents() {
         flagDailyShowSummarySaved = true;
     }
 
-    // Fail-safe: if we missed the exact minute, still write ONE summary row later
-    if (sdAvailable &&
-        showSeasonActive &&
-        (minutesNow > showEndMin) &&
-        !flagDailyShowSummarySaved &&
-        now.hour() < 23) {
+    // // Fail-safe: if we missed the exact minute, still write ONE summary row later
+    // // GAL 25-12-02: disabled, causing duplicate ShowSummary rows note of reboots after written
+    //     showSeasonActive &&
+    //     (minutesNow > showEndMin) &&
+    //     !flagDailyShowSummarySaved &&
+    //     now.hour() < 23) {
 
-        saveDailyShowSummary();
-        publishMQTT(MQTT_DEBUG_LOG,
-                    "Daily Show Summary Saved (failsafe after showEndMin)");
-        flagDailyShowSummarySaved = true;
-    }
+    //     saveDailyShowSummary();
+    //     publishMQTT(MQTT_DEBUG_LOG,
+    //                 "Daily Show Summary Saved (failsafe after showEndMin)");
+    //     flagDailyShowSummarySaved = true;
+    // }
 
     // ---------------------------
     // Reset daily flags at 12:01:01 AM
