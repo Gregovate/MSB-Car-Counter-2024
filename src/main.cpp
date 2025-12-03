@@ -6,10 +6,14 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.12.02.1-MQTTfix"
+#define FWVersion "25.12.03.0-MQTTfix"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.12.03.0  Replaced Beam1_Trip_ms with TimeBetweenCars_ms in EnterLog.csv to
+             log actual time between cars instead of redundant Beam-1 trip time.
+             Updated all related comments, variable names, and CSV headers.
+25.12.02.2  Added dates for file listings in SD File Manager UI
 25.12.02.1  Disabled Failsafe to avoid writing duplicate summary rows 25.12.02.1-MQTTfix
 25.12.02.0  25.12.02.0   Added full beam-health protection and unified alarm handling.
              - Added Beam-1 idle fault detection in FIRST_BEAM_HIGH:
@@ -457,6 +461,7 @@ unsigned long firstBeamTripTime = 0;     // ms when first beam was tripped
 unsigned long bothBeamsHighTime = 0;     // ms when both beams were tripped
 unsigned long lastCarDetectedMillis = 0; // ms when last car was detected
 unsigned long secondBeamTripTime = 0;    // ms when second beam was tripped
+unsigned long timeBetweenCars_ms = 0;    // Time between last car and current car
 bool abFollowCaptured = false;
 unsigned long abFollow_ms = 0;           // Time in ms between first beam and second beam trip
 
@@ -902,13 +907,16 @@ void ensureSeasonFolderExists() {
 }
 
 // BEGIN OTA SD Card File Operations
+// BEGIN OTA SD Card File Operations
 void listSDFiles(AsyncWebServerRequest *request) {
     if (!sdAvailable) {
         request->send(503, "text/plain", "SD not available");
         return;
     }
 
+    // Header line so the UI output is self-explanatory
     String fileList = "Files in " + currentDirectory + ":\n";
+    fileList += "Name, Size (bytes), Last Write\n";
 
     File root = SD.open(currentDirectory);
     if (!root || !root.isDirectory()) {
@@ -916,14 +924,44 @@ void listSDFiles(AsyncWebServerRequest *request) {
         return;
     }
 
-    File file = root.openNextFile();
-    while (file) {
-        fileList += String(file.name()) + " (" + String(file.size()) + " bytes)\n";
-        file = root.openNextFile();
+    while (true) {
+        File file = root.openNextFile();
+        if (!file) {
+            break;  // no more files
+        }
+
+        if (!file.isDirectory()) {
+            // Name
+            fileList += String(file.name());
+            fileList += ", ";
+
+            // Size
+            fileList += String(file.size());
+            fileList += ", ";
+
+            // Last write time (if available and time is set)
+            time_t lw = file.getLastWrite();  // ESP32 SD library usually supports this
+            if (lw > 0) {
+                struct tm *tmstruct = localtime(&lw);
+                char buf[20];
+                // YYYY-MM-DD HH:MM
+                strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", tmstruct);
+                fileList += buf;
+            } else {
+                fileList += "unknown";
+            }
+
+            fileList += "\n";
+        }
+
+        file.close();  // important: close each file before opening the next
     }
+
+    root.close();
 
     request->send(200, "text/plain", fileList);
 }
+
 
 void downloadSDFile(AsyncWebServerRequest *request) {
     if (!request->hasParam("filename")) {
@@ -2714,7 +2752,7 @@ void countTheCar() {
     myFile = SD.open(enterLogPath.c_str(), FILE_APPEND); // EnterLog.csv in season folder
     if (myFile) {
         // NEW CSV FORMAT:
-        // DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, Beam1_Trip_ms
+        // DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms
 
         myFile.print(timeBuf);
         myFile.print(", ");
@@ -2724,7 +2762,7 @@ void countTheCar() {
         myFile.print(", ");
         myFile.print(abFollow_ms);         // A->B follow time (Beam 2 first high)
         myFile.print(", ");
-        myFile.println(firstBeamTripTime); // raw millis when Beam 1 first tripped
+        myFile.println(timeBetweenCars_ms); // raw millis between cars
 
         myFile.close();
 
@@ -2921,8 +2959,8 @@ void detectCar() {
                 digitalWrite(greenArchPin, HIGH); // Green ON
 
                 // Time between cars
-                unsigned long timeBetweenCars = currentMillis - lastCarDetectedMillis;
-                publishMQTT(MQTT_PUB_BETWEENCARS_MS, String(timeBetweenCars), true);
+                timeBetweenCars_ms = currentMillis - lastCarDetectedMillis;
+                publishMQTT(MQTT_PUB_BETWEENCARS_MS, String(timeBetweenCars_ms), true);
                 lastCarDetectedMillis = currentMillis;
 
                 // Back to idle
@@ -3590,7 +3628,7 @@ void setup() {
         checkAndCreateFile(fileName2);
         checkAndCreateFile(fileName3);
         checkAndCreateFile(fileName4);
-        checkAndCreateFile(fileName6, "DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, Beam1_Trip_ms");
+        checkAndCreateFile(fileName6, "DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms, TempF, Humidity");
         checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
         checkAndCreateFile(fileName8);
         checkAndCreateFile(fileName9);
