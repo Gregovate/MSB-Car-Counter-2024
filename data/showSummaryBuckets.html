@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Show Summary Buckets</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+    </style>
+</head>
+<body>
+    <h1>Show Summary — Buckets</h1>
+    <table id="showSummaryTable">
+        <thead>
+            <tr id="tableHeader"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <script>
+        function fetchShowSummaryBuckets() {
+            fetch('/ShowSummaryBuckets.csv')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok ' + response.statusText);
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    displayTable(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching ShowSummaryBuckets.csv:', error);
+                });
+        }
+
+        function displayTable(csvData) {
+            const rows = csvData.split('\n').filter(row => row.trim() !== '');
+            const tableHeader = document.getElementById('tableHeader');
+            const tableBody = document.getElementById('tableBody');
+
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (rows.length === 0) return;
+
+            const headers = rows[0].split(',');
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header.trim();
+                tableHeader.appendChild(th);
+            });
+
+            rows.slice(1).forEach(row => {
+                const rowData = row.split(',');
+                const tr = document.createElement('tr');
+                rowData.forEach(cell => {
+                    const td = document.createElement('td');
+                    td.textContent = cell.trim();
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+
+        window.onload = fetchShowSummaryBuckets;
+    </script>
+</body>
+</html>

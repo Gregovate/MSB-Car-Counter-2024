@@ -6,10 +6,31 @@ DOIT DevKit V1 ESP32 with built-in WiFi & Bluetooth */
 
 // IMPORTANT: Update FWVersion each time a new changelog entry is added
 #define OTA_Title "Car Counter" // OTA Title
-#define FWVersion "25.12.03.0-MQTTfix"
+#define FWVersion "25.12.03.2"
 #define THIS_MQTT_CLIENT "espCarCounter" // MQTT Client Name
 
 /* ## CAR COUNTER BEGIN CHANGELOG ##
+25.12.03.2   Updated CarCounter web UI and summary views:
+             - Added new showSummaryBuckets.html viewer for bucket-style
+               summary data and linked it into the main index.html page.
+             - Added HTTP routes /showSummaryBuckets.html and
+               /ShowSummaryBuckets.csv to serve the new HTML viewer and
+               the derived bucket CSV file.
+             - Updated index.html to match GateCounter layout and added
+               dual summary buttons (cumulative + bucket).
+             - Updated CarCounter listSDFiles() output to use tab-aligned
+               formatting identical to GateCounter for improved readability.
+             - No changes to detection logic or MQTT topics.
+25.12.03.1   Added second daily summary file (ShowSummaryBuckets.csv) to CarCounter:
+             - Introduced new filename10 constant and automatic header creation for
+               the bucket-style summary CSV in /CC/YYYY/.
+             - saveDailyShowSummary() now writes both cumulative summary
+               (ShowSummary.csv) and new hourly bucket summary
+               (6PM,7PM,8PM,9PM plus DailyTotal).
+             - Bucket math derived from existing cumulative values; does not alter
+               legacy ShowSummary.csv format or behavior.
+             - Ensures backward compatibility with committee spreadsheets while
+               providing incremental per-hour data for improved nightly reporting.
 25.12.03.0  Replaced Beam1_Trip_ms with TimeBetweenCars_ms in EnterLog.csv to
              log actual time between cars instead of redundant Beam-1 trip time.
              Updated all related comments, variable names, and CSV headers.
@@ -731,6 +752,7 @@ const String fileName6 = "/EnterLog.csv"; // EnterLog.csv file to store all car 
 const String fileName7 = "/ShowSummary.csv"; // Show summary of counts during show (5:00pm to 9:10pm)
 const String fileName8 = "/data/index.html"; // data folder and index.html for serving files OTA
 const String fileName9 = "/data/style.css"; // data folder and index.html for serving files OTA
+const String fileName10 = "/ShowSummaryBuckets.csv";   // New incremental summary version
 
 /***** Arrays for Hourly Totals/Averages *****/
 static unsigned int hourlyCount[24] = {0}; // Array for Daily total cars per hour
@@ -906,21 +928,21 @@ void ensureSeasonFolderExists() {
     publishMQTT(MQTT_DEBUG_LOG, String("Using season folder: ") + seasonFolder);
 }
 
-// BEGIN OTA SD Card File Operations
-// BEGIN OTA SD Card File Operations
+// BEGIN OTA SD Card File Operations for Car Counter
 void listSDFiles(AsyncWebServerRequest *request) {
     if (!sdAvailable) {
         request->send(503, "text/plain", "SD not available");
         return;
     }
 
-    // Header line so the UI output is self-explanatory
+    // Header for UI alignment (same as Gate Counter)
     String fileList = "Files in " + currentDirectory + ":\n";
-    fileList += "Name, Size (bytes), Last Write\n";
+    fileList += "Name\tSize (bytes)\tLast Write\n";
 
     File root = SD.open(currentDirectory);
     if (!root || !root.isDirectory()) {
-        request->send(500, "text/plain", "Failed to open directory: " + currentDirectory);
+        request->send(500, "text/plain",
+                      "Failed to open directory: " + currentDirectory);
         return;
     }
 
@@ -931,20 +953,19 @@ void listSDFiles(AsyncWebServerRequest *request) {
         }
 
         if (!file.isDirectory()) {
-            // Name
+            // Add file name
             fileList += String(file.name());
-            fileList += ", ";
+            fileList += "\t";
 
-            // Size
+            // Add file size
             fileList += String(file.size());
-            fileList += ", ";
+            fileList += "\t";
 
-            // Last write time (if available and time is set)
-            time_t lw = file.getLastWrite();  // ESP32 SD library usually supports this
+            // Add last write timestamp
+            time_t lw = file.getLastWrite();
             if (lw > 0) {
                 struct tm *tmstruct = localtime(&lw);
                 char buf[20];
-                // YYYY-MM-DD HH:MM
                 strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", tmstruct);
                 fileList += buf;
             } else {
@@ -954,13 +975,15 @@ void listSDFiles(AsyncWebServerRequest *request) {
             fileList += "\n";
         }
 
-        file.close();  // important: close each file before opening the next
+        file.close();
     }
 
     root.close();
 
     request->send(200, "text/plain", fileList);
 }
+
+
 
 
 void downloadSDFile(AsyncWebServerRequest *request) {
@@ -1162,7 +1185,7 @@ void renameSDFile(AsyncWebServerRequest *request) {
 
 //END OTA SD Card File Operations
 
-// HTML Content served from /data/index.html and /data/style.css
+// Car Counter HTML Content served from /data/index.html and /data/style.css
 void setupServer() {
 
     // ----------------------------
@@ -1244,6 +1267,46 @@ void setupServer() {
     });
 
     // ----------------------------
+    // Serve Show Summary Buckets webpage
+    // Put showSummaryBuckets.html in /data/
+    // ----------------------------
+    server.on("/showSummaryBuckets.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+
+        if (sdAvailable && SD.exists("/data/showSummaryBuckets.html")) {
+            request->send(SD, "/data/showSummaryBuckets.html", "text/html");
+            return;
+        }
+
+        request->send(404, "text/plain",
+                      "showSummaryBuckets.html not found in /data");
+    });
+
+    // ----------------------------
+    // Seasonal ShowSummaryBuckets.csv
+    // /CC/YYYY/ShowSummaryBuckets.csv
+    // ----------------------------
+    server.on("/ShowSummaryBuckets.csv", HTTP_GET, [](AsyncWebServerRequest *request) {
+
+        if (!sdAvailable) {
+            request->send(503, "text/plain", "SD not available");
+            return;
+        }
+
+        String fullPath = String(seasonFolder) + "/ShowSummaryBuckets.csv";
+
+        if (!SD.exists(fullPath)) {
+            request->send(404, "text/plain",
+                          "ShowSummaryBuckets.csv not found in season folder");
+            return;
+        }
+
+        AsyncWebServerResponse *response =
+            request->beginResponse(SD, fullPath, "text/csv");
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(response);
+    });
+
+    // ----------------------------
     // File manager / SD routes
     // ----------------------------
     server.on("/listFiles", HTTP_GET, listSDFiles);
@@ -1261,14 +1324,13 @@ void setupServer() {
             "</body></html>"
         );
     });
-
-    // ----------------------------
-    // Handle file uploads to /data directory
-    // ----------------------------    
     server.on("/upload", HTTP_POST,
         [](AsyncWebServerRequest *request) {},
         uploadSDFile);
-
+        
+    // ----------------------------
+    // Handle file uploads to /data directory
+    // ---------------------------- 
     server.on("/uploadToData", HTTP_POST,
         [](AsyncWebServerRequest *request) {},
         [](AsyncWebServerRequest *request, String filename, size_t index,
@@ -2331,6 +2393,48 @@ void saveDailyShowSummary() {
                        showAverageTemp);
     summaryFile.close();
 
+    // ---------------------------------------------
+    // NEW: write bucket-style summary to second file
+    // /CC/YYYY/ShowSummaryBuckets.csv (fileName10)
+    // ---------------------------------------------
+
+    // Compute per-hour buckets from cumulative values
+    int bucket6PM = cumulative6PM;
+    int bucket7PM = cumulative7PM - cumulative6PM;
+    int bucket8PM = cumulative8PM - cumulative7PM;
+    int bucket9PM = cumulative9PM - cumulative8PM;
+
+    // Full show total for the night (includes any 9:00–9:20 bump already
+    // rolled into cumulative9PM above)
+    int dailyTotal = cumulative9PM;
+
+    // Build seasonal path: /CC/YYYY/ShowSummaryBuckets.csv
+    String fnameBuckets = String(fileName10);
+    if (!fnameBuckets.startsWith("/")) fnameBuckets = "/" + fnameBuckets;
+    String fullPathBuckets = folder + fnameBuckets;
+
+    File bucketFile = SD.open(fullPathBuckets, FILE_APPEND);
+    if (!bucketFile) {
+        Serial.print("Failed to open bucketed show summary file: ");
+        Serial.println(fullPathBuckets);
+        publishMQTT(MQTT_DEBUG_LOG,
+                    "Failed to open bucketed show summary file: " + fullPathBuckets);
+        // Do NOT return here; cumulative summary already written.
+    } else {
+        // Format: Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp
+        bucketFile.printf("%s,%d,%d,%d,%d,%d,%d,%d,%.1f\n",
+                          dateBuffer,
+                          daysRunning,
+                          bucket6PM,
+                          bucket7PM,
+                          bucket8PM,
+                          bucket9PM,
+                          dailyTotal,
+                          totalShowCars,
+                          showAverageTemp);
+        bucketFile.close();
+    }
+    
     // GAL 25-11-26.x:
     // This summary is used for manual spreadsheets from SD, not HA/Calendar.
     char debugBuf[160];
@@ -3632,6 +3736,8 @@ void setup() {
         checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
         checkAndCreateFile(fileName8);
         checkAndCreateFile(fileName9);
+        // NEW: bucketed summary file (per-hour buckets + daily total + running show total)
+        checkAndCreateFile(fileName10, "Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp");
 
         // Required Hourly Data Files
         createAndInitializeHourlyFile(fileName5);
