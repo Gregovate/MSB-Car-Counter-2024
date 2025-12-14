@@ -3732,7 +3732,7 @@ void setup() {
         checkAndCreateFile(fileName2);
         checkAndCreateFile(fileName3);
         checkAndCreateFile(fileName4);
-        checkAndCreateFile(fileName6, "DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms, TempF, Humidity");
+        checkAndCreateFile(fileName6, "DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms");
         checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
         checkAndCreateFile(fileName8);
         checkAndCreateFile(fileName9);
