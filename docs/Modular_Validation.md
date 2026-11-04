@@ -9,7 +9,7 @@ Status: PASS for source-preservation checks and ESP32 compile/link contract chec
 | GPIO/topic macros, state initialization order/values, enum values | PASS | PASS |
 | Common files byte-identical across projects | 9 files PASS | 9 files PASS |
 | ESP32 compile and link | PASS with OTA interface shim | PASS with OTA interface shim |
-| Real licensed ElegantOTAPro build | PASS: operator build at6fe838b, ElegantOTAPro3.1.4 | Pending operator-local build |
+| Real licensed ElegantOTAPro build | PASS: operator build at6fe838b, ElegantOTAPro3.1.4 | PASS: operator modular build log, ElegantOTAPro3.1.4 |
 | Hardware/OTA/counting acceptance | Not performed | Not performed |
 
 Compile configuration used Espressif32 platform6.9.0, Arduino ESP32 framework2.0.17 package3.20017.241212, Xtensa8.4.0 toolchain2021r2-patch5, board az-delivery-devkit-v4. Public libraries: SSD1306 2.5.9, GFX1.11.9, BusIO1.16.1, RTClib2.1.3, NTPClient3.2.1, PubSubClient2.8, ArduinoJson7.2.0, DHT1.4.6, Unified Sensor1.1.14, AsyncTCP3.3.2, ESPAsyncWebServer3.6.0.
@@ -26,4 +26,10 @@ The operator supplied the complete successful PlatformIO build log after pulling
 
 Compile and link SUCCESS in24.17 seconds. RAM50504/532480 bytes (9.5%); flash1040925/1310720 bytes (79.4%). Three warnings appear in the third-party Arduino-DS3231 1.1.0+sha.4582ed6 source: sequence-point/month assignment, uint32_t printf format, and possibly uninitialized month. No application compile/link errors appear. Both firmwares instantiate RTC_DS3231 from RTClib; the separately declared Arduino-DS3231 dependency can be evaluated for removal in a later dependency cleanup, without changing it during this structural check.
 
-This closes the Car real-library compile gate only. No paid library source was received or published. No upload or hardware acceptance is established by this log. Gate real-library build remains pending.
+This closes the Car real-library compile gate only. No paid library source was received or published. No upload or hardware acceptance is established by this log. Gate real-library build is recorded below.
+
+## Operator-local Gate build evidence
+
+The operator supplied a successful Gate modular build log, including compilation of main.cpp and the extracted services (no Car ArchEffects.cpp), using the real local ElegantOTAPro3.1.4. Toolchain and reported library versions match the operator-local Car environment above. Compile and link SUCCESS in19.91 seconds; RAM50488/532480 bytes (9.5%); flash1024365/1310720 bytes (78.2%). The same three Arduino-DS3231 third-party warnings are present; no application compile/link errors appear.
+
+The log does not print a Git commit or firmware version; its successful compilation of modular Gate services is direct evidence, while exact source/binary association still requires local revision verification and a binary hash. No firmware upload or runtime/hardware validation is shown. No licensed source was received or published.
