@@ -38,14 +38,14 @@ def main():
     parser.add_argument('--peer', type=Path, help='Other counter repository for byte-for-byte shared-file comparison')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    expected = json.loads((root / 'tests/baseline_function_hashes.json').read_text())
+    expected = json.loads((root / 'tests/baseline_function_hashes.json').read_text(encoding="utf-8"))
     actual = {}
     for path in sorted((root / 'src').rglob('*.cpp')):
-        for name, digest in body_hashes(path.read_text()):
+        for name, digest in body_hashes(path.read_text(encoding="utf-8")):
             if name in actual:
                 raise SystemExit('FAIL: duplicate function definition: ' + name)
             actual[name] = digest
-        if path.name != 'NetworkService.cpp' and '#include "secrets.h"' in path.read_text():
+        if path.name != 'NetworkService.cpp' and '#include "secrets.h"' in path.read_text(encoding="utf-8"):
             raise SystemExit('FAIL: credentials must be compiled only by NetworkService.cpp')
     for name, digest in expected.items():
         if actual.get(name) != digest:
@@ -57,26 +57,27 @@ def main():
     expected_registration = dict(body_hashes(registration))['configureWifiAccessPoints']
     if actual['configureWifiAccessPoints'] != expected_registration:
         raise SystemExit('FAIL: AP registration changed')
-    config = json.loads((root / 'tests/baseline_config.json').read_text())
+    config = json.loads((root / 'tests/baseline_config.json').read_text(encoding="utf-8"))
     definitions = {}
     for filename in ['DeviceConfig.h', 'MqttTopics.h']:
-        source = mask_comments((root / 'include/traffic' / filename).read_text())
+        source = mask_comments((root / 'include/traffic' / filename).read_text(encoding="utf-8"))
         definitions.update({m[1]: ' '.join(m[2].split()) for m in re.finditer(r'^#define\s+(\w+)\s+(.+)$', source, re.M)})
     if definitions != config['defines']:
         raise SystemExit('FAIL: GPIO, identity, topic or constant macro changed')
-    state = re.sub(r'^\s*#.*$', '', (root / 'src/services/RuntimeState.cpp').read_text(), flags=re.M)
+    state = re.sub(r'^\s*#.*$', '', (root / 'src/services/RuntimeState.cpp').read_text(encoding="utf-8"), flags=re.M)
     if tokens(state) != tokens(config['state_tokens']):
         raise SystemExit('FAIL: state initialization values or ordering changed')
-    state_header = mask_comments((root / 'include/traffic/RuntimeState.h').read_text())
+    state_header = mask_comments((root / 'include/traffic/RuntimeState.h').read_text(encoding="utf-8"))
     enums = ' '.join(re.findall(r'enum\s+\w+\s*\{[^}]*\}\s*;', state_header))
     if tokens(enums) != tokens(config['enum_tokens']):
         raise SystemExit('FAIL: detector/pattern enum values changed')
-    shared = json.loads((root / 'tests/shared_files.json').read_text())
+    shared = json.loads((root / 'tests/shared_files.json').read_text(encoding="utf-8"))
     for name, digest in shared.items():
-        data = (root / name).read_bytes()
+        # Git may check text out as CRLF on Windows; compare canonical LF bytes.
+        data = (root / name).read_bytes().replace(b'\r\n', b'\n')
         if hashlib.sha256(data).hexdigest() != digest:
             raise SystemExit('FAIL: shared file changed: ' + name)
-        if args.peer and data != (args.peer / name).read_bytes():
+        if args.peer and data != (args.peer / name).read_bytes().replace(b'\r\n', b'\n'):
             raise SystemExit('FAIL: counterpart shared file differs: ' + name)
     print(f'PASS: {len(expected)} baseline function bodies preserved; AP registration, GPIO/topics, state initialization and enums preserved; {len(shared)} shared files verified' + (' against peer' if args.peer else ''))
 
