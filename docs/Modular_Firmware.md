@@ -9,7 +9,7 @@ This change implements matching module boundaries in the Car and Gate firmware. 
 | Files | Responsibility |
 |---|---|
 | `src/main.cpp` | Setup sequence and loop scheduling, still in the original order |
-| `include/traffic/DeviceConfig.h` | Existing device identity, GPIOs, logical display geometry and distinct development firmware version |
+| `include/traffic/DeviceConfig.h` | Existing device identity, GPIOs and logical display geometry; version declaration imported from FirmwareVersion.h |
 | `include/traffic/MqttTopics.h` | Exact existing topic literals; spelling/case/slashes preserved |
 | `include/traffic/Firmware.h` | Composition header connecting service declarations; no object definitions |
 | `include/traffic/RuntimeState.h`, `src/services/RuntimeState.cpp` | Transitional extern declarations and exactly one definition of each original global object/value |
@@ -84,4 +84,10 @@ ElegantOTAPro is paid, proprietary software. Its source must remain local and mu
 4. Review the module diff and build evidence before any hardware test. No GPIO rewiring is required for this extraction.
 5. Before any future upload, use the governing operator runbook, known-good firmware/UI bundle and count-data backup. This document does not authorize an upload.
 
-Version is now defined in `include/traffic/DeviceConfig.h`, not main.cpp. The version helper reads this explicit definition and never derives a new version from old source comments. History, UI files and CSV formats remain separate artifacts.
+## Manual release workflow
+
+The active changelog and the only editable firmware version are at the top of `src/main.cpp`, matching Greg's established workflow. Before compiling, record every change in that newest-first comment block and manually update `const char FWVersion[] = "...";` immediately below it. Keep detailed older history in `docs/Firmware_History.md`; do not rewrite it.
+
+`include/traffic/FirmwareVersion.h` declares the version for all separately compiled services; it contains no duplicate value. MQTT, ElegantOTA and diagnostics therefore use the same manually assigned identifier. `update_version.py` reads that value in UTF-8; it changes it only when explicitly called with `--set`. It never assigns a version from old changelog comments.
+
+The preservation check accepts a deliberate valid version change and comment-only changelog additions while continuing to reject altered function bodies, GPIOs, topics and initial state. The .2 workflow update changes release metadata and tools, not detector behavior. Earlier real-library build evidence applies to .1; .2 still needs a new local licensed-library build before any hardware test. UI files and CSV formats remain separate artifacts.

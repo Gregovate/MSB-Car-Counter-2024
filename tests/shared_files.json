@@ -7,5 +7,6 @@
   "include/traffic/MqttTransport.h": "971d839730a28225c3c16a350fde7ff854362f5a9ad26b7d356716575947233e",
   "include/traffic/EnvironmentService.h": "f7825df91947318e236b98633976d73a396d522e6d6208a23eb1a776e01a6dfe",
   "include/traffic/DisplayService.h": "cf667652b42f6688d5e61481083da83e4a0c99184810d7838fbcede3a633e8bd",
-  "include/traffic/WebService.h": "cefcd3d3c30f614690c61459808d5d9b680601fbb29b27d18f4dcbacfad3f0a7"
+  "include/traffic/WebService.h": "cefcd3d3c30f614690c61459808d5d9b680601fbb29b27d18f4dcbacfad3f0a7",
+  "include/traffic/FirmwareVersion.h": "8b64e7c90e2b684620e842aba9590d887915e08023c9a02083d260f3ad3eccbe"
 }

@@ -2,7 +2,7 @@
 
 // Device-specific identity, GPIOs and display geometry. No wiring changes in this extraction.
 #define OTA_Title "Car Counter"
-#define FWVersion "25.12.03.2-modular-test.1"
+#include "FirmwareVersion.h" // Version is edited at the top of src/main.cpp.
 #define THIS_MQTT_CLIENT "espCarCounter"
 #define DS3231_I2C_ADDRESS 0x68
 #define firstBeamPin 33

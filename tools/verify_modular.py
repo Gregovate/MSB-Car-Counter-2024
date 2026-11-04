@@ -62,8 +62,14 @@ def main():
     for filename in ['DeviceConfig.h', 'MqttTopics.h']:
         source = mask_comments((root / 'include/traffic' / filename).read_text(encoding="utf-8"))
         definitions.update({m[1]: ' '.join(m[2].split()) for m in re.finditer(r'^#define\s+(\w+)\s+(.+)$', source, re.M)})
-    if definitions != config['defines']:
+    # Version is release metadata controlled by the operator, not detector logic.
+    expected_definitions = {k: v for k, v in config['defines'].items() if k != 'FWVersion'}
+    if definitions != expected_definitions:
         raise SystemExit('FAIL: GPIO, identity, topic or constant macro changed')
+    version_source = mask_comments((root / 'src/main.cpp').read_text(encoding="utf-8"))
+    versions = re.findall(r'const\s+char\s+FWVersion\s*\[\s*\]\s*=\s*"([^"\r\n]+)"\s*;', version_source)
+    if len(versions) != 1 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', versions[0]):
+        raise SystemExit('FAIL: expected one valid manual FWVersion at the top of main.cpp')
     state = re.sub(r'^\s*#.*$', '', (root / 'src/services/RuntimeState.cpp').read_text(encoding="utf-8"), flags=re.M)
     if tokens(state) != tokens(config['state_tokens']):
         raise SystemExit('FAIL: state initialization values or ordering changed')

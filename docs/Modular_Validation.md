@@ -33,3 +33,11 @@ This closes the Car real-library compile gate only. No paid library source was r
 The operator supplied a successful Gate modular build log, including compilation of main.cpp and the extracted services (no Car ArchEffects.cpp), using the real local ElegantOTAPro3.1.4. Toolchain and reported library versions match the operator-local Car environment above. Compile and link SUCCESS in19.91 seconds; RAM50488/532480 bytes (9.5%); flash1024365/1310720 bytes (78.2%). The same three Arduino-DS3231 third-party warnings are present; no application compile/link errors appear.
 
 The log does not print a Git commit or firmware version; its successful compilation of modular Gate services is direct evidence, while exact source/binary association still requires local revision verification and a binary hash. No firmware upload or runtime/hardware validation is shown. No licensed source was received or published.
+
+## Manual release workflow update (.2)
+
+The active changelog and single editable FWVersion are restored to the top of src/main.cpp. FirmwareVersion.h provides only the shared extern declaration. Every change is recorded newest-first in main.cpp, including this workflow update; original historical entries remain unchanged in docs/Firmware_History.md.
+
+Three portability/release-workflow regression tests pass per project: Windows legacy encoding with CRLF, manual version/changelog edits accepted, and changed setupServer executable text rejected. All original function bodies, state defaults, GPIOs/topics and enums remain preserved. Ten shared files now include the new declaration-only version header. This .2 change supersedes the prior DeviceConfig.h version-edit location. Previous operator real-library build evidence applies to .1, not to the new .2 identity; a new local licensed-library build is still required before testing.
+
+The workflow revision also passed an ESP32 compile/link check with public dependencies and a compile-only OTA API stand-in. This does not replace a local build with the licensed ElegantOTAPro library or hardware testing.

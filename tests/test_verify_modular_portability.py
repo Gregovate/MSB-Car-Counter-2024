@@ -41,6 +41,16 @@ runpy.run_path(sys.argv[0],run_name='__main__')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('PASS:', result.stdout)
 
+    def test_manual_version_and_changelog_edit_pass(self):
+        path = self.root / 'src/main.cpp'
+        data = path.read_text(encoding='utf-8')
+        import re
+        data, count = re.subn(r'(const char FWVersion\[\] = )"[^"]+"', r'\1"26.11.04.99-manual-test"', data)
+        self.assertEqual(count, 1)
+        path.write_text('// Newest change: manual operator release entry.\n' + data, encoding='utf-8')
+        result = self.run_windows_verifier()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_changed_setup_server_still_fails(self):
         path = self.root / 'src/services/WebService.cpp'
         data = path.read_text(encoding='utf-8')

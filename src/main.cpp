@@ -1,5 +1,28 @@
-// MSB Car Counter composition and scheduler.
-// Historical comments: docs/Firmware_History.md.
+/*
+ * MSB Car Counter — RELEASE CONTROL
+ *
+ * Before compiling a changed firmware:
+ *   1. Add every change below, newest entry first.
+ *   2. Manually update FWVersion immediately below this comment.
+ * This is the only version value: MQTT, ElegantOTA and diagnostics use it.
+ * Older original history is preserved in docs/Firmware_History.md.
+ *
+ * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.2 — 2026-11-04
+ *   - Restore the editable firmware identifier and active changelog to main.cpp.
+ *   - Share the identifier through FirmwareVersion.h; no duplicate version value.
+ *   - Allow deliberate version edits in preservation checks; keep logic checks.
+ *   - Make version-helper text access explicitly UTF-8.
+ * 25.12.03.2-modular-test.1 — 2026-11-04
+ *   - Extract MQTT, network, web/OTA, temperature, clock, SD, display and detector
+ *     services; retain existing counting behavior, pins and topic names.
+ *   - Preserve original source history and exclude all licensed OTA source.
+ *   - Add preservation/shared-file checks and Windows UTF-8/CRLF fixes.
+ *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
+ */
+#include "traffic/FirmwareVersion.h"
+const char FWVersion[] = "25.12.03.2-modular-test.2";
+
 #include "traffic/Firmware.h"
 
 void setup() {
