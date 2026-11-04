@@ -40,12 +40,14 @@ include/secrets*.h
 **/secrets*.h
 
 # ------------------------------
-# Optional: local libraries you don't want tracked
-# (only keep if you truly want these excluded)
+# Licensed local libraries — never commit paid ElegantOTAPro source
 # ------------------------------
-lib/ElegantOTAPro-3-1-4/
+lib/ElegantOTAPro*/
+lib/ElegantOTAPro*.zip
 
 # ------------------------------
 # DO NOT IGNORE THESE (Force Git to track)
 !/firmware/
 !/data/
+# Local compile-only validation configuration (not deployable)
+platformio.contract.ini

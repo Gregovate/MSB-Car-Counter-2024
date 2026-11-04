@@ -1,0 +1,11 @@
+{
+  "src/services/MqttTransport.cpp": "fabada00d8141593d6016a2ba1e24d850a613d6e6c3cd5a1479559b97c48b97f",
+  "src/services/TemperatureSensor.cpp": "f0d4686a4bb7c31487c405f44770fbe010f37efc08502ecaf3d6330b39ca8de6",
+  "src/services/ClockCommon.cpp": "eda672defd4c2db3eeb3a0e36436fe578d7b925de1fcae9f845306a3ed1989d9",
+  "src/services/WebCommon.cpp": "7055f072422081bf05e48a122618f0c6ef0d8061e4cd99883f4c701abf155eb0",
+  "include/traffic/Platform.h": "96d6086f744299a115de84585fea0053a413b36fbc364d85a920c808f8e45fa2",
+  "include/traffic/MqttTransport.h": "971d839730a28225c3c16a350fde7ff854362f5a9ad26b7d356716575947233e",
+  "include/traffic/EnvironmentService.h": "f7825df91947318e236b98633976d73a396d522e6d6208a23eb1a776e01a6dfe",
+  "include/traffic/DisplayService.h": "cf667652b42f6688d5e61481083da83e4a0c99184810d7838fbcede3a633e8bd",
+  "include/traffic/WebService.h": "cefcd3d3c30f614690c61459808d5d9b680601fbb29b27d18f4dcbacfad3f0a7"
+}
