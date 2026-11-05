@@ -116,6 +116,27 @@ int main() {
     assert(recoverHourlyExport(hourly));assert(disk[hourly]==old);
     assert(writeHourlyExport(hourly,"new complete rows"));
     assert(disk[hourly]=="new complete rows" && disk[hourly+".previous"]==old);
+    // Startup publication may never reach MQTT. A later heartbeat must emit
+    // current export health without rewriting the CSV or replaying old counts.
+    messages.clear();messageRetained.clear();auto exported=disk;
+    publishCountHealth();
+    bool sawHourly=false;
+    for(size_t i=0;i<messages.size();++i) {
+        if(messages[i].first=="msb/traffic/TestCounter/System/hourlyExport") {
+            sawHourly=true;assert(messages[i].second=="OK" && messageRetained[i]);
+        }
+    }
+    assert(sawHourly && disk==exported);
+    failWrite=hourly+".pending";assert(!writeHourlyExport(hourly,"failed replacement"));
+    messages.clear();messageRetained.clear();publishCountHealth();sawHourly=false;
+    for(size_t i=0;i<messages.size();++i) {
+        if(messages[i].first=="msb/traffic/TestCounter/System/hourlyExport") {
+            sawHourly=true;assert(messages[i].second=="WRITE_VERIFY_FAILED" && messageRetained[i]);
+        }
+    }
+    assert(sawHourly && disk[hourly]=="new complete rows");
+    failWrite="";assert(writeHourlyExport(hourly,"verified later replacement"));
+    assert(hourlyExportHealth=="OK");
     std::cout<<"PASS: count recovery, torn saves, per-event persistence, reset replay, full dates, read failures, archive protection, Gate paths\n";
     return 0;
 }

@@ -453,8 +453,8 @@ void saveDaysRunning() {
 }
 
 void saveHourlyCounts() {
-    if (!countsReady()) return;
-    if (!persistCountState()) return; // Preserve exports when the checkpoint fails.
+    if (!countsReady()) { reportHourlyExportStatus("SKIPPED_RESTORE_FAILED"); return; }
+    if (!persistCountState()) { reportHourlyExportStatus("SKIPPED_CHECKPOINT_FAILED"); return; } // Preserve exports when the checkpoint fails.
     DateTime now = rtc.now();
     char dateBuffer[13];
     snprintf(dateBuffer, sizeof(dateBuffer), "%04d-%02d-%02d",
@@ -466,6 +466,7 @@ void saveHourlyCounts() {
 
     // GAL 25-11-26.x: Even if SD is not available, we still publish the hourly MQTT value.
     if (!sdAvailable) {
+        reportHourlyExportStatus("SD_UNAVAILABLE");
         Serial.println("saveHourlyCounts skipped - SD not available (MQTT only)");
 
         snprintf(topic, sizeof(topic),
@@ -495,6 +496,7 @@ void saveHourlyCounts() {
     if (!recoverHourlyExport(fullPath)) return;
     File file = recordingOpen(fullPath, FILE_READ);
     if (!file) {
+        reportHourlyExportStatus("READ_FAILED_KEEP_FILE");
         publishMQTT(MQTT_DEBUG_LOG, "Hourly export read failed; existing file preserved");
         return;
     }
@@ -538,7 +540,7 @@ void saveHourlyCounts() {
         bool complete=file.position()==file.size();
         file.close();
         if (!complete) {
-            publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),"READ_FAILED_KEEP_FILE",true);
+            reportHourlyExportStatus("READ_FAILED_KEEP_FILE");
             return;
         }
     }

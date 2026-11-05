@@ -11,6 +11,7 @@ int freshCountYear=0;
 int countSlot=-1;
 bool countReady=false;
 const char* countFault="NOT_RESTORED";
+String hourlyExportHealth="NOT_ATTEMPTED";
 
 uint32_t countToday() {
     if (!rtcReady || rtc.lostPower()) return 0;
@@ -112,8 +113,16 @@ void noteFreshCountFolder() {
     freshCountYear=recordingYear();
 }
 
+void reportHourlyExportStatus(const char* status) {
+    // Latch current health separately from the offline event queue. Both devices
+    // repeat this value after connection; no old count messages are replayed.
+    hourlyExportHealth=status;
+    publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),hourlyExportHealth,true);
+}
+
 void publishCountHealth() {
     reportCountFault(countFault);
+    publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),hourlyExportHealth,true);
     if (!countReady)
         publishMQTT((String(topic_base_path)+"/System/unrestoredDailyCount").c_str(),String(totalDailyCars),true);
 }
@@ -238,7 +247,7 @@ bool recoverHourlyExport(const String& path) {
     String previous=path+".previous";
     if (!SD.exists(previous)) return true; // Normal first-time initialization.
     if (recordingRename(previous,path)) return true;
-    publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),"RECOVERY_FAILED",true);
+    reportHourlyExportStatus("RECOVERY_FAILED");
     return false;
 }
 
@@ -251,22 +260,22 @@ bool writeHourlyExport(const String& path, const String& content) {
     bool ok=check && check.size()==content.length() && n==content.length() && check.readString()==content;
     check.close();
     if (!ok) {
-        publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),"WRITE_VERIFY_FAILED",true);
+        reportHourlyExportStatus("WRITE_VERIFY_FAILED");
         return false;
     }
     if (!recoverHourlyExport(path) ||
         (SD.exists(previous) && !recordingRemove(previous)) ||
         (SD.exists(path) && !recordingRename(path,previous))) {
-        publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),"BACKUP_FAILED",true);
+        reportHourlyExportStatus("BACKUP_FAILED");
         return false;
     }
     if (!recordingRename(pending,path)) {
         // Best effort rollback. On power loss/failed rollback, boot restores
         // .previous BEFORE the initializer can create an empty hourly file.
         recoverHourlyExport(path);
-        publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),"REPLACE_FAILED",true);
+        reportHourlyExportStatus("REPLACE_FAILED");
         return false;
     }
-    publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),"OK",true);
+    reportHourlyExportStatus("OK");
     return true;
 }

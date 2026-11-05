@@ -16,10 +16,10 @@
   "tests/test_recording_calendar.py": "cd0178164bd1cf9cc4961b992444b91529cc5318659901c38fd52dcc450ae972",
   "tests/calendar_stubs/traffic/Firmware.h": "c23e167b1182b6c0be7f5f4246ca64d4cbf67b58988776ffbad001c910daefe4",
   "tests/calendar_stubs/Preferences.h": "de0c5cf10845e7a18ac80382650c6a78283212688886262883e5d288a5bcb151",
-  "src/services/CountPersistence.cpp": "771440e205f9dc3edbca4846c23ed7ffb88c8aa6b620a3fdf27f0269e3845f84",
-  "include/traffic/CountPersistence.h": "f2c8b44bb813c80c5fc8bce64d27eca0644cf7f69f1aed2deec42752e01589e3",
+  "src/services/CountPersistence.cpp": "97c4fea19a1c93d0e4e3f7714cf3cab97c09085b1de8b98378956f818eafc032",
+  "include/traffic/CountPersistence.h": "0cd2824e2497cea70e4b32360ec785f7bc300c2941db14da11990f2e099bbcc2",
   "include/traffic/CountRecord.h": "90c9d15b4513a0a1e873fe6da5f213d0f6019c7aafe3dc2d0b5e581d69af67ff",
-  "tests/count_stubs/traffic/Firmware.h": "958a0fae01b51292310af5274a2c1224e00fdd04f4992a7551ecb7116ec2141c",
-  "tests/count_recovery_test.cpp": "b4cbadf268346d77e43d816a9ae66c36cc09a76b9e9f3900410b15ba3fe6cf3b",
+  "tests/count_stubs/traffic/Firmware.h": "9d1ccf78e89948a18861abaff636ed75d56c3f2157066403a337f19ddfcd087a",
+  "tests/count_recovery_test.cpp": "72549ae5adc377a6f309a25e76826b572885482661f0e7d486f336b9f8fdd3c9",
   "tests/test_count_recovery.py": "aebc85bad9f9272daae078e03b2ba2fc3fefb56edf112b512ec92e771ab42721"
 }

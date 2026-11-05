@@ -8,6 +8,10 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.6 — 2026-11-05
+ *   - Repeat the latest hourly-export status on heartbeat in both counters.
+ *   - Report skipped/failed exports explicitly; do not replay stale count queues.
+ *   - Test late status delivery, retained failures and successful recovery.
  * 25.12.03.2-modular-test.5 — 2026-11-05
  *   - Accept a verified zero legacy daily total with older valid hourly rows.
  *   - Preserve historical rows and reject inconsistent nonzero daily totals.
@@ -39,7 +43,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.5";
+const char FWVersion[] = "25.12.03.2-modular-test.6";
 
 #include "traffic/Firmware.h"
 

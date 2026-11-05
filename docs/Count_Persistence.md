@@ -1,7 +1,7 @@
 # Count persistence and reboot recovery — 2026-11-04
 
 ## Status and evidence
-Current source revision `.5` on `refactor/shared-firmware`; not uploaded yet.
+Current source revision `.6` on `refactor/shared-firmware`; `.6` is not uploaded yet. Both devices now report `.5` installed; see the startup telemetry update below.
 Car `.4` licensed build passed (29.77 s) and its OTA page subsequently reported `.4` installed on November 5. Initial migration reported `RESTORE_FAILED_KEEP_FILES`; field diagnosis and correction are below. Gate has not been reported updated from `.2`.
 The `.3` licensed local builds reported by Greg passed (Car 32.55 s, Gate 23.00 s); those builds do not include this change.
 Greg observed today's Car count reach 40, disappear across a reboot, then a seven-car manual test (later eight) disappear. HA history preserves the reported changes; it does not prove which write completed or the exact cause of each drop.
@@ -53,10 +53,10 @@ Persistence health is retained and repeated on heartbeat. Generic SD health `OK`
 ## Controlled hardware acceptance procedure
 Owner: the respective counter repository; branch `refactor/shared-firmware`. Coordinate HA schedule policy with the governing Show Controls repository. One device and one step at a time.
 
-1. Read-only: pull this source, verify the peer files and manual `.5` version, then run the local licensed build. Preserve `.vscode/extensions.json` edits. Do not upload compile-contract binaries.
-2. Read-only: capture live firmware, heartbeat/time, counts, persistence/SD diagnostics and current-year files. Preserve existing end-of-season 2025 backups; do not rename or edit 2025 files. Car currently reports `.4` with migration blocked; Gate last reported `.2`. Verify live identities before upload.
+1. Read-only: pull this source, verify the peer files and manual `.6` version, then run the local licensed build. Preserve `.vscode/extensions.json` edits. Do not upload compile-contract binaries.
+2. Read-only: capture live firmware, heartbeat/time, counts, persistence/SD diagnostics and current-year files. Preserve existing end-of-season 2025 backups; do not rename or edit 2025 files. Both devices now report `.5` with countPersistence OK. Verify live identities before upload.
 3. Before upload, review baseline expectations: `.2` may have written current traffic under 2025; `.4` imports 2026 only. Do not label an expected folder migration as proof of a successful count restoration. Choose an idle period and agree the single-device firmware-only OTA action. No filesystem upload, SD format, factory reset, or count command.
-4. After that agreed upload, inspect `.5` identity, current-year paths, full RTC date, `countPersistence` and hourly export status. On a restore fault stop further reset/upload actions and download the current-year evidence for inspection. Keep `.a`, `.b`, `.previous`, and `.pending` files intact. Do not revert to `.2` as a routine remedy: it can write into 2025.
+4. After that agreed upload, inspect `.6` identity, current-year paths, full RTC date, `countPersistence` and hourly export status. On a restore fault stop further reset/upload actions and download the current-year evidence for inspection. Keep `.a`, `.b`, `.previous`, and `.pending` files intact. Do not revert to `.2` as a routine remedy: it can write into 2025.
 5. When physical testing is possible, note starting daily/show/hourly values; pass a known number of vehicles; verify a completed checkpoint and matching exports. Perform one agreed reboot; require identical same-day values and no reset command. Verify failed-SD warning and restoration using a controlled test card/bench setup, not by interrupting the historical card remotely.
 6. Verify midnight/full-date rollover and reboot within the show-reset minute on a disposable test setup. Do not change the production RTC/HA calendar to force this test.
 
@@ -71,3 +71,17 @@ Observed Car files under `/CC/2026`: EnterTotal.txt is `0`, ShowTotal.txt is emp
 The exact field fixture was reproduced failing on `.4`, then passed with the shared `.5` correction. It also verifies one newly counted vehicle survives reboot after migration, and a nonzero mismatched daily count still fails without modifying files. Both 13-test suites and peer verification pass. ESP32 compile-contract checks are recorded in Modular_Validation.md; licensed `.5` builds and hardware validation remain pending.
 
 Before another upload, read `System/unrestoredDailyCount` on the running Car to capture any partial detections while `.4` recovery was blocked. A firmware reboot cannot retain that RAM-only value automatically. Do not invent a recovered baseline or alter 2025 history.
+
+## Startup telemetry correction — 2026-11-05
+
+Both devices now report `.5` installed. Car boot 04:59:16: `/CC/2026`, calendarHealth/countPersistence/hourlyExport all OK, daily/show 0/0. Car licensed `.5` build passed in 11.87 s; OTA failed MD5 twice, then succeeded on the third reported attempt. The reason for those MD5 failures is not established.
+
+Gate boot 05:05:16: `/GC/2026`, calendarHealth/countPersistence OK, exit/in-park 0/0, accepted State/showStartDate=2026-11-27. Gate rejected the stale 2025-11-28 command as intended. Its OTA identity/success and heartbeat confirm `.5` installation; no separate Gate build log/duration was supplied. Nonzero counting/reboot acceptance and offline operation remain pending.
+
+Gate `System/hourlyExport` was absent. Source audit: boot restores/exports before MQTT connects. Gate queues these messages but has no call to `publishQueuedMessages`; the current export status was only sent at the file operation. Thus a successful startup export could have no MQTT status. This finding alone does not prove that the CSV export succeeded; inspect its latest status/file after correction.
+
+Shared `.6` latches the latest hourly-export result and repeats it retained through `publishCountHealth` on each heartbeat in both counters. It also reports previously silent read/skip cases. `NOT_ATTEMPTED` means no result yet; failure remains visible until a subsequent export result replaces it. Heartbeat publication does not rewrite SD or change counts. The existing offline event queue is not replayed: replaying historical retained counts into HA requires a separate queue/state reconciliation design.
+
+Regression tests discard the initial publication, then verify heartbeat publishes retained OK without changing files; repeat after a failed write and require the failure, then verify successful export replaces the latched error. Both 13-test suites pass; peer verification checks 23 shared files and 90 Car / 95 Gate function bodies. ESP32 `.6` build checks were not available here (PlatformIO absent). Licensed `.6` builds, uploads and runtime verification are pending; both current devices remain `.5`.
+
+Next acceptance: build/install the Gate reporting revision using the existing controlled procedure, then observe `System/hourlyExport` after a heartbeat. On any failure inspect `/GC/2026` evidence, without a count reset. Verify current accepted date remains 2026-11-27. Preserve nonzero-count/reboot testing as a separate acceptance step.

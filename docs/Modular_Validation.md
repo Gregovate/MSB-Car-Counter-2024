@@ -61,3 +61,17 @@ The `.4` source adds shared dated per-vehicle checkpoints and protected hourly C
 
 ## `.5` zero-baseline migration regression — 2026-11-05
 Exact field fixture fails on `.4` and passes after the shared correction. Both full 13-test suites and all 23 shared-file checks pass; tested source retains prior malformed/nonzero/clock/archive protections. The `.5` ESP32 compile check could not run in this session because PlatformIO is unavailable (`No module named platformio`). Prior `.4` compile evidence remains valid for `.4` only. Licensed `.5` builds and live count/reboot acceptance remain pending.
+
+## Startup telemetry correction — 2026-11-05
+
+Both devices now report `.5` installed. Car boot 04:59:16: `/CC/2026`, calendarHealth/countPersistence/hourlyExport all OK, daily/show 0/0. Car licensed `.5` build passed in 11.87 s; OTA failed MD5 twice, then succeeded on the third reported attempt. The reason for those MD5 failures is not established.
+
+Gate boot 05:05:16: `/GC/2026`, calendarHealth/countPersistence OK, exit/in-park 0/0, accepted State/showStartDate=2026-11-27. Gate rejected the stale 2025-11-28 command as intended. Its OTA identity/success and heartbeat confirm `.5` installation; no separate Gate build log/duration was supplied. Nonzero counting/reboot acceptance and offline operation remain pending.
+
+Gate `System/hourlyExport` was absent. Source audit: boot restores/exports before MQTT connects. Gate queues these messages but has no call to `publishQueuedMessages`; the current export status was only sent at the file operation. Thus a successful startup export could have no MQTT status. This finding alone does not prove that the CSV export succeeded; inspect its latest status/file after correction.
+
+Shared `.6` latches the latest hourly-export result and repeats it retained through `publishCountHealth` on each heartbeat in both counters. It also reports previously silent read/skip cases. `NOT_ATTEMPTED` means no result yet; failure remains visible until a subsequent export result replaces it. Heartbeat publication does not rewrite SD or change counts. The existing offline event queue is not replayed: replaying historical retained counts into HA requires a separate queue/state reconciliation design.
+
+Regression tests discard the initial publication, then verify heartbeat publishes retained OK without changing files; repeat after a failed write and require the failure, then verify successful export replaces the latched error. Both 13-test suites pass; peer verification checks 23 shared files and 90 Car / 95 Gate function bodies. ESP32 `.6` build checks were not available here (PlatformIO absent). Licensed `.6` builds, uploads and runtime verification are pending; both current devices remain `.5`.
+
+Next acceptance: build/install the Gate reporting revision using the existing controlled procedure, then observe `System/hourlyExport` after a heartbeat. On any failure inspect `/GC/2026` evidence, without a count reset. Verify current accepted date remains 2026-11-27. Preserve nonzero-count/reboot testing as a separate acceptance step.

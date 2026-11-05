@@ -77,7 +77,8 @@ inline struct Sd {
 inline int daysRunning=0,totalDailyCars=7,totalShowCars=42;
 inline String seasonFolder="/CC/2026";
 inline std::vector<std::pair<String,String>> messages;
-inline void publishMQTT(const char* t,const String& s,bool=false){messages.emplace_back(t,s);}
+inline std::vector<bool> messageRetained;
+inline void publishMQTT(const char* t,const String& s,bool retain=false){messages.emplace_back(t,s);messageRetained.push_back(retain);}
 #define topic_base_path "msb/traffic/TestCounter"
 #define MQTT_DEBUG_LOG "debug"
 #define MQTT_PUB_SEASON_YEAR "year"
