@@ -59,3 +59,14 @@ void publishDebugEvent(const char* event, const String& details, bool retainFlag
 
     publishMQTT(MQTT_DEBUG_LOG, String(buf), retainFlag);
 }
+
+// HA owns retained Config commands. Report applied values on State only.
+// Skip disconnected snapshots: heartbeat republishes current values after
+// connection, rather than replaying defaults captured before HA commands.
+void publishConfigState(const char* commandTopic, const String& value) {
+    if (!mqtt_client.connected()) return;
+    String stateTopic(commandTopic);
+    if (stateTopic.indexOf("/Config/") < 0) return;
+    stateTopic.replace("/Config/", "/State/");
+    publishMQTT(stateTopic.c_str(), value, true);
+}

@@ -1,3 +1,9 @@
+## 25.12.03.2-modular-test.7 — 2026-11-05
+- Share command-to-State reporting for detector timing; firmware no longer overwrites HA-owned retained tuning commands during startup.
+- Report actual settings on heartbeat and after supported command application; skip disconnected snapshots to avoid stale state replay.
+- Keep existing command subscriptions, detector behavior, defaults, reset timing and count storage unchanged. Car beam-duration command remains disabled and is documented explicitly.
+- See [Configuration ownership](Configuration_Ownership.md). 14 host tests PASS per device; 24 shared files match. Licensed builds and hardware verification pending.
+
 ## 25.12.03.2-modular-test.6 — 2026-11-05
 - Latch and repeat current hourly-export health retained on heartbeat in both devices, so pre-connection startup messages do not disappear from monitoring.
 - Explicitly report skipped/checkpoint/SD/read failures. Do not replay old MQTT count queues or change counting/storage formats.

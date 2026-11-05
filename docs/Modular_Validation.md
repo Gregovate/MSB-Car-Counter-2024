@@ -75,3 +75,7 @@ Shared `.6` latches the latest hourly-export result and repeats it retained thro
 Regression tests discard the initial publication, then verify heartbeat publishes retained OK without changing files; repeat after a failed write and require the failure, then verify successful export replaces the latched error. Both 13-test suites pass; peer verification checks 23 shared files and 90 Car / 95 Gate function bodies. ESP32 `.6` build checks were not available here (PlatformIO absent). Licensed `.6` builds, uploads and runtime verification are pending; both current devices remain `.5`.
 
 Next acceptance: build/install the Gate reporting revision using the existing controlled procedure, then observe `System/hourlyExport` after a heartbeat. On any failure inspect `/GC/2026` evidence, without a count reset. Verify current accepted date remains 2026-11-27. Preserve nonzero-count/reboot testing as a separate acceptance step.
+
+## Configuration command ownership (.7), 2026-11-05
+
+Both repositories pass 14 host tests and peer verification (Car 91 function bodies / 70 explicit revisions; Gate 96 / 71; 24 shared files). Actual timing publishers tested against retained HA commands, offline suppression and current applied-state reporting. Original baseline hashes, GPIO/topics and detector state definitions remain unchanged. PlatformIO is not installed in this environment; no .7 ESP32 build or hardware acceptance is claimed. Devices last reported .5.

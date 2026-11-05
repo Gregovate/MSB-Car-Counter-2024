@@ -30,6 +30,7 @@ void publishMQTT(const char *topic, const String &message) {
 
 
 void KeepMqttAlive() {
+    publishTimingConfig();
     publishCountHealth();
 
     // ---- Heartbeat (retained, ONLY here to prevent show spam) ----
@@ -97,8 +98,9 @@ void KeepMqttAlive() {
 }
 
 void publishTimingConfig() {
-  publishMQTT(MQTT_SUB_TOPIC5, String(carCounterTimeout), true);
-  publishMQTT(MQTT_SUB_TOPIC6, String(waitDuration),      true);
+    // Commands remain HA-owned; expose the actual applied values separately.
+    publishConfigState(MQTT_SUB_TOPIC5, String(carCounterTimeout));
+    publishConfigState(MQTT_SUB_TOPIC6, String(waitDuration));
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -146,8 +148,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
         Serial.println(F(" Counter Alarm Timer Updated"));
         publishMQTT(MQTT_DEBUG_LOG, "Car Counter Timeout Updated");
 
-        // Echo updated timing config once
-        // publishTimingConfig();
+        // Acknowledge the applied value without replacing the HA command.
+        publishTimingConfig();
 
     // *** DISABLE THIS FOR NOW ***
     /*

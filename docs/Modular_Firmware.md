@@ -99,3 +99,7 @@ The preservation check accepts a deliberate valid version change and comment-onl
 ## Count recovery follow-up — 2026-11-04
 
 The `.4` source adds shared dated per-vehicle checkpoints and protected hourly CSV replacement. See [Count persistence](Count_Persistence.md) for evidence, failure handling, remaining limits, and the controlled acceptance procedure. Neither device has been uploaded with this revision.
+
+## Configuration ownership (.7)
+
+See [Configuration ownership and remaining refactor work](Configuration_Ownership.md) for HA command/applied-state separation, actual hard-coded values, and unresolved offline/scheduling gaps.

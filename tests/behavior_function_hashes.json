@@ -1,10 +1,10 @@
 {
-  "KeepMqttAlive": "e45743d9d7817e8c1456247775ee6fea4fa34cf6c3cad887c6082370cc2e1a53",
+  "KeepMqttAlive": "1bba79fb73dd77e8e88570e7ff07f70ff528c6c609cde0a5e7dee3c1daaf2dc8",
   "MQTTreconnect": "60006dfc19a20fd58899dc82dfb96b2ee787dfa3907f5e49c237aa24d7a28a68",
   "SetLocalTime": "f2e9662d99e9af93794fdff67ac400016085c762f0b6c09f4da749287a9e888c",
   "acceptShowStartDate": "68e628189079b5766713940aa60905ae4063b733c988fec858afea7b631fea11",
   "applyRecordingCalendar": "2e5609f8c8324d77e110bb28527849b0425d25573fad29de76084a8329390ece",
-  "callback": "58c2ac518444e86725b5c6bc681d81f7018d6e74079791326aab02056c7c9533",
+  "callback": "ccc675d7d654d42491d09378d0fc4dbcd75b3cf23532f75a2d499fe54336bfe4",
   "changeDirectory": "c48d9632ce990c441ba41387b94668f7c94b14126fc031d617026ace4da09914",
   "checkAndCreateFile": "6d90a284257e0e20dd3963a3faebb96847521a49443cf4d79494786dca7c4e24",
   "checkSdHealth": "1a20542211fced364fa886e7f1d6b45f048f0175f08db3fa76330143cca5e0ca",
@@ -66,5 +66,7 @@
   "resetCountsForShow": "a4460f5d419dcc035f0118c65999fcca5a6bdc5acad4a5796969108782ed6711",
   "recoverHourlyExport": "9454008c3180aa2f9d3e7f8861e7b4a00b7dc489a717ff6959a844463c5e8275",
   "writeHourlyExport": "3f2922b2ec57c7004ecbb6024afcf2b43dac3973d74bf5e958bb8b5937a7f289",
-  "reportHourlyExportStatus": "bde61168fa54b8af2f917dbe58270549af1afb4ea2821a0683f8b7746dccc917"
+  "reportHourlyExportStatus": "bde61168fa54b8af2f917dbe58270549af1afb4ea2821a0683f8b7746dccc917",
+  "publishTimingConfig": "dd6eb11de5732ffa22f5315a504f5fc129e1551c9ef88b8e5ff0003e4c2a5b9d",
+  "publishConfigState": "f010da7d17de54b632d8c3aec729650f49806f3b14c1bbb7133849450567c682"
 }
