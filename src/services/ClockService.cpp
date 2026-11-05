@@ -19,18 +19,9 @@ void timeTriggeredEvents() {
     if (!rtcReady || rtc.lostPower() || rtc.now().year() != recordingYear()) return;
     DateTime now = rtc.now();
 
-    // ---------------------------
-    // Midnight reset
-    // ---------------------------
-    if (now.hour() == 23 && now.minute() == 59 && !flagMidnightReset) { 
-        saveHourlyCounts();
-        totalDailyCars = 0;
-        saveDailyTotal();
-        resetHourlyCounts();
-        publishMQTT(MQTT_DEBUG_LOG, "Total cars reset at Midnight");
-        flagMidnightReset = true;
-    }
-    
+    // Full-date rollover is serviced before detection, not at 23:59.
+    if (!countsReady()) return;
+
     // =========================================================
     // DaysRunning computed from showStartDate (Christmas Eve gap honored)
     // =========================================================
@@ -62,10 +53,8 @@ void timeTriggeredEvents() {
     // =========================================================
     int minutesNow = now.hour() * 60 + now.minute();
     if (recordingShowSeasonActive() && minutesNow == (showStartMin - 1) && !flagDailyShowStartReset) {
-        totalDailyCars = 0;
-        saveDailyTotal();
-        publishMQTT(MQTT_DEBUG_LOG, "Daily total reset (showStartMin-1)");
-        flagDailyShowStartReset = true;
+        if (resetCountsForShow())
+            publishMQTT(MQTT_DEBUG_LOG, "Show-window daily reset checkpointed");
     }
 
     // =========================================================

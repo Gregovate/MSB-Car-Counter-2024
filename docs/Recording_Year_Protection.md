@@ -48,3 +48,8 @@ This is a bounded calendar/storage-protection release, not completion of the ful
 - Next operator step: inspect a clean local branch and pull refactor/shared-firmware, then build with the licensed library. Do not flash merely because the source tests passed. Preserve the complete current SD contents, especially official 2025 summaries, before the later controlled hardware test. Never test year rollover by changing the production clock; use an isolated spare-card/device test.
 
 The manual version and newest-first changelog remain at the top of src/main.cpp. No version automation has been introduced.
+
+
+## Count recovery follow-up — 2026-11-04
+
+The `.4` source adds shared dated per-vehicle checkpoints and protected hourly CSV replacement. See [Count persistence](Count_Persistence.md) for evidence, failure handling, remaining limits, and the controlled acceptance procedure. Neither device has been uploaded with this revision.

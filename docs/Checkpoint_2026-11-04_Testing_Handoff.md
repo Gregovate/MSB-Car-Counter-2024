@@ -1,3 +1,5 @@
+> Current source update, 2026-11-04: `.4` adds shared per-vehicle count checkpoints/recovery and protected hourly replacements. [Count persistence and acceptance procedure](Count_Persistence.md) supersedes earlier persistence limitations. Both `.3` licensed local builds passed, but neither `.3` nor `.4` has been reported uploaded. Devices remain `.2`; current-year-only migration does not reconstruct today's missing counts. `.4` licensed build/hardware tests pending. Earlier entries below are historical.
+
 > Later update, 2026-11-04: Greg subsequently flashed both `.2` devices and supplied runtime evidence. Car was writing into /CC/2025 despite /CC/2026 telemetry. The new `.3` source implements calendar-year protection and Black Friday fallback; see [Recording year protection](Recording_Year_Protection.md). This `.3` has NOT been uploaded. The original handoff below is retained as historical evidence.
 
 # Firmware testing checkpoint — 2026-11-04

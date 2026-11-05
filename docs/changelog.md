@@ -1,3 +1,10 @@
+## 25.12.03.2-modular-test.4 — 2026-11-04
+- Share immediate per-vehicle dated SD checkpoints and reboot recovery across both counters.
+- Verify alternating copies; retry failed saves independently of MQTT; report retained persistence faults.
+- Preserve counts across same-day/reset-minute reboots; use full-date rollover and stop uncertain recovery from overwriting files or HA counts.
+- Verify hourly CSV replacements with previous-file recovery; preserve all historical-year write guards.
+- Add real event/reboot and SD failure tests. Licensed build and hardware acceptance pending; see [Count persistence](Count_Persistence.md).
+
 ## Verification manifest correction — 2026-11-04
 
 - Correct nine shared-file checksums generated from temporary copies with an extra trailing newline.

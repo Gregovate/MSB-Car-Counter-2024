@@ -4,6 +4,7 @@
 
 
 void publishMQTT(const char *topic, const String &message, bool retainFlag) {
+    if (!countTopicPublishable(topic)) return;
     if (mqtt_client.connected()) {
         mqtt_client.publish(topic, message.c_str(), retainFlag);
     } else {
@@ -29,6 +30,7 @@ void publishMQTT(const char *topic, const String &message) {
 
 
 void KeepMqttAlive() {
+    publishCountHealth();
 
     // ---- Heartbeat (retained, ONLY here to prevent show spam) ----
     // GAL 25-11-22.3: keep firmware visible for dashboards (retained overwrite)
@@ -90,26 +92,7 @@ void KeepMqttAlive() {
     );
     publishMQTT(MQTT_PUB_HOURLY_JSON, String(buckets), true);
 
-    // =====================================
-    // Deferred SD writes (safe, non-hot-path)
-    // =====================================
-    if (sdAvailable) {
-
-        if (pendingSaveDaily) {
-            saveDailyTotal();
-            pendingSaveDaily = false;
-        }
-
-        if (pendingSaveShow) {
-            saveShowTotal();
-            pendingSaveShow = false;
-        }
-
-        if (pendingSaveHourly) {
-            saveHourlyCounts();
-            pendingSaveHourly = false;
-        }
-    }
+    // Count persistence runs per vehicle and retries independently of MQTT.
     start_MqttMillis = millis();
 }
 

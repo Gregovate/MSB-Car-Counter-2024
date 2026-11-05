@@ -52,3 +52,8 @@ Three portability/release-workflow regression tests pass per project: Windows le
 
 The workflow revision also passed an ESP32 compile/link check with public dependencies and a compile-only OTA API stand-in. This does not replace a local build with the licensed ElegantOTAPro library or hardware testing.
 
+
+
+## Count recovery follow-up — 2026-11-04
+
+The `.4` source adds shared dated per-vehicle checkpoints and protected hourly CSV replacement. See [Count persistence](Count_Persistence.md) for evidence, failure handling, remaining limits, and the controlled acceptance procedure. Neither device has been uploaded with this revision.

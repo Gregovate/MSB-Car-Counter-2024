@@ -2,6 +2,7 @@
 
 // Extracted from the production baseline; behavior fixes are separate changes.
 void countTheCar() {
+    serviceCountState(); // Network work may have crossed midnight since loop start.
     /* COUNT SUCCESS */
 
     noCarTimer = millis();
@@ -27,24 +28,31 @@ void countTheCar() {
     // Increment hourly car count
     int currentHour = now.hour();
     hourlyCount[currentHour]++;
-    pendingSaveHourly = true;   // defer SD hourly write
-    pendingSaveDaily  = true;   // defer daily total write
 
     // Construct the MQTT topic dynamically
     char topic[60];
     snprintf(topic, sizeof(topic), "%s%02d", MQTT_PUB_CARS_HOURLY, currentHour);
-    publishMQTT(topic, String(hourlyCount[currentHour]));
 
     // Increase Show Count only when show is open
     if (showTime == true) {
         totalShowCars++;
-        pendingSaveShow = true;  // defer show total write
     }
+
+    // Commit this vehicle as one dated daily/show/hourly checkpoint before
+    // MQTT or the web-facing files can delay persistence.
+    persistCountState();
+    // Reporting continues if SD fails; countPersistence identifies durability.
+    publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
+    publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars), true);
+    publishMQTT(topic, String(hourlyCount[currentHour]), true);
+    saveDailyTotal();
+    saveShowTotal();
+    saveHourlyCounts();
 
     Serial.print(F("TotalDailyCars after increment: "));
     Serial.println(totalDailyCars);
 
-    // Build full path: /CC/2025/EnterLog.csv
+    // Build the current recording-year log path.
     String enterLogPath = String(seasonFolder) + fileName6;
 
     // Open file for writing Car Data

@@ -1,0 +1,12 @@
+#pragma once
+// Common durable count state; SD is independent of MQTT reporting.
+bool countsReady();
+bool restoreCountState();
+bool persistCountState();
+void serviceCountState();
+bool resetCountsForShow();
+bool countTopicPublishable(const char* topic);
+void noteFreshCountFolder();
+void publishCountHealth();
+bool recoverHourlyExport(const String& path);
+bool writeHourlyExport(const String& path, const String& content);

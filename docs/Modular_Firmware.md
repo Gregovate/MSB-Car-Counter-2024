@@ -94,3 +94,8 @@ The active changelog and the only editable firmware version are at the top of `s
 
 The preservation check accepts a deliberate valid version change and comment-only changelog additions while continuing to reject altered function bodies, GPIOs, topics and initial state. The .2 workflow update changes release metadata and tools, not detector behavior. Earlier real-library build evidence applies to .1; .2 still needs a new local licensed-library build before any hardware test. UI files and CSV formats remain separate artifacts.
 
+
+
+## Count recovery follow-up — 2026-11-04
+
+The `.4` source adds shared dated per-vehicle checkpoints and protected hourly CSV replacement. See [Count persistence](Count_Persistence.md) for evidence, failure handling, remaining limits, and the controlled acceptance procedure. Neither device has been uploaded with this revision.

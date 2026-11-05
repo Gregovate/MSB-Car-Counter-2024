@@ -16,6 +16,7 @@ struct String : std::string {
     String(int n):std::string(std::to_string(n)){}
     void trim() { while(!empty() && isspace(back())) pop_back(); }
     void toLowerCase() { std::transform(begin(),end(),begin(),[](unsigned char c){return tolower(c);}); }
+    int indexOf(const char* p) const {auto n=find(p);return n==npos ? -1 : int(n);}
     bool startsWith(const char* p) const { return rfind(p,0)==0; }
 };
 struct DateTime {

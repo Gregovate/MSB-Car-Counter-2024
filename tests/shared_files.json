@@ -11,9 +11,15 @@
   "include/traffic/FirmwareVersion.h": "8b64e7c90e2b684620e842aba9590d887915e08023c9a02083d260f3ad3eccbe",
   "include/traffic/RecordingPolicy.h": "81e23497c33b78c6ec4d0865dc4718b542b56d93ab7c5f1abbde5579bce24c4a",
   "include/traffic/RecordingCalendar.h": "1d47b90fe282f4a6cc61949b98dbe2436fda49a13c80ca252d8baedc03b50179",
-  "src/services/RecordingCalendar.cpp": "b709c7c457be10a8d0b89791760699a4a2d4d40c56a53393fd02a3427810142d",
+  "src/services/RecordingCalendar.cpp": "23a1ce7998ed00ed0e2d847ec5d95d100263ba7515fc38219839071b74ea1cce",
   "tests/recording_calendar_test.cpp": "a13a546e90279f22890b838313d763c5b0bb50b33100560a4f8e02e3701cb89f",
   "tests/test_recording_calendar.py": "cd0178164bd1cf9cc4961b992444b91529cc5318659901c38fd52dcc450ae972",
-  "tests/calendar_stubs/traffic/Firmware.h": "9f934e40eef862987b7fa9804ee90e0ba7193143d0bc8496e8504b10dd100e75",
-  "tests/calendar_stubs/Preferences.h": "de0c5cf10845e7a18ac80382650c6a78283212688886262883e5d288a5bcb151"
+  "tests/calendar_stubs/traffic/Firmware.h": "c23e167b1182b6c0be7f5f4246ca64d4cbf67b58988776ffbad001c910daefe4",
+  "tests/calendar_stubs/Preferences.h": "de0c5cf10845e7a18ac80382650c6a78283212688886262883e5d288a5bcb151",
+  "src/services/CountPersistence.cpp": "3d7336d9ae98e7975894f426043eb59b7804e0830de42c9c682092e834ae92c7",
+  "include/traffic/CountPersistence.h": "f2c8b44bb813c80c5fc8bce64d27eca0644cf7f69f1aed2deec42752e01589e3",
+  "include/traffic/CountRecord.h": "90c9d15b4513a0a1e873fe6da5f213d0f6019c7aafe3dc2d0b5e581d69af67ff",
+  "tests/count_stubs/traffic/Firmware.h": "958a0fae01b51292310af5274a2c1224e00fdd04f4992a7551ecb7116ec2141c",
+  "tests/count_recovery_test.cpp": "71b867ac844738ae942cd387475947d15c9f54365261bf859b05d0b61c48eb1a",
+  "tests/test_count_recovery.py": "aebc85bad9f9272daae078e03b2ba2fc3fefb56edf112b512ec92e771ab42721"
 }

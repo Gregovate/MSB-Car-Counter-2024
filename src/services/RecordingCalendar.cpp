@@ -202,5 +202,6 @@ bool recordingRename(const String &from, const String &to) {
 // User file-manager operations must not edit the internal recovery records.
 bool recordingWebWritable(const String &path) {
     String lower=path; lower.toLowerCase();
-    return !lower.startsWith("/recording-calendar.") && recordingPathWritable(path);
+    return !lower.startsWith("/recording-calendar.") && lower.indexOf("/countstate.")<0 &&
+           lower.indexOf("hourlydata.csv.")<0 && recordingPathWritable(path);
 }

@@ -8,6 +8,12 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.4 — 2026-11-04
+ *   - Save each vehicle in a shared verified, dated two-copy SD checkpoint.
+ *   - Restore counts before reporting; preserve files when recovery is uncertain.
+ *   - Retry failed checkpoints independently of MQTT and report persistence faults.
+ *   - Use full-date rollover and persist show-reset markers across reboot.
+ *   - Verify hourly CSV replacements and retain the previous complete file.
  * 25.12.03.2-modular-test.3 — 2026-11-04
  *   - Share persistent calendar-year selection; never reopen a prior year for writes.
  *   - Protect historical SD folders from logging and web mutations.
@@ -29,7 +35,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.3";
+const char FWVersion[] = "25.12.03.2-modular-test.4";
 
 #include "traffic/Firmware.h"
 
@@ -97,6 +103,7 @@ void setup() {
     initializeRecordingCalendar();
     SetLocalTime();
     updateRecordingCalendar();
+    serviceCountState();
     DateTime now = rtc.now();
 
     // Save boot timestamp
