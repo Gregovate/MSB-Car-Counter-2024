@@ -9,3 +9,4 @@ void publishQueuedMessages(size_t maxToFlush = MAX_FLUSH_PER_CALL);
 void publishDebugLog(const String &message);
 void publishDebugEvent(const char* event, const String& details, bool retainFlag = false);
 void publishConfigState(const char* commandTopic, const String& value);
+void publishHourlySnapshot();

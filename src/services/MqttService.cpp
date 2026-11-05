@@ -80,18 +80,7 @@ void KeepMqttAlive() {
         publishMQTT(MQTT_PUB_SHOWTOTAL,  String(totalShowCars),  true);
     }
 
-    // ---- Hourly Snapshot (retained, unchanged) ----
-    char buckets[180];
-    snprintf(buckets, sizeof(buckets),
-        "[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]",
-        hourlyCount[0], hourlyCount[1], hourlyCount[2], hourlyCount[3],
-        hourlyCount[4], hourlyCount[5], hourlyCount[6], hourlyCount[7],
-        hourlyCount[8], hourlyCount[9], hourlyCount[10], hourlyCount[11],
-        hourlyCount[12], hourlyCount[13], hourlyCount[14], hourlyCount[15],
-        hourlyCount[16], hourlyCount[17], hourlyCount[18], hourlyCount[19],
-        hourlyCount[20], hourlyCount[21], hourlyCount[22], hourlyCount[23]
-    );
-    publishMQTT(MQTT_PUB_HOURLY_JSON, String(buckets), true);
+    publishHourlySnapshot();
 
     // Count persistence runs per vehicle and retries independently of MQTT.
     start_MqttMillis = millis();

@@ -1,3 +1,10 @@
+## 25.12.03.2-modular-test.8 — 2026-11-05
+- Share 24-bin JSON and individual Cars/hour/00..23 snapshots on heartbeat. Skip disconnected/unrestored snapshots; ensure sufficient MQTT packet capacity.
+- Correct Gate's extra slash in all per-hour publishers. Do not clear existing broker retained topics automatically.
+- Call serviceCountState in each main loop before reporting/detection, enabling idle save retries and date rollover.
+- Record consistent MQTT naming and HA migration requirements. Full operational configuration persistence and offset handlers remain pending.
+- 16 host tests PASS per device; 25 shared files match. Licensed ESP32 builds and hardware acceptance pending.
+
 ## 25.12.03.2-modular-test.7 — 2026-11-05
 - Share command-to-State reporting for detector timing; firmware no longer overwrites HA-owned retained tuning commands during startup.
 - Report actual settings on heartbeat and after supported command application; skip disconnected snapshots to avoid stale state replay.

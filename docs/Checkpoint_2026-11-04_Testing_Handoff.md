@@ -1,3 +1,5 @@
+> Source .8: shared hourly JSON/individual topics, Gate slash correction, and main-loop count recovery service. See [MQTT contract](MQTT_Contract.md). Devices last confirmed .5; licensed build, upload and complete HA configuration mapping remain pending.
+
 > Source .7: both timing reporters now use State topics and preserve HA Config commands. See [Configuration ownership](Configuration_Ownership.md). Devices last confirmed .5; .6/.7 licensed builds and upload not confirmed.
 
 > Latest hardware evidence, 2026-11-05: Both Car and Gate now report `.5` installed, current-year folders, and countPersistence OK. Car hourlyExport is OK. Gate accepted date is 2026-11-27, but hourlyExport is absent because its startup queue is not flushed. Shared `.6` repeats current export health on heartbeat without replaying historical counts. `.6` local licensed builds/upload remain pending; nonzero-count/reboot and offline tests remain pending. See [Count persistence](Count_Persistence.md).

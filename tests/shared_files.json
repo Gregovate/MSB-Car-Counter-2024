@@ -1,10 +1,10 @@
 {
-  "src/services/MqttTransport.cpp": "749b3bb2e6dff386886f24c6632ddfc93fd3540de8772177fe08313fec8deb02",
+  "src/services/MqttTransport.cpp": "4c7c6cc3601b4d00bba8ad8cd91d9932050fcf2bd6375e623438fbd465473c89",
   "src/services/TemperatureSensor.cpp": "f0d4686a4bb7c31487c405f44770fbe010f37efc08502ecaf3d6330b39ca8de6",
   "src/services/ClockCommon.cpp": "ebf91ee389e00acc7081f3135b7a68fba997f6dfa7a3d9b069c84f457a23867d",
   "src/services/WebCommon.cpp": "7055f072422081bf05e48a122618f0c6ef0d8061e4cd99883f4c701abf155eb0",
   "include/traffic/Platform.h": "96d6086f744299a115de84585fea0053a413b36fbc364d85a920c808f8e45fa2",
-  "include/traffic/MqttTransport.h": "1034fd93821de9d985d5e3ea16794708d5be55caf20fc2888f9fbb32cf254726",
+  "include/traffic/MqttTransport.h": "b4f5af2eb4aa06483002cba5cc3d16ce6c84b798a4982081fadb80c8a1dc3d7f",
   "include/traffic/EnvironmentService.h": "f7825df91947318e236b98633976d73a396d522e6d6208a23eb1a776e01a6dfe",
   "include/traffic/DisplayService.h": "cf667652b42f6688d5e61481083da83e4a0c99184810d7838fbcede3a633e8bd",
   "include/traffic/WebService.h": "cefcd3d3c30f614690c61459808d5d9b680601fbb29b27d18f4dcbacfad3f0a7",
@@ -20,7 +20,8 @@
   "include/traffic/CountPersistence.h": "0cd2824e2497cea70e4b32360ec785f7bc300c2941db14da11990f2e099bbcc2",
   "include/traffic/CountRecord.h": "90c9d15b4513a0a1e873fe6da5f213d0f6019c7aafe3dc2d0b5e581d69af67ff",
   "tests/count_stubs/traffic/Firmware.h": "9d1ccf78e89948a18861abaff636ed75d56c3f2157066403a337f19ddfcd087a",
-  "tests/count_recovery_test.cpp": "72549ae5adc377a6f309a25e76826b572885482661f0e7d486f336b9f8fdd3c9",
+  "tests/count_recovery_test.cpp": "46a8a3bac6d9fe9e794c99efecbc5a3e39c0cea538a25d402b870aa4f8c8238f",
   "tests/test_count_recovery.py": "aebc85bad9f9272daae078e03b2ba2fc3fefb56edf112b512ec92e771ab42721",
-  "tests/test_configuration_ownership.py": "de4fbea320b1605811d568f325d3f2b2a40e3dd18857a1372f38e7393483ede5"
+  "tests/test_configuration_ownership.py": "de4fbea320b1605811d568f325d3f2b2a40e3dd18857a1372f38e7393483ede5",
+  "tests/test_hourly_contract.py": "9acc76b182ac3132dc71239c76c52a73d5f263bbe6ae8d50e4c3de8bb3e6b9db"
 }

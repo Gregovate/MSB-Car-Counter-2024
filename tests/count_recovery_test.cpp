@@ -53,7 +53,23 @@ void testLegacyZeroWithOlderHourlyRows() {
     reboot();auto untouched=disk;assert(!restoreCountState());assert(disk==untouched);
 }
 
+void testIdleRecoveryService() {
+    legacy();assert(restoreCountState());
+    ++totalDailyCars;++hourlyCount[16];
+    failWrite=countPath(countSlot==0 ? "CountState.b":"CountState.a");
+    assert(!persistCountState());
+    failWrite="";ticks+=5001;
+    serviceCountState(); // No additional vehicle: idle retry must persist 41.
+    reboot();assert(restoreCountState());assert(totalDailyCars==41);
+    rtc.current=DateTime(2026,11,5,0,0,1);ticks+=5001;
+    serviceCountState(); // Idle day change must not await the next detector event.
+    assert(totalDailyCars==0 && hourlyCount[16]==0 && totalShowCars==400);
+    reboot();assert(restoreCountState());assert(totalDailyCars==0 && totalShowCars==400);
+    assert(disk["/CC/2025/ShowSummaryBuckets.csv"]=="OFFICIAL UNCHANGED");
+}
+
 int main() {
+    testIdleRecoveryService();
     testLegacyZeroWithOlderHourlyRows();
     legacy();assert(restoreCountState());assert(totalDailyCars==40);
     // Per-event save survives immediate reboot, with no MQTT/timer cycle.

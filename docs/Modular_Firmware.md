@@ -103,3 +103,5 @@ The `.4` source adds shared dated per-vehicle checkpoints and protected hourly C
 ## Configuration ownership (.7)
 
 See [Configuration ownership and remaining refactor work](Configuration_Ownership.md) for HA command/applied-state separation, actual hard-coded values, and unresolved offline/scheduling gaps.
+
+See [Three-system MQTT contract](MQTT_Contract.md) for the .8 reporting corrections and explicitly pending operational configuration work.

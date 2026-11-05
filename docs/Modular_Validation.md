@@ -79,3 +79,7 @@ Next acceptance: build/install the Gate reporting revision using the existing co
 ## Configuration command ownership (.7), 2026-11-05
 
 Both repositories pass 14 host tests and peer verification (Car 91 function bodies / 70 explicit revisions; Gate 96 / 71; 24 shared files). Actual timing publishers tested against retained HA commands, offline suppression and current applied-state reporting. Original baseline hashes, GPIO/topics and detector state definitions remain unchanged. PlatformIO is not installed in this environment; no .7 ESP32 build or hardware acceptance is claimed. Devices last reported .5.
+
+## MQTT alignment and idle recovery (.8), 2026-11-05
+
+Both repositories pass 16 host tests. Shared-file verification: 25 files match; Car 92 function bodies / 71 explicit revisions, Gate 97 / 72. New tests exercise the actual hourly publisher with all 24 values, maximum int payloads, allocation failure, offline/recovery guards, and correct single-slash topics. Count-service fault injection verifies idle retry and idle rollover persistence; the loop wiring check requires service before report/schedule/detection. Original configuration/pin/state baselines remain preserved. Private HA candidate files parse and preserve all distinct existing unique IDs. PlatformIO remains unavailable here: licensed ESP32 builds, OTA and real hardware/HA acceptance are pending.

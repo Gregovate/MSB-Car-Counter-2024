@@ -47,3 +47,5 @@ Use the firmware-only update procedure in Count_Persistence.md. Do not reset cou
 4. Verify current-year folder, countPersistence, hourlyExport and reboot count continuity. Licensed builds, OTA and hardware acceptance remain pending for .7.
 
 Host tests compile the actual shared publisher and device-specific timing publisher against a retained-command broker model. They verify that startup preserves HA commands, applied state reports real values, offline snapshots do not publish, and a later connected snapshot reports current values. These tests do not prove real MQTT delivery or physical sensor operation.
+
+See [Three-system MQTT contract](MQTT_Contract.md) for the .8 reporting corrections and explicitly pending operational configuration work.

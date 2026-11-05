@@ -70,3 +70,28 @@ void publishConfigState(const char* commandTopic, const String& value) {
     stateTopic.replace("/Config/", "/State/");
     publishMQTT(stateTopic.c_str(), value, true);
 }
+
+// Publish one current 24-hour snapshot for both devices. Never enqueue an
+// offline snapshot or report default counts after failed recovery.
+void publishHourlySnapshot() {
+    if (!countsReady() || !mqtt_client.connected()) return;
+    // A complete 24-bin int array plus topic can exceed PubSubClient's default
+    // packet capacity. Grow only when needed; do not publish truncated JSON.
+    if (mqtt_client.getBufferSize() < 512 && !mqtt_client.setBufferSize(512)) {
+        publishDebugLog("Hourly snapshot skipped: MQTT buffer allocation failed");
+        return;
+    }
+    String buckets("[");
+    for (int i=0; i<24; ++i) {
+        if (i) buckets += ",";
+        buckets += String(hourlyCount[i]);
+    }
+    buckets += "]";
+    publishMQTT(MQTT_PUB_HOURLY_JSON, buckets, true);
+    for (int i=0; i<24; ++i) {
+        char topic[96];
+        // MQTT_PUB_CARS_HOURLY already ends with '/'.
+        snprintf(topic, sizeof(topic), "%s%02d", MQTT_PUB_CARS_HOURLY, i);
+        publishMQTT(topic, String(hourlyCount[i]), true);
+    }
+}
