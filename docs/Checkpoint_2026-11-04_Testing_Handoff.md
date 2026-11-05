@@ -1,3 +1,5 @@
+> Later update, 2026-11-04: Greg subsequently flashed both `.2` devices and supplied runtime evidence. Car was writing into /CC/2025 despite /CC/2026 telemetry. The new `.3` source implements calendar-year protection and Black Friday fallback; see [Recording year protection](Recording_Year_Protection.md). This `.3` has NOT been uploaded. The original handoff below is retained as historical evidence.
+
 # Firmware testing checkpoint — 2026-11-04
 
 ## Scope and branch
@@ -32,3 +34,4 @@ Keep production firmware and data available for rollback. Do not upload or reset
 
 ## Start of next testing thread
 Read this checkpoint plus docs/Modular_Firmware.md and docs/Modular_Validation.md in both refactor/shared-firmware branches. Start with read-only checkout/version and storage-path verification, then agree on an isolated hardware test and rollback procedure. Give Greg one terminal step at a time. Do not assume a successful build proves device behavior or that a device has been updated.
+

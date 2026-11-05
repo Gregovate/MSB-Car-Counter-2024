@@ -48,7 +48,7 @@ void countTheCar() {
     String enterLogPath = String(seasonFolder) + fileName6;
 
     // Open file for writing Car Data
-    myFile = SD.open(enterLogPath.c_str(), FILE_APPEND); // EnterLog.csv in season folder
+    myFile = recordingOpen(enterLogPath.c_str(), FILE_APPEND); // EnterLog.csv in season folder
     if (myFile) {
         // NEW CSV FORMAT:
         // DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms
@@ -269,3 +269,4 @@ void detectCar() {
 
     }   // ---- State machine Car Counter END ----
 }
+

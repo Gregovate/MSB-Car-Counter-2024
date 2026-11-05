@@ -1,3 +1,14 @@
+## 25.12.03.2-modular-test.3 — 2026-11-04
+
+- Shared persistent calendar-year routing and historical-folder write protection.
+- Black Friday fallback; validated current-year HA override saved to NVS and two verified SD copies.
+- Shared days-running calculation (zero before opening), current-year show gating, and separate accepted-date telemetry.
+- Runtime year rollover and network-clock retry without moving the recording year backward.
+- Web upload/delete/rename protection; per-request upload handles.
+- MQTT connects after SD restoration; Car also restores show total on a new-day reboot.
+- Native regression checks and ESP32 compile/link checks pass; licensed build/hardware acceptance pending.
+- Scope and remaining reliability work: [Recording year protection](Recording_Year_Protection.md).
+
 ## Changelog
 
 ### [1.3.0] - 2024-12-19
@@ -62,3 +73,4 @@
 This changelog follows semantic versioning. For further details, please contact:
 **Greg Liebig**  
 Email: `greg@engrinnovations.com`
+

@@ -192,6 +192,7 @@ void MQTTreconnect() {
 
         // Flush queued messages now that we're back online
         publishQueuedMessages();
+        publishRecordingCalendar();
 
         return;
 
@@ -231,3 +232,4 @@ void checkWiFiConnection() {
         }
     }    
 }
+

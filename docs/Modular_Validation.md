@@ -1,3 +1,5 @@
+> Update 2026-11-04: `.3` deliberately changes calendar/storage behavior. See [Recording year protection](Recording_Year_Protection.md) for the current rules, validation and remaining work. The structural-refactor evidence below is historical.
+
 # Modular extraction validation
 
 Status: PASS for source-preservation checks and ESP32 compile/link contract checks. Not approved for upload.
@@ -41,3 +43,4 @@ The active changelog and single editable FWVersion are restored to the top of sr
 Three portability/release-workflow regression tests pass per project: Windows legacy encoding with CRLF, manual version/changelog edits accepted, and changed setupServer executable text rejected. All original function bodies, state defaults, GPIOs/topics and enums remain preserved. Ten shared files now include the new declaration-only version header. This .2 change supersedes the prior DeviceConfig.h version-edit location. Previous operator real-library build evidence applies to .1, not to the new .2 identity; a new local licensed-library build is still required before testing.
 
 The workflow revision also passed an ESP32 compile/link check with public dependencies and a compile-only OTA API stand-in. This does not replace a local build with the licensed ElegantOTAPro library or hardware testing.
+

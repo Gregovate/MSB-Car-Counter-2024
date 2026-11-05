@@ -10,7 +10,7 @@ void checkSdHealth() {
     }
 
     // Try to write a temporary test file
-    File test = SD.open("/_sd_test.tmp", FILE_WRITE);
+    File test = recordingOpen("/_sd_test.tmp", FILE_WRITE);
     if (!test) {
         publishMQTT(MQTT_PUB_SD_HEALTH, "WRITE_FAIL", true);
         publishMQTT(MQTT_DEBUG_LOG,
@@ -23,7 +23,7 @@ void checkSdHealth() {
     test.close();
 
     // Delete test file
-    SD.remove("/_sd_test.tmp");
+    recordingRemove("/_sd_test.tmp");
 
     // If we got here, the card is good
     publishMQTT(MQTT_PUB_SD_HEALTH, "OK", true);
@@ -63,12 +63,12 @@ void ensureSeasonFolderExists() {
     snprintf(seasonFolder, sizeof(seasonFolder), "/CC/%04d", seasonYear);
 
     if (!SD.exists("/CC")) {
-        SD.mkdir("/CC");
+        recordingMkdir("/CC");
         publishMQTT(MQTT_DEBUG_LOG, "Created /CC directory");
     }
 
     if (!SD.exists(seasonFolder)) {
-        SD.mkdir(seasonFolder);
+        recordingMkdir(seasonFolder);
         publishMQTT(MQTT_DEBUG_LOG, String("Created season folder: ") + seasonFolder);
     }
 
@@ -92,7 +92,7 @@ void getDailyTotal() {
 
     String fullPath = folder + fname;
 
-    myFile = SD.open(fullPath, FILE_READ);
+    myFile = recordingOpen(fullPath, FILE_READ);
 
     if (myFile) {
         while (myFile.available()) {
@@ -131,7 +131,7 @@ void getShowTotal() {
 
     String fullPath = folder + fname;
 
-    myFile = SD.open(fullPath, FILE_READ);
+    myFile = recordingOpen(fullPath, FILE_READ);
     if (myFile) {
         while (myFile.available()) {
             totalShowCars = myFile.parseInt();  // read total
@@ -170,7 +170,7 @@ void getDayOfMonth() {
 
     String fullPath = folder + fname;
 
-    myFile = SD.open(fullPath, FILE_READ);
+    myFile = recordingOpen(fullPath, FILE_READ);
     if (myFile) {
         while (myFile.available()) {
             lastDayOfMonth = myFile.parseInt();   // read day number
@@ -209,7 +209,7 @@ void getDaysRunning() {
 
     String fullPath = folder + fname;
 
-    myFile = SD.open(fullPath, FILE_READ);
+    myFile = recordingOpen(fullPath, FILE_READ);
     if (myFile) {
         while (myFile.available()) {
             daysRunning = myFile.parseInt();  // read day number
@@ -260,7 +260,7 @@ void getHourlyData() {
     // -------------------------------
     // Open file
     // -------------------------------
-    File file = SD.open(fullPath, FILE_READ);
+    File file = recordingOpen(fullPath, FILE_READ);
     if (!file) {
         Serial.println("Failed to open hourly file. Resetting hourly data.");
         publishMQTT(MQTT_DEBUG_LOG,
@@ -332,7 +332,7 @@ void saveDailyTotal() {
 
     String fullPath = folder + fileName1;
 
-    myFile = SD.open(fullPath, FILE_WRITE);  // overwrite same as before
+    myFile = recordingOpen(fullPath, FILE_WRITE);  // overwrite same as before
     if (myFile) {
         myFile.print(totalDailyCars);
         myFile.close();
@@ -367,7 +367,7 @@ void saveShowTotal() {
     String fullPath = folder + fname;
 
     // ---- OPEN ----
-    myFile = SD.open(fullPath, FILE_WRITE);  // overwrite, same as before
+    myFile = recordingOpen(fullPath, FILE_WRITE);  // overwrite, same as before
     if (!myFile) {
         Serial.print(F("SD Card: Cannot open the file: "));
         Serial.println(fullPath);
@@ -414,7 +414,7 @@ void saveDayOfMonth() {
 
         String fullPath = folder + fname;
 
-        myFile = SD.open(fullPath, FILE_WRITE);  // overwrite, same as before
+        myFile = recordingOpen(fullPath, FILE_WRITE);  // overwrite, same as before
         if (myFile) {
             myFile.print(dayOfMonth);
             myFile.close();
@@ -443,7 +443,7 @@ void saveDaysRunning() {
 
         String fullPath = folder + fname;
 
-        myFile = SD.open(fullPath, FILE_WRITE);
+        myFile = recordingOpen(fullPath, FILE_WRITE);
         if (myFile) {
             myFile.print(daysRunning);
             myFile.close();
@@ -497,7 +497,7 @@ void saveHourlyCounts() {
     // -------------------------------------------------
     // READ EXISTING FILE
     // -------------------------------------------------
-    File file = SD.open(fullPath, FILE_READ);
+    File file = recordingOpen(fullPath, FILE_READ);
     String updatedContent = "";
     bool rowExists = false;
 
@@ -565,7 +565,7 @@ void saveHourlyCounts() {
     // -------------------------------------------------
     // WRITE UPDATED FILE BACK
     // -------------------------------------------------
-    file = SD.open(fullPath, FILE_WRITE);
+    file = recordingOpen(fullPath, FILE_WRITE);
     if (file) {
         file.print(updatedContent);
         file.close();
@@ -629,7 +629,7 @@ void saveDailyShowSummary() {
     String fullPath = folder + fname;
 
     // Open file for appending
-    File summaryFile = SD.open(fullPath, FILE_APPEND);
+    File summaryFile = recordingOpen(fullPath, FILE_APPEND);
     if (!summaryFile) {
         Serial.print("Failed to open daily show summary file: ");
         Serial.println(fullPath);
@@ -676,7 +676,7 @@ void saveDailyShowSummary() {
     if (!fnameBuckets.startsWith("/")) fnameBuckets = "/" + fnameBuckets;
     String fullPathBuckets = folder + fnameBuckets;
 
-    File bucketFile = SD.open(fullPathBuckets, FILE_APPEND);
+    File bucketFile = recordingOpen(fullPathBuckets, FILE_APPEND);
     if (!bucketFile) {
         Serial.print("Failed to open bucketed show summary file: ");
         Serial.println(fullPathBuckets);
@@ -745,6 +745,9 @@ void getSavedValuesOnReboot() {
 
     // SD is available from here down
     DateTime now2 = now;  // just to be explicit we’re using the same snapshot
+
+    // Always restore show total, including the new-day boot branch.
+    getShowTotal();
 
     // Load last day of month from SD
     getDayOfMonth();
@@ -843,7 +846,7 @@ void checkAndCreateFile(const String &fileName, const String &header) {
         Serial.printf("%s not found. Creating...\n", fullPath.c_str());
 
         if (fileName.endsWith("/")) { // Create directory if name ends with '/'
-            if (!SD.mkdir(fullPath)) {
+            if (!recordingMkdir(fullPath)) {
                 Serial.printf("Failed to create directory %s\n", fullPath.c_str());
                 publishMQTT(MQTT_DEBUG_LOG,
                             String("Failed to create directory: ") + fullPath);
@@ -854,7 +857,7 @@ void checkAndCreateFile(const String &fileName, const String &header) {
             }
 
         } else { // Create file
-            File file = SD.open(fullPath, FILE_WRITE);
+            File file = recordingOpen(fullPath, FILE_WRITE);
             if (!file) {
                 Serial.printf("Failed to create file %s\n", fullPath.c_str());
                 publishMQTT(MQTT_DEBUG_LOG,
@@ -883,7 +886,7 @@ void createAndInitializeHourlyFile(const String &fileName) {
     if (!SD.exists(fullPath)) {
         Serial.printf("%s not found. Creating...\n", fullPath.c_str());
 
-        File file = SD.open(fullPath, FILE_WRITE);
+        File file = recordingOpen(fullPath, FILE_WRITE);
         if (!file) {
             Serial.printf("Failed to create file %s\n", fullPath.c_str());
             return;
@@ -961,6 +964,8 @@ void initSDCard() {
     uint64_t cardSizeMB = SD.totalBytes() / (1024ULL * 1024ULL);
     Serial.printf("SD Card Size: %lluMB\n", cardSizeMB);
 
+    loadRecordingCalendarFromSD();
+
     // ---- Validate critical folders/files ----
     bool dataDirExists = SD.exists("/data");
     bool uiIndexExists = SD.exists("/data/index.html");   // if your UI entry file differs, we’ll adjust later
@@ -968,7 +973,7 @@ void initSDCard() {
     // Ensure /CC exists
     bool ccDirExists = SD.exists("/CC");
     if (!ccDirExists) {
-        ccDirExists = SD.mkdir("/CC");
+        ccDirExists = recordingMkdir("/CC");
         if (ccDirExists) {
             publishMQTT(MQTT_DEBUG_LOG, "Created /CC directory", false);
         } else {
@@ -982,7 +987,7 @@ void initSDCard() {
 
     bool seasonDirExists = SD.exists(seasonFolder);
     if (!seasonDirExists) {
-        seasonDirExists = SD.mkdir(seasonFolder);
+        seasonDirExists = recordingMkdir(seasonFolder);
         if (seasonDirExists) {
             publishMQTT(MQTT_DEBUG_LOG,
                 String("Created season folder: ") + seasonFolder, false);
@@ -1002,14 +1007,14 @@ void initSDCard() {
     bool writeTestOK = false;
     const char* testFile = "/sd_test.txt";
 
-    File tf = SD.open(testFile, FILE_WRITE);
+    File tf = recordingOpen(testFile, FILE_WRITE);
     if (tf) {
         size_t n = tf.print("test\n");
         tf.flush();
         tf.close();
 
         if (n > 0) {
-            File rf = SD.open(testFile, FILE_READ);
+            File rf = recordingOpen(testFile, FILE_READ);
             if (rf) {
                 String s = rf.readStringUntil('\n');
                 rf.close();
@@ -1018,7 +1023,7 @@ void initSDCard() {
         }
 
     #if 1
-        SD.remove(testFile);
+        recordingRemove(testFile);
     #endif
     }
 
@@ -1063,4 +1068,24 @@ void initSDCard() {
         writeTestOK ? "true" : "false"
     );
     publishMQTT(MQTT_PUB_SD_DIAG, diag2, true);
+}
+
+
+// Device adapter; the calendar policy itself is shared with Gate.
+void applyRecordingCalendar() {
+    DateTime start=recordingShowStart();
+    showStartY=start.year(); showStartM=start.month(); showStartD=start.day();
+    showStartDateValid=true;
+    snprintf(seasonFolder,sizeof(seasonFolder),"/CC/%04d",recordingYear());
+    if (SD.cardType()==CARD_NONE) return;
+    ensureSeasonFolderExists();
+    if (!sdAvailable) return;
+    checkAndCreateFile(fileName1);
+    checkAndCreateFile(fileName2);
+    checkAndCreateFile(fileName3);
+    checkAndCreateFile(fileName4);
+    checkAndCreateFile(fileName6,"DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms");
+    checkAndCreateFile(fileName7,"Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
+    checkAndCreateFile(fileName10,"Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp");
+    createAndInitializeHourlyFile(fileName5);
 }

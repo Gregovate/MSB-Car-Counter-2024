@@ -16,43 +16,16 @@ String getRtcTimestamp() {
 }
 
 void SetLocalTime() {
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)) {
-      Serial.println("Failed to obtain time. Using Compiled Date");
-      return;
-  }
-  //Following used for Debugging and can be commented out
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-  Serial.print("Day of week: ");
-  Serial.println(&timeinfo, "%A");
-  Serial.print("Month: ");
-  Serial.println(&timeinfo, "%B");
-  Serial.print("Day of Month: ");
-  Serial.println(&timeinfo, "%d");
-  Serial.print("Year: ");
-  Serial.println(&timeinfo, "%Y");
-  Serial.print("Hour: ");
-  Serial.println(&timeinfo, "%H");
-  Serial.print("Hour (12 hour format): ");
-  Serial.println(&timeinfo, "%I");
-  Serial.print("Minute: ");
-  Serial.println(&timeinfo, "%M");
-  Serial.print("Second: ");
-  Serial.println(&timeinfo, "%S");
-  Serial.println("Time variables");
-  char timeHour[3];
-  strftime(timeHour,3, "%H", &timeinfo);
-  Serial.println(timeHour);
-  char timeWeekDay[10];
-  strftime(timeWeekDay,10, "%A", &timeinfo);
-  Serial.println(timeWeekDay);
-  Serial.println();
- 
-  // Convert NTP time string to set RTC
-  char timeStringBuff[50]; //50 chars should be enough
-  strftime(timeStringBuff, sizeof(timeStringBuff), "%Y-%m-%d %H:%M:%S", &timeinfo);
-  Serial.println(timeStringBuff);
-  rtc.adjust(DateTime(timeStringBuff));
+    // Wi-Fi alone is not proof of time. Keep the RTC unless the network clock
+    // supplies a valid date at or above the persisted recording year.
+    if (WiFi.status() != WL_CONNECTED) return;
+    struct tm info;
+    if (!getLocalTime(&info, 10)) return;
+    int year=info.tm_year+1900;
+    if (!traffic::validDate(year,info.tm_mon+1,info.tm_mday) || year<recordingYear()) return;
+    noteNetworkClock(year);
+    if (rtcReady) rtc.adjust(DateTime(year,info.tm_mon+1,info.tm_mday,
+                                     info.tm_hour,info.tm_min,info.tm_sec));
 }
 
 void resetHourlyCounts() {
@@ -63,3 +36,4 @@ void resetHourlyCounts() {
     Serial.println("Hourly counts have been reset.");
     publishMQTT(MQTT_DEBUG_LOG, "Hourly counts reset for the new day.");
 }
+

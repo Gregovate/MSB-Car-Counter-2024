@@ -39,6 +39,10 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     expected = json.loads((root / 'tests/baseline_function_hashes.json').read_text(encoding="utf-8"))
+    # Preserve the structural baseline. Explicit, reviewed behavior changes are
+    # pinned separately rather than silently rewriting the original baseline.
+    behavior = json.loads((root / 'tests/behavior_function_hashes.json').read_text(encoding="utf-8"))
+    expected.update(behavior)
     actual = {}
     for path in sorted((root / 'src').rglob('*.cpp')):
         for name, digest in body_hashes(path.read_text(encoding="utf-8")):
@@ -85,7 +89,8 @@ def main():
             raise SystemExit('FAIL: shared file changed: ' + name)
         if args.peer and data != (args.peer / name).read_bytes().replace(b'\r\n', b'\n'):
             raise SystemExit('FAIL: counterpart shared file differs: ' + name)
-    print(f'PASS: {len(expected)} baseline function bodies preserved; AP registration, GPIO/topics, state initialization and enums preserved; {len(shared)} shared files verified' + (' against peer' if args.peer else ''))
+    print(f'PASS: {len(expected)} function bodies verified ({len(behavior)} explicit behavior revisions); original unaffected bodies, AP registration, GPIO/topics, state initialization and enums preserved; {len(shared)} shared files verified' + (' against peer' if args.peer else ''))
 
 if __name__ == '__main__':
     main()
+

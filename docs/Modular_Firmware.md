@@ -1,3 +1,5 @@
+> Update 2026-11-04: `.3` deliberately changes calendar/storage behavior. See [Recording year protection](Recording_Year_Protection.md) for the current rules, validation and remaining work. The structural-refactor evidence below is historical.
+
 # Modular firmware — first implementation
 
 Status: DEVELOPMENT / TEST ONLY. No device upload is part of this change.
@@ -91,3 +93,4 @@ The active changelog and the only editable firmware version are at the top of `s
 `include/traffic/FirmwareVersion.h` declares the version for all separately compiled services; it contains no duplicate value. MQTT, ElegantOTA and diagnostics therefore use the same manually assigned identifier. `update_version.py` reads that value in UTF-8; it changes it only when explicitly called with `--set`. It never assigns a version from old changelog comments.
 
 The preservation check accepts a deliberate valid version change and comment-only changelog additions while continuing to reject altered function bodies, GPIOs, topics and initial state. The .2 workflow update changes release metadata and tools, not detector behavior. Earlier real-library build evidence applies to .1; .2 still needs a new local licensed-library build before any hardware test. UI files and CSV formats remain separate artifacts.
+

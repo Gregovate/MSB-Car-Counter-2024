@@ -6,45 +6,17 @@
 
 
 int computeDaysRunning() {
-    if (!showStartDateValid) return 0;
-    if (!rtcReady) return 0;
-
-    DateTime nowDT = rtc.now();
-    if (nowDT.year() < 2024) return 0;   // sanity guard
-
-    DateTime showStart(showStartY, showStartM, showStartD, 0, 0, 0);
-
-    if (nowDT.unixtime() < showStart.unixtime()) return 0;
-
-    uint32_t diffSeconds = nowDT.unixtime() - showStart.unixtime();
-    int diffDays = diffSeconds / 86400UL;
-
-    int dayNum = diffDays + 1;  // opening night = Day 1
-
-    // ---- Preserve historical "no Christmas Eve show day" semantics ----
-    // If the season started before Dec 24 (normal MSB case),
-    // then subtract 1 for Dec 24 and every day after.
-    bool seasonStartsBeforeDec24 =
-        (showStartM < 12) || (showStartM == 12 && showStartD <= 23);
-
-    if (seasonStartsBeforeDec24 &&
-        nowDT.month() == 12 && nowDT.day() >= 24) {
-        dayNum -= 1;
-    }
-
-    if (dayNum < 1) dayNum = 1;  // safety clamp once show has started
-    return dayNum;
+    return recordingDaysRunning();
 }
 
 int determineSeasonYear() {
-    if (showStartDateValid) return showStartY;
-    DateTime nowDT = rtc.now();
-    return nowDT.year();
+    return recordingYear();
 }
 
 
 
 void timeTriggeredEvents() {
+    if (!rtcReady || rtc.lostPower() || rtc.now().year() != recordingYear()) return;
     DateTime now = rtc.now();
 
     // ---------------------------
@@ -66,7 +38,7 @@ void timeTriggeredEvents() {
 
         if (!flagDaysRunningReset) {
             int newDaysRunning = computeDaysRunning();
-            if (newDaysRunning > 0 && newDaysRunning != daysRunning) {
+            if (newDaysRunning != daysRunning) {
                 daysRunning = newDaysRunning;
                 saveDaysRunning();
                 publishMQTT(MQTT_DEBUG_LOG,
@@ -89,7 +61,7 @@ void timeTriggeredEvents() {
     // Reset 1 minute before showStartMin
     // =========================================================
     int minutesNow = now.hour() * 60 + now.minute();
-    if (minutesNow == (showStartMin - 1) && !flagDailyShowStartReset) {
+    if (recordingShowSeasonActive() && minutesNow == (showStartMin - 1) && !flagDailyShowStartReset) {
         totalDailyCars = 0;
         saveDailyTotal();
         publishMQTT(MQTT_DEBUG_LOG, "Daily total reset (showStartMin-1)");
@@ -100,11 +72,8 @@ void timeTriggeredEvents() {
     // **MICROSTEP #3 — dynamic show-end summary**
     // Save summary EXACTLY at showEndMin
     // =========================================================
-    // Consider the show "active" once a valid showStartDate is set
-    bool showSeasonActive =
-        showStartDateValid &&
-        rtcReady &&
-        (now.year() >= showStartY);   // cheap check, you can tighten if needed
+    // Apply the shared current-year calendar and Christmas Eve exclusion.
+    bool showSeasonActive = recordingShowSeasonActive();
 
     // Primary trigger: normal end-of-show save
     if (sdAvailable &&
@@ -149,3 +118,4 @@ void timeTriggeredEvents() {
         resetFlagsOnce = false;
     }
 }
+

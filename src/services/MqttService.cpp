@@ -62,7 +62,8 @@ void KeepMqttAlive() {
     char showStartDateBuf[11];
     snprintf(showStartDateBuf, sizeof(showStartDateBuf), "%04d-%02d-%02d",
             showStartY, showStartM, showStartD);
-    publishMQTT(MQTT_PUB_SHOW_START_DATE, showStartDateBuf, true); // "YYYY-MM-DD"
+    // HA owns Config/showStartDate. Accepted value is published under State.
+    publishRecordingCalendar();
     publishMQTT(MQTT_PUB_SHOW_START_MIN,  String(showStartMin), true);
     publishMQTT(MQTT_PUB_SHOW_END_MIN,    String(showEndMin), true);
 
@@ -178,52 +179,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
         publishMQTT(MQTT_DEBUG_LOG, "Beam Sensor Duration Updated");
     */
     } else if (strcmp(topic, MQTT_SUB_SHOWSTART) == 0) {
-        // Set Show Start Date (YYYY-MM-DD)
-        int y, m, d;
-
-        if (sscanf(message, "%d-%d-%d", &y, &m, &d) == 3) {
-
-            // ---- guard against junk / uninitialized dates ----
-            bool valid =
-                (y >= 2020 && y <= 2100) &&
-                (m >= 1 && m <= 12) &&
-                (d >= 1 && d <= 31);
-
-            if (!valid) {
-                publishMQTT(MQTT_DEBUG_LOG,
-                    String("Invalid ShowStartDate payload (range): ") + message);
-                return;   // don't overwrite stored values
-            }
-
-            // // ---- idempotent guard: same date => do nothing ----
-            // if (showStartDateValid &&
-            //     y == showStartY && m == showStartM && d == showStartD) {
-            //     publishMQTT(MQTT_DEBUG_LOG,
-            //         String("ShowStartDate unchanged, ignoring: ") + message);
-            //     return;   // prevents side effects from HA reasserts
-            // }
-
-            // ---- accept NEW date ----
-            showStartY = y;
-            showStartM = m;
-            showStartD = d;
-            showStartDateValid = true;
-
-            // update SD season folder only on real change
-            ensureSeasonFolderExists();
-            publishMQTT(MQTT_DEBUG_LOG,
-                String("SD season folder updated to: ") + seasonFolder);
-
-            // recompute derived values ONLY (no resets here)
-            daysRunning = computeDaysRunning();
-            saveDaysRunning();   // publishes retained DaysRunning
-            publishMQTT(MQTT_DEBUG_LOG,
-                "ShowStartDate received, DaysRunning recomputed: " + String(daysRunning));
-
-        } else {
-            publishMQTT(MQTT_DEBUG_LOG,
-                String("Invalid ShowStartDate payload (parse): ") + message);
-        }
+        // Date commands cannot change the recording folder or reset counts.
+        acceptShowStartDate(String(message));
 
     } else if (strcmp(topic, MQTT_SUB_SHOWSTARTTIME) == 0) {
         // Update show start time (minutes since midnight)
@@ -260,3 +217,4 @@ void callback(char* topic, byte* payload, unsigned int length) {
         }
     }
 }
+
