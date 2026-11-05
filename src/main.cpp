@@ -8,7 +8,7 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
- * 25.12.03.2-modular-test.9 — 2026-11-05
+ * 25.12.03.2-modular-test.10 — 2026-11-05
  *   - Coordinate persisted HA schedules/tuning with both counter releases.
  *   - Separate official show buckets from uninterrupted all-day traffic.
  *   - Add conditional extension reporting and verified idempotent summaries.
@@ -60,7 +60,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.9";
+const char FWVersion[] = "25.12.03.2-modular-test.10";
 
 #include "traffic/Firmware.h"
 

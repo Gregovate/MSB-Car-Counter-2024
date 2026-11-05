@@ -2,6 +2,16 @@
 
 // Extracted from the production baseline; behavior fixes are separate changes.
 void updateDisplay() {
+    if (!countsReady()) {
+        display.clearDisplay();
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,line1);
+        display.println("COUNT RECOVERY");
+        display.println("Pending - check HA");
+        display.display();
+        return;
+    }
     DateTime now = rtc.now();
     //float tempF = ((rtc.getTemperature() * 9 / 5) + 32); // Get temperature in Fahrenheit
     int currentHr24 = now.hour();

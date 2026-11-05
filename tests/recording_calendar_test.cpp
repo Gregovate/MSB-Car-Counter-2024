@@ -24,7 +24,12 @@ int main(int argc,char** argv) {
     loadRecordingCalendarFromSD();
     assert(recordingYear()==2026);
     if(mode=="sd-recovery") {assert(recordingShowStart().day()==28);return 0;}
-    if(mode=="offline") {assert(recordingDaysRunning()==0);assert(recordingPathWritable("/GC/2026/log.csv"));return 0;}
+    if(mode=="offline") {
+        assert(recordingDaysRunning()==0);assert(recordingPathWritable("/GC/2026/log.csv"));
+        assert(rtcTimeLossObserved);rtc.lost=false;publishRecordingCalendar();
+        bool warned=false;for(auto&m:messages)if(m.second=="TIME_RECOVERED_CHECK_RTC_BACKUP")warned=true;
+        assert(warned);return 0;
+    }
     assert(recordingShowStart().day()==27);
     assert(recordingDaysRunning()==0);
     assert(!acceptShowStartDate("2025-11-28"));

@@ -65,7 +65,7 @@ void KeepMqttAlive() {
     publishMQTT(MQTT_PUB_DAYOFMONTH,  String(dayOfMonth),  true);
     publishMQTT(MQTT_PUB_DAYSRUNNING, String(daysRunning), true);
 
-    if (totalsInitialized) {
+    if (countsReady()) {
         // ---- Retained core counts ----
         publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
         publishMQTT(MQTT_PUB_SHOWTOTAL,  String(totalShowCars),  true);

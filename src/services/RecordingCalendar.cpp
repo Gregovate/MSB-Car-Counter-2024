@@ -9,6 +9,7 @@ int networkYear = 0;
 int startMonth = 11;
 int startDay = traffic::blackFridayDay(traffic::kRecordingYearFloor);
 bool initialized = false;
+bool rtcTimeLossObserved = false;
 bool nvsDateValid = false;
 bool sdCalendarReady = false;
 const char* calendarFault = "OK";
@@ -61,6 +62,9 @@ int recordingYear() { return activeYear; }
 void initializeRecordingCalendar() {
     if (initialized) return;
     initialized = true;
+    // Capture OSF before NTP adjustment clears it. This is time-loss evidence,
+    // not a battery voltage/charge measurement.
+    rtcTimeLossObserved=rtcReady && rtc.lostPower();
     if (!calendarPrefs.begin("traffic-cal", false)) calendarFault = "CALENDAR_NVS_UNAVAILABLE";
     int saved = calendarPrefs.getInt("year", traffic::kRecordingYearFloor);
     activeYear = traffic::validYear(saved) ? saved : traffic::kRecordingYearFloor;
@@ -152,6 +156,7 @@ void updateRecordingCalendar() {
         lastNtpAttempt=millis();
         SetLocalTime();
     }
+    if (rtcReady && rtc.lostPower()) rtcTimeLossObserved=true;
     int clockYear=usableRtc() ? rtc.now().year() : 0;
     int next=traffic::selectRecordingYear(activeYear,clockYear,networkYear==clockYear);
     if (next>activeYear) {
@@ -164,11 +169,18 @@ void updateRecordingCalendar() {
         publishRecordingCalendar();
     }
     if (clockYear!=activeYear) calendarFault="CLOCK_YEAR_MISMATCH_USING_SAVED_YEAR";
+    if (clockYear==activeYear && strcmp(calendarFault,"CLOCK_YEAR_MISMATCH_USING_SAVED_YEAR")==0) calendarFault="OK";
     daysRunning=recordingDaysRunning();
 }
 
 void publishRecordingCalendar() {
     String base=String(topic_base_path);
+    if (rtcReady && rtc.lostPower()) rtcTimeLossObserved=true;
+    const char* rtcHealth=!rtcReady ? "NOT_DETECTED" :
+        !usableRtc() ? "TIME_INVALID" :
+        rtcTimeLossObserved ? "TIME_RECOVERED_CHECK_RTC_BACKUP" : "OK";
+    publishMQTT((base+"/System/rtcHealth").c_str(),rtcHealth,true);
+    publishMQTT((base+"/System/rtcTimeLossObserved").c_str(),rtcTimeLossObserved ? "1":"0",true);
     publishMQTT(MQTT_PUB_SEASON_YEAR,String(activeYear),true);
     publishMQTT(MQTT_PUB_SEASON_FOLDER,String(seasonFolder),true);
     DateTime start=recordingShowStart();

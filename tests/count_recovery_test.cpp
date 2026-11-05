@@ -6,6 +6,7 @@
 #include <iostream>
 
 void reboot() {
+    retryClockRestore=false;lastRestoreAttempt=0;pendingLoaded=false;pendingVehicles=0;pendingDurable=true;
     savedCounts={};closedCounts={}; countDate=showResetDate=0;freshCountYear=0; countSlot=-1;
     for(auto& n:officialHourly) n=0;
     officialCountsComplete=false;
@@ -70,7 +71,42 @@ void testIdleRecoveryService() {
     assert(disk["/CC/2025/ShowSummaryBuckets.csv"]=="OFFICIAL UNCHANGED");
 }
 
+void testDelayedClockRecovery() {
+    legacy();stringPrefs.clear();
+    rtc.current=DateTime(2026,11,5,9,31,58);
+    traffic::CountRecord record{};
+    record.magic=0x4d534232;record.sequence=31;record.date=20261105;
+    record.daily=29;record.hourly[6]=1;record.hourly[8]=10;record.hourly[9]=18;
+    record.officialComplete=1;record.checksum=traffic::countChecksum(record);
+    disk["/CC/2026/CountState.a"]=std::string(reinterpret_cast<char*>(&record),sizeof(record));
+    --record.sequence;--record.daily;--record.hourly[9];record.checksum=traffic::countChecksum(record);
+    disk["/CC/2026/CountState.b"]=std::string(reinterpret_cast<char*>(&record),sizeof(record));
+    auto before=disk;
+    reboot();rtc.current=DateTime(2000,1,1,0,0,37);rtc.lost=true;
+    assert(!restoreCountState());assert(retryClockRestore);
+    assert(std::string(countFault)=="WAITING_FOR_VALID_CLOCK");
+    ticks+=2000;serviceCountState();assert(!countsReady() && disk==before);
+    recordPendingVehicle();recordPendingVehicle();assert(pendingVehicles==2);
+    // A second cold boot must keep undated detections separately in NVS.
+    reboot();assert(!restoreCountState());assert(pendingVehicles==2);
+    rtc.current=DateTime(2026,11,5,9,35,14);rtc.lost=false;
+    ticks+=2000;serviceCountState();
+    assert(countsReady() && totalDailyCars==29 && totalShowCars==0);
+    assert(hourlyCount[6]==1 && hourlyCount[8]==10 && hourlyCount[9]==18);
+    assert(pendingVehicles==2 && std::string(countFault)=="OK");
+    ++totalDailyCars;++hourlyCount[9];assert(persistCountState());
+    ticks+=2000;serviceCountState();assert(totalDailyCars==30);
+    assert(restoreCountState() && totalDailyCars==30); // retry cannot replace live counts
+    reboot();assert(restoreCountState() && totalDailyCars==30 && pendingVehicles==2);
+    // Corrupt evidence is not automatically retried or erased after clock recovery.
+    disk["/CC/2026/CountState.a"]="bad";disk["/CC/2026/CountState.b"]="bad";
+    reboot();assert(!restoreCountState());before=disk;ticks+=2000;serviceCountState();
+    assert(!countsReady() && !retryClockRestore && disk==before);
+    stringPrefs.clear();legacy();
+}
+
 int main() {
+    testDelayedClockRecovery();
     { // Real .5 checkpoint migration, including its durable reset marker.
     legacy();traffic::LegacyCountRecord old{};
     old.magic=0x4d534231UL;old.sequence=8;old.date=20261104;

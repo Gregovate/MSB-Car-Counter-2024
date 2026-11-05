@@ -14,7 +14,7 @@ class CountRecovery(unittest.TestCase):
         source=(ROOT/"src/services/VehicleDetector.cpp").read_text(encoding="utf-8")
         body=re.search(r"void countTheCar\(\) \{.*?^\}", source, re.S|re.M).group(0)
         harness='#define main recovery_scenarios\n#include "'+str(ROOT/"tests/count_recovery_test.cpp")+'"\n#undef main\n'+re.search(r'void recordOfficialVehicle\(\) \{.*?^\}',(ROOT/'src/services/ShowSummary.cpp').read_text(),re.S|re.M).group(0)+'\n'+body+\
-            "\nint main(){legacy();assert(restoreCountState());showTime=true;countTheCar();reboot();assert(restoreCountState());assert(totalDailyCars==41 && totalShowCars==401 && hourlyCount[16]==41);return 0;}"
+            "\nint main(){legacy();assert(restoreCountState());showTime=true;countTheCar();reboot();assert(restoreCountState());assert(totalDailyCars==41 && totalShowCars==401 && hourlyCount[16]==41);reboot();rtc.lost=true;assert(!restoreCountState());auto before=disk;auto pending=pendingVehicles;countTheCar();assert(pendingVehicles==pending+1 && disk==before && totalDailyCars==0);return 0;}"
         with tempfile.TemporaryDirectory() as tmp:
             cpp=pathlib.Path(tmp)/"event.cpp";cpp.write_text(harness)
             exe=str(pathlib.Path(tmp)/"event")

@@ -3,6 +3,11 @@
 // Extracted from the production baseline; behavior fixes are separate changes.
 void countTheCar() {
     serviceCountState(); // Network work may have crossed midnight since loop start.
+    if (!countsReady()) {
+        // Preserve events during recovery without writing zero/fictitious dates.
+        recordPendingVehicle();
+        return;
+    }
     /* COUNT SUCCESS */
 
     noCarTimer = millis();

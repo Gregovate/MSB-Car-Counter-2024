@@ -1,6 +1,7 @@
 #pragma once
 // Common durable count state; SD is independent of MQTT reporting.
 bool countsReady();
+void recordPendingVehicle();
 bool restoreCountState();
 bool persistCountState();
 void serviceCountState();

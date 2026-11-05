@@ -1,3 +1,10 @@
+# Release .10 — 2026-11-05
+
+- Retry count restoration after valid RTC time returns; preserve blocked detections separately in NVS.
+- Show recovery pending instead of zero; correct post-migration warning and stale diagnostic reporting.
+- Report RTC time-loss evidence on both devices without claiming a battery voltage measurement.
+- See [recovery release and test procedure](Recovery_Release_10.md).
+
 # Coordinated release .9 — 2026-11-05
 
 - Installed baseline is .5 on both devices. No separate .6/.7/.8 installation is required.

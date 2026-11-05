@@ -1,6 +1,7 @@
 #include "traffic/Firmware.h"
 #include "traffic/CountRecord.h"
 #include <limits.h>
+#include <Preferences.h>
 
 unsigned int officialHourly[24]{};
 bool officialCountsComplete=false;
@@ -14,6 +15,19 @@ uint32_t countDate=0, showResetDate=0;
 int freshCountYear=0;
 int countSlot=-1;
 bool countReady=false;
+bool retryClockRestore=false;
+unsigned long lastRestoreAttempt=0;
+// Undated events are durable but never assigned to a fabricated day/hour.
+Preferences pendingPrefs;
+bool pendingLoaded=false;
+uint32_t pendingVehicles=0;
+bool pendingDurable=true;
+void loadPendingVehicles() {
+    if (pendingLoaded) return;
+    pendingLoaded=true;
+    pendingDurable=pendingPrefs.begin("traffic-pending",false);
+    if (pendingDurable) pendingVehicles=pendingPrefs.getUInt("vehicles",0);
+}
 const char* countFault="NOT_RESTORED";
 String hourlyExportHealth="NOT_ATTEMPTED";
 
@@ -150,11 +164,22 @@ void reportHourlyExportStatus(const char* status) {
     publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),hourlyExportHealth,true);
 }
 
+void recordPendingVehicle() {
+    loadPendingVehicles();
+    if (pendingVehicles<UINT32_MAX) ++pendingVehicles;
+    // Preferences commits each accepted event. No invalid RTC date enters SD.
+    pendingDurable=pendingPrefs.putUInt("vehicles",pendingVehicles)==sizeof(uint32_t);
+    publishCountHealth();
+}
+
 void publishCountHealth() {
+    loadPendingVehicles();
+    publishMQTT((String(topic_base_path)+"/System/unassignedRecoveryCount").c_str(),String(pendingVehicles),true);
+    publishMQTT((String(topic_base_path)+"/System/pendingCountHealth").c_str(),
+        pendingDurable ? (pendingVehicles ? "UNASSIGNED_EVENTS_REQUIRE_REVIEW":"OK") : "SAVE_FAILED_NVS",true);
     reportCountFault(countFault);
     publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),hourlyExportHealth,true);
-    if (!countReady)
-        publishMQTT((String(topic_base_path)+"/System/unrestoredDailyCount").c_str(),String(totalDailyCars),true);
+    publishMQTT((String(topic_base_path)+"/System/unrestoredDailyCount").c_str(),String(countReady ? 0 : totalDailyCars),true);
 }
 
 bool countsReady() { return countReady; }
@@ -168,8 +193,17 @@ bool countTopicPublishable(const char* topic) {
 }
 
 bool restoreCountState() {
+    if (countReady) return true; // A retry must never replace live totals.
+    loadPendingVehicles();
     uint32_t today=countToday();
-    if (!today || SD.cardType()==CARD_NONE) { reportCountFault("RESTORE_FAILED_CLOCK_OR_SD"); return false; }
+    if (!today) {
+        retryClockRestore=true;
+        reportCountFault("WAITING_FOR_VALID_CLOCK"); return false;
+    }
+    // Only the clock dependency is automatically retried. Corrupt/unreadable
+    // checkpoints remain protected and require inspection.
+    retryClockRestore=false;
+    if (SD.cardType()==CARD_NONE) { reportCountFault("RESTORE_FAILED_CLOCK_OR_SD"); return false; }
     traffic::CountRecord a{},b{};
     bool va=readCountRecord(0,a), vb=readCountRecord(1,b);
     if (va || vb) {
@@ -209,9 +243,13 @@ bool restoreCountState() {
     dayOfMonth=lastDayOfMonth=today%100;
     daysRunning=recordingDaysRunning();
     flagDailyShowStartReset=showResetDate==today;
-    persistCountState();
-    if (va!=vb && (SD.exists(countPath("CountState.a")) && SD.exists(countPath("CountState.b"))))
-        reportCountFault("RECOVERED_ONE_VALID_COPY_CHECK_SD");
+    if (persistCountState()) {
+        // Inspect the resulting copies, not pre-migration validation flags.
+        traffic::CountRecord afterA{},afterB{};
+        if (readCountRecord(0,afterA) && readCountRecord(1,afterB))
+            reportCountFault("OK");
+        else reportCountFault("RECOVERED_ONE_VALID_COPY_CHECK_SD");
+    }
     return true;
 }
 
@@ -246,7 +284,17 @@ bool persistCountState() {
 }
 
 void serviceCountState() {
-    if (!countReady) return; // Recovery needs operator inspection; don't erase evidence.
+    if (!countReady) {
+        if (!retryClockRestore || !countToday()) return;
+        if (millis()-lastRestoreAttempt<1000UL) return;
+        lastRestoreAttempt=millis();
+        if (restoreCountState()) {
+            // Repair exports only after the verified snapshot is loaded.
+            saveDailyTotal(); saveShowTotal(); saveHourlyCounts();
+            publishCountHealth();
+        }
+        return;
+    }
     uint32_t today=countToday();
     if (!today || today<countDate) { reportCountFault("CLOCK_INVALID_OR_BACKWARD"); return; }
     if (today>countDate) {
