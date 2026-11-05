@@ -1,3 +1,11 @@
+## Published checksum correction — 2026-11-04
+
+The first `.3` shared-file manifest incorrectly hashed nine unchanged files from temporary copies containing an extra final newline. Clean Git checkouts reproduced `FAIL: shared file changed: src/services/MqttTransport.cpp` in both repositories. This was a manifest-generation error, not an operator edit or Windows CRLF problem.
+
+Corrected only the nine expected digests to match the committed LF-normalized bytes. The verifier remains strict; no check was disabled and no source files were padded to match the incorrect hashes. Clean Git checkouts now pass the source verifier, all 17 shared-file comparisons against the peer, and all 11 tests per project (including Windows encoding/CRLF coverage). The previous temporary-workspace validation was insufficient to validate the published manifest and is superseded by this checkout-based result. Firmware source and `.3` identity are unchanged; no new compile or device upload is involved.
+
+Future release verification must run from the exact published Git checkout, not only a reconstructed working copy.
+
 > Update 2026-11-04: `.3` deliberately changes calendar/storage behavior. See [Recording year protection](Recording_Year_Protection.md) for the current rules, validation and remaining work. The structural-refactor evidence below is historical.
 
 # Modular extraction validation

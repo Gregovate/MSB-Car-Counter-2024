@@ -1,3 +1,9 @@
+## Verification manifest correction — 2026-11-04
+
+- Correct nine shared-file checksums generated from temporary copies with an extra trailing newline.
+- Reproduce and verify the correction in clean Git checkouts of both counters: source/peer checks and 11 tests per project PASS.
+- No firmware behavior change; manual firmware versions remain `.3`.
+
 ## 25.12.03.2-modular-test.3 — 2026-11-04
 
 - Shared persistent calendar-year routing and historical-folder write protection.
