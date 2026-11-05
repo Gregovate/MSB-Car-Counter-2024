@@ -27,7 +27,34 @@ void legacy() {
     disk["/CC/2025/ShowSummaryBuckets.csv"]="OFFICIAL UNCHANGED";
     reboot();
 }
+
+void testLegacyZeroWithOlderHourlyRows() {
+    legacy();
+    rtc.current=DateTime(2026,11,5,4,45,0);
+    disk["/CC/2026/EnterTotal.txt"]="0";
+    disk["/CC/2026/ShowTotal.txt"]="";
+    disk["/CC/2026/DayOfMonth.txt"]="4";
+    const std::string history=
+        "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23\n"
+        "2026-10-19,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n"
+        "2026-10-21,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,0,0,0,0,0,0,0,0,0\n";
+    disk["/CC/2026/HourlyData.csv"]=history;
+    assert(restoreCountState());
+    assert(totalDailyCars==0 && totalShowCars==0 && countDate==20261105);
+    for(auto n:hourlyCount) assert(n==0); // October's four cars are not today's traffic.
+    assert(disk["/CC/2026/HourlyData.csv"]==history);
+    assert(disk["/CC/2025/ShowSummaryBuckets.csv"]=="OFFICIAL UNCHANGED");
+    // Once migrated, a new vehicle is durable through another cold boot.
+    totalDailyCars=1;hourlyCount[4]=1;assert(persistCountState());
+    reboot();assert(restoreCountState());assert(totalDailyCars==1 && hourlyCount[4]==1);
+    // Do not broaden this exception to discard an ambiguous nonzero total.
+    disk.erase("/CC/2026/CountState.a");disk.erase("/CC/2026/CountState.b");
+    disk["/CC/2026/EnterTotal.txt"]="7";
+    reboot();auto untouched=disk;assert(!restoreCountState());assert(disk==untouched);
+}
+
 int main() {
+    testLegacyZeroWithOlderHourlyRows();
     legacy();assert(restoreCountState());assert(totalDailyCars==40);
     // Per-event save survives immediate reboot, with no MQTT/timer cycle.
     ++totalDailyCars;++hourlyCount[16];assert(persistCountState());

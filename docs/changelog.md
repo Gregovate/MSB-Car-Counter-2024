@@ -1,3 +1,8 @@
+## 25.12.03.2-modular-test.5 — 2026-11-05
+- Fix `.4` migration rejection when a verified zero daily total/day marker is newer than valid older hourly rows; keep all older rows unchanged and do not derive today's count from them.
+- Exact field regression: EnterTotal=0, empty ShowTotal, day=4, October 19/21 hourly rows, RTC November 5. `.4` fails this fixture; `.5` restores zero and preserves a subsequent vehicle across reboot. Inconsistent nonzero totals still stop recovery.
+- Manual version/changelog updated. Same shared fix in both counters; licensed builds and `.5` hardware acceptance pending.
+
 ## 25.12.03.2-modular-test.4 — 2026-11-04
 - Share immediate per-vehicle dated SD checkpoints and reboot recovery across both counters.
 - Verify alternating copies; retry failed saves independently of MQTT; report retained persistence faults.

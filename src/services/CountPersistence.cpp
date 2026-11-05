@@ -92,7 +92,12 @@ bool loadLegacyCounts(uint32_t today) {
         // A nonzero daily total without a dated hourly row is ambiguous.
         if (!found && daily!=0) return false;
     } else {
-        if (!latest || latest>=today || latest%100!=day) return false;
+        // A verified zero daily total can stay zero when all hourly rows are
+        // older than today, even if the separate day file advanced later.
+        // Legacy firmware produced exactly this split during failed saves.
+        // Preserve those older rows; never sum them into today's total.
+        // Nonzero totals still require the original day/date consistency check.
+        if (!latest || latest>=today || (daily!=0 && latest%100!=day)) return false;
         daily=0;
     }
     totalDailyCars=daily; totalShowCars=show;

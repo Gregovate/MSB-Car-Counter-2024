@@ -1,7 +1,8 @@
 # Count persistence and reboot recovery — 2026-11-04
 
 ## Status and evidence
-Source revision `.4`, on `refactor/shared-firmware`, not uploaded to either device.
+Current source revision `.5` on `refactor/shared-firmware`; not uploaded yet.
+Car `.4` licensed build passed (29.77 s) and its OTA page subsequently reported `.4` installed on November 5. Initial migration reported `RESTORE_FAILED_KEEP_FILES`; field diagnosis and correction are below. Gate has not been reported updated from `.2`.
 The `.3` licensed local builds reported by Greg passed (Car 32.55 s, Gate 23.00 s); those builds do not include this change.
 Greg observed today's Car count reach 40, disappear across a reboot, then a seven-car manual test (later eight) disappear. HA history preserves the reported changes; it does not prove which write completed or the exact cause of each drop.
 
@@ -47,16 +48,26 @@ Persistence health is retained and repeated on heartbeat. Generic SD health `OK`
 - Cases include torn save and retry, last valid copy recovery, seven counts surviving reset-minute reboot, different month with same day number, new-day/new-year startup, invalid clock, failed/malformed reads, protected 2025 data, Gate absolute paths, and interrupted hourly replacement.
 - Strict preservation checks pass: Car 89 function bodies, Gate 94; 23 shared files match. Original unaffected behavior/config/GPIO/topic/state/enum baselines remain intact; changes are pinned in explicit behavior overrides.
 - ESP32 compile/link checks pass with cached public dependencies and the explicit compile-only OTA interface stand-in. Car: 50,296 bytes RAM, 1,022,121 flash; Gate: 50,288 RAM, 1,008,121 flash. These artifacts must never be deployed. Greg must build with his licensed ElegantOTAPro source before any upload.
-- Hardware validation, licensed `.4` builds, and device uploads are pending.
+- Car licensed `.4` build/install is now evidenced above; Gate `.4` and both `.5` licensed builds/installations remain pending. Hardware persistence acceptance remains pending.
 
 ## Controlled hardware acceptance procedure
 Owner: the respective counter repository; branch `refactor/shared-firmware`. Coordinate HA schedule policy with the governing Show Controls repository. One device and one step at a time.
 
-1. Read-only: pull this source, verify the peer files and manual `.4` version, then run the local licensed build. Preserve `.vscode/extensions.json` edits. Do not upload compile-contract binaries.
-2. Read-only: capture live firmware, heartbeat/time, counts, persistence/SD diagnostics and current-year files. Preserve existing end-of-season 2025 backups; do not rename or edit 2025 files. The current devices still run `.2` until an explicitly agreed upload succeeds.
+1. Read-only: pull this source, verify the peer files and manual `.5` version, then run the local licensed build. Preserve `.vscode/extensions.json` edits. Do not upload compile-contract binaries.
+2. Read-only: capture live firmware, heartbeat/time, counts, persistence/SD diagnostics and current-year files. Preserve existing end-of-season 2025 backups; do not rename or edit 2025 files. Car currently reports `.4` with migration blocked; Gate last reported `.2`. Verify live identities before upload.
 3. Before upload, review baseline expectations: `.2` may have written current traffic under 2025; `.4` imports 2026 only. Do not label an expected folder migration as proof of a successful count restoration. Choose an idle period and agree the single-device firmware-only OTA action. No filesystem upload, SD format, factory reset, or count command.
-4. After that agreed upload, inspect `.4` identity, current-year paths, full RTC date, `countPersistence` and hourly export status. On a restore fault stop further reset/upload actions and download the current-year evidence for inspection. Keep `.a`, `.b`, `.previous`, and `.pending` files intact. Do not revert to `.2` as a routine remedy: it can write into 2025.
+4. After that agreed upload, inspect `.5` identity, current-year paths, full RTC date, `countPersistence` and hourly export status. On a restore fault stop further reset/upload actions and download the current-year evidence for inspection. Keep `.a`, `.b`, `.previous`, and `.pending` files intact. Do not revert to `.2` as a routine remedy: it can write into 2025.
 5. When physical testing is possible, note starting daily/show/hourly values; pass a known number of vehicles; verify a completed checkpoint and matching exports. Perform one agreed reboot; require identical same-day values and no reset command. Verify failed-SD warning and restoration using a controlled test card/bench setup, not by interrupting the historical card remotely.
 6. Verify midnight/full-date rollover and reboot within the show-reset minute on a disposable test setup. Do not change the production RTC/HA calendar to force this test.
 
 The two-copy format protects the recovery path, but production acceptance remains pending until these checks pass.
+
+## Field correction: zero legacy baseline — 2026-11-05
+
+Observed Car files under `/CC/2026`: EnterTotal.txt is `0`, ShowTotal.txt is empty, DayOfMonth.txt is `4`; HourlyData.csv has an all-zero October 19 row and October 21 counts 1,1,2 at hours 12,13,14. There are no CountState files. On November 5, `.4` required the newest hourly row's day (21) to equal the day marker (4), unnecessarily rejecting the already-zero daily baseline. This was an upgrade-rule defect, not proof of a failed SD card.
+
+`.5` permits this specific class of migration: daily count must parse as zero, all hourly rows must remain valid/current-year/not future, and the newest hourly row must precede today. The existing empty legacy show-total initializer remains zero. Older hourly rows remain history, not today's counts. Nonzero inconsistent totals, malformed/failed reads, damaged checkpoints and prior-year writes remain rejected. No file editing/reset command is needed to work around the defect.
+
+The exact field fixture was reproduced failing on `.4`, then passed with the shared `.5` correction. It also verifies one newly counted vehicle survives reboot after migration, and a nonzero mismatched daily count still fails without modifying files. Both 13-test suites and peer verification pass. ESP32 compile-contract checks are recorded in Modular_Validation.md; licensed `.5` builds and hardware validation remain pending.
+
+Before another upload, read `System/unrestoredDailyCount` on the running Car to capture any partial detections while `.4` recovery was blocked. A firmware reboot cannot retain that RAM-only value automatically. Do not invent a recovered baseline or alter 2025 history.

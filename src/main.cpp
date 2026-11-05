@@ -8,6 +8,10 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.5 — 2026-11-05
+ *   - Accept a verified zero legacy daily total with older valid hourly rows.
+ *   - Preserve historical rows and reject inconsistent nonzero daily totals.
+ *   - Add the exact field migration case and post-migration reboot regression.
  * 25.12.03.2-modular-test.4 — 2026-11-04
  *   - Save each vehicle in a shared verified, dated two-copy SD checkpoint.
  *   - Restore counts before reporting; preserve files when recovery is uncertain.
@@ -35,7 +39,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.4";
+const char FWVersion[] = "25.12.03.2-modular-test.5";
 
 #include "traffic/Firmware.h"
 

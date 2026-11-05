@@ -57,3 +57,7 @@ The workflow revision also passed an ESP32 compile/link check with public depend
 ## Count recovery follow-up — 2026-11-04
 
 The `.4` source adds shared dated per-vehicle checkpoints and protected hourly CSV replacement. See [Count persistence](Count_Persistence.md) for evidence, failure handling, remaining limits, and the controlled acceptance procedure. Neither device has been uploaded with this revision.
+
+
+## `.5` zero-baseline migration regression — 2026-11-05
+Exact field fixture fails on `.4` and passes after the shared correction. Both full 13-test suites and all 23 shared-file checks pass; tested source retains prior malformed/nonzero/clock/archive protections. The `.5` ESP32 compile check could not run in this session because PlatformIO is unavailable (`No module named platformio`). Prior `.4` compile evidence remains valid for `.4` only. Licensed `.5` builds and live count/reboot acceptance remain pending.
