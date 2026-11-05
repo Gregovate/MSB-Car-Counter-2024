@@ -34,9 +34,7 @@ void countTheCar() {
     snprintf(topic, sizeof(topic), "%s%02d", MQTT_PUB_CARS_HOURLY, currentHour);
 
     // Increase Show Count only when show is open
-    if (showTime == true) {
-        totalShowCars++;
-    }
+    recordOfficialVehicle();
 
     // Commit this vehicle as one dated daily/show/hourly checkpoint before
     // MQTT or the web-facing files can delay persistence.

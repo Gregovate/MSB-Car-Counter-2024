@@ -1,3 +1,15 @@
+# Coordinated release .9 — 2026-11-05
+
+- Installed baseline is .5 on both devices. No separate .6/.7/.8 installation is required.
+- HA-owned, validated complete schedule/tuning transactions; verified SD and NVS fallback; applied State acknowledgements. Reset times come from HA offsets, not fixed scheduler hours.
+- Versioned .5 count migration; official show bins persisted alongside raw hourly traffic; closing-day binary archive; replay-protected manual corrections.
+- Normal cutoffs 21:10 Car / 21:25 Gate from HA values; date-scoped 0–30 minute extension; conditional 10PM reporting; current-year-only verified/idempotent summary updates.
+- Both devices attempt AP 6 when its private SSID/password macros are present; private secrets.h is untouched and never committed.
+- WiFi starts asynchronously; MQTT handshake runs separately from sensing with explicit client ownership; reconnect reports current values rather than replaying stale snapshots.
+- Central DST rules replace a fixed daylight offset. Both devices publish identical schedule/configuration health and hourly topic contracts.
+- Private HA companion corrects command publishers, duplicate/misassigned entities, applied state topics, date template and fault warnings. Unrelated LOR/production controls and analytics package remain unchanged.
+- See [Coordinated release / park acceptance](Coordinated_Release_9.md) for installation order, metrics meanings, rollback limits and remaining physical acceptance.
+
 ## 25.12.03.2-modular-test.8 — 2026-11-05
 - Share 24-bin JSON and individual Cars/hour/00..23 snapshots on heartbeat. Skip disconnected/unrestored snapshots; ensure sufficient MQTT packet capacity.
 - Correct Gate's extra slash in all per-hour publishers. Do not clear existing broker retained topics automatically.

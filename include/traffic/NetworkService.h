@@ -7,3 +7,5 @@ void preferPrimaryIfAvailable();
 void MQTTreconnect();
 void checkWiFiConnection();
 void configureWifiAccessPoints();
+
+void configureAdditionalWifiAccessPoints();

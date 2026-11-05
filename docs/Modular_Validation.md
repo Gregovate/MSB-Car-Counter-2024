@@ -83,3 +83,7 @@ Both repositories pass 14 host tests and peer verification (Car 91 function bodi
 ## MQTT alignment and idle recovery (.8), 2026-11-05
 
 Both repositories pass 16 host tests. Shared-file verification: 25 files match; Car 92 function bodies / 71 explicit revisions, Gate 97 / 72. New tests exercise the actual hourly publisher with all 24 values, maximum int payloads, allocation failure, offline/recovery guards, and correct single-slash topics. Count-service fault injection verifies idle retry and idle rollover persistence; the loop wiring check requires service before report/schedule/detection. Original configuration/pin/state baselines remain preserved. Private HA candidate files parse and preserve all distinct existing unique IDs. PlatformIO remains unavailable here: licensed ESP32 builds, OTA and real hardware/HA acceptance are pending.
+
+## Coordinated release .9
+
+Host tests exercise the actual count, operating-settings, summary and MQTT-handshake services. Cases include a real .5 binary checkpoint, seven-car reset/reboot persistence, current-year archive protection, HA offset persistence, normal/15/30 minute extensions, later volunteer exclusion, complete/partial summary replacement, malformed/stale settings and manual-command replay. GPIO/AP/topic constants and original detector state-machine bodies remain protected. Full ESP32 source compilation uses disposable dummy credentials and an OTA API substitute, so its image is NOT installable. The licensed local builds and park acceptance remain mandatory.

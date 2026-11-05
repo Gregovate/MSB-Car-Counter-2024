@@ -123,17 +123,22 @@ int recordingDaysRunning() {
     if (!usableRtc()) return 0;
     DateTime now=rtc.now(), start=recordingShowStart();
     if (now.year()!=activeYear || now.unixtime()<start.unixtime()) return 0;
-    int days=(now.unixtime()-start.unixtime())/86400UL+1;
-    if ((startMonth<12 || (startMonth==12 && startDay<24)) &&
-        now.month()==12 && now.day()>=24) --days;
+    int end=operatingSeasonEndDate(),down=operatingDownDate();
+    DateTime endDay(end/10000,end/100%100,end%100);
+    DateTime downDay(down/10000,down/100%100,down%100);
+    uint32_t last=now.unixtime()<endDay.unixtime() ? now.unixtime():endDay.unixtime();
+    if (last<start.unixtime()) return 0;
+    int days=(last-start.unixtime())/86400UL+1;
+    if (downDay.unixtime()>=start.unixtime() && downDay.unixtime()<=last) --days;
     return days;
 }
 
 bool recordingShowSeasonActive() {
     if (!usableRtc()) return false;
     DateTime now=rtc.now();
+    int date=now.year()*10000+now.month()*100+now.day();
     return now.year()==activeYear && now.unixtime()>=recordingShowStart().unixtime() &&
-           !(now.month()==12 && now.day()==24);
+           date<=operatingSeasonEndDate() && date!=operatingDownDate();
 }
 
 void noteNetworkClock(int year) { networkYear=year; }
@@ -201,7 +206,10 @@ bool recordingRename(const String &from, const String &to) {
 
 // User file-manager operations must not edit the internal recovery records.
 bool recordingWebWritable(const String &path) {
+    String protectedPath(path);protectedPath.toLowerCase();
+    if (protectedPath.indexOf("operating-settings")>=0 || protectedPath.endsWith(".pending") || protectedPath.endsWith(".previous")) return false;
+
     String lower=path; lower.toLowerCase();
-    return !lower.startsWith("/recording-calendar.") && lower.indexOf("/countstate.")<0 &&
+    return !lower.startsWith("/recording-calendar.") && lower.indexOf("/countstate.")<0 && lower.indexOf("/closedcounts-")<0 &&
            lower.indexOf("hourlydata.csv.")<0 && recordingPathWritable(path);
 }

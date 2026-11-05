@@ -1,3 +1,5 @@
+> **Current release .9:** [Coordinated_Release_9.md](Coordinated_Release_9.md) supersedes older pending-work notes below. HA controls reset offsets; .9 commands and checkpoints require the coordinated HA companion. Installed devices were last confirmed on .5.
+
 > Source .8: shared hourly JSON/individual topics, Gate slash correction, and main-loop count recovery service. See [MQTT contract](MQTT_Contract.md). Devices last confirmed .5; licensed build, upload and complete HA configuration mapping remain pending.
 
 > Source .7: both timing reporters now use State topics and preserve HA Config commands. See [Configuration ownership](Configuration_Ownership.md). Devices last confirmed .5; .6/.7 licensed builds and upload not confirmed.

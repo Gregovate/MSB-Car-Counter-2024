@@ -17,3 +17,5 @@
 #include "RecordingCalendar.h"
 
 #include "CountPersistence.h"
+
+#include "OperatingSettings.h"

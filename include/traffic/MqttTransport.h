@@ -10,3 +10,8 @@ void publishDebugLog(const String &message);
 void publishDebugEvent(const char* event, const String& details, bool retainFlag = false);
 void publishConfigState(const char* commandTopic, const String& value);
 void publishHourlySnapshot();
+
+// Connection handshake runs separately; all other MQTT operations stay on loop.
+bool mqttConnectionBusy();
+bool mqttOnline();
+bool pollMqttConnection(const char* user,const char* password);

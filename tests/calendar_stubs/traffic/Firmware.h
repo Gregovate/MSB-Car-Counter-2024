@@ -10,6 +10,7 @@
 #include <algorithm>
 #include "traffic/RecordingPolicy.h"
 struct String : std::string {
+    bool endsWith(const std::string& suffix) const {return size()>=suffix.size() && compare(size()-suffix.size(),suffix.size(),suffix)==0;}
     using std::string::string;
     String() = default;
     String(const std::string &s):std::string(s){}
@@ -68,3 +69,6 @@ void publishRecordingCalendar();
 inline void applyRecordingCalendar(){seasonFolder=String("/CC/")+String(recordingYear());}
 
 bool recordingPathWritable(const String &, bool mkdirOnly=false);
+
+inline int operatingSeasonEndDate(){return recordingYear()*10000+1231;}
+inline int operatingDownDate(){return recordingYear()*10000+1224;}

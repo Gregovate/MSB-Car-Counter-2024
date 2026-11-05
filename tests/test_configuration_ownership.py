@@ -25,6 +25,8 @@ class String {
  const char* c_str()const{return s.c_str();}
 };
 struct Client {bool online=true;bool connected(){return online;}} mqtt_client;
+bool mqttOnline(){return mqtt_client.connected();}
+
 std::map<std::string,std::string> retained;
 unsigned publishes=0;
 void publishMQTT(const char* t,const String& v,bool retain){assert(retain);retained[t]=v.c_str();++publishes;}

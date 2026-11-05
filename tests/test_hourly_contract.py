@@ -18,6 +18,8 @@ class HourlyContract(unittest.TestCase):
 #include <climits>
 struct String:std::string {using std::string::string;String(int n):std::string(std::to_string(n)){};};
 struct Client {bool online=true,allocation=true;unsigned size=256;bool connected(){return online;}unsigned getBufferSize(){return size;}bool setBufferSize(unsigned n){if(!allocation)return false;size=n;return true;}} mqtt_client;
+bool mqttOnline(){return mqtt_client.connected();}
+
 bool restored=true;bool countsReady(){return restored;}
 int hourlyCount[24]={};
 std::map<std::string,std::string> retained;

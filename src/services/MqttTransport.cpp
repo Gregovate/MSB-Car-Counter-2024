@@ -9,7 +9,7 @@ void publishQueuedMessages(size_t maxToFlush) {
     size_t flushed = 0;
 
     while (!publishQueue.empty() &&
-           mqtt_client.connected() &&
+           mqttOnline() &&
            flushed < maxToFlush) {
 
         String data = publishQueue.front();
@@ -64,7 +64,7 @@ void publishDebugEvent(const char* event, const String& details, bool retainFlag
 // Skip disconnected snapshots: heartbeat republishes current values after
 // connection, rather than replaying defaults captured before HA commands.
 void publishConfigState(const char* commandTopic, const String& value) {
-    if (!mqtt_client.connected()) return;
+    if (!mqttOnline()) return;
     String stateTopic(commandTopic);
     if (stateTopic.indexOf("/Config/") < 0) return;
     stateTopic.replace("/Config/", "/State/");
@@ -74,7 +74,7 @@ void publishConfigState(const char* commandTopic, const String& value) {
 // Publish one current 24-hour snapshot for both devices. Never enqueue an
 // offline snapshot or report default counts after failed recovery.
 void publishHourlySnapshot() {
-    if (!countsReady() || !mqtt_client.connected()) return;
+    if (!countsReady() || !mqttOnline()) return;
     // A complete 24-bin int array plus topic can exceed PubSubClient's default
     // packet capacity. Grow only when needed; do not publish truncated JSON.
     if (mqtt_client.getBufferSize() < 512 && !mqtt_client.setBufferSize(512)) {

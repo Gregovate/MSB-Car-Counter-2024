@@ -2,10 +2,14 @@
 #include "traffic/CountRecord.h"
 #include <limits.h>
 
+unsigned int officialHourly[24]{};
+bool officialCountsComplete=false;
+
 // Identical in both devices. Legacy text/CSV files remain for the web UI;
 // CountState.a/b are the authoritative, verified reboot checkpoint from .4 on.
 namespace {
 traffic::CountRecord savedCounts{};
+traffic::CountRecord closedCounts{};
 uint32_t countDate=0, showResetDate=0;
 int freshCountYear=0;
 int countSlot=-1;
@@ -34,9 +38,35 @@ void reportCountFault(const char* fault) {
 bool readCountRecord(int slot, traffic::CountRecord& record) {
     File f=recordingOpen(countPath(slot==0 ? "CountState.a" : "CountState.b"),FILE_READ);
     if (!f) return false;
-    bool ok=f.size()==sizeof(record) && f.read(reinterpret_cast<uint8_t*>(&record),sizeof(record))==sizeof(record);
+    bool ok=false;
+    if (f.size()==sizeof(traffic::LegacyCountRecord)) {
+        traffic::LegacyCountRecord old{};
+        ok=f.read(reinterpret_cast<uint8_t*>(&old),sizeof(old))==sizeof(old) && traffic::decodeLegacyCount(old,record);
+    } else ok=f.size()==sizeof(record) && f.read(reinterpret_cast<uint8_t*>(&record),sizeof(record))==sizeof(record);
     f.close();
     return ok && traffic::validCountRecord(record);
+}
+bool persistClosedCounts() {
+    if (!closedCounts.date) return true;
+    String path=countPath(String("ClosedCounts-")+String(closedCounts.date)+".bin");
+    File existing=recordingOpen(path,FILE_READ);
+    traffic::CountRecord check{};
+    bool same=existing && existing.size()==sizeof(check) &&
+        existing.read(reinterpret_cast<uint8_t*>(&check),sizeof(check))==sizeof(check) &&
+        memcmp(&check,&closedCounts,sizeof(check))==0;
+    existing.close();
+    if (!same) {
+        File f=recordingOpen(path,FILE_WRITE);
+        size_t n=f ? f.write(reinterpret_cast<const uint8_t*>(&closedCounts),sizeof(closedCounts)):0;
+        f.flush();f.close();
+        File verify=recordingOpen(path,FILE_READ);
+        same=verify && n==sizeof(check) && verify.size()==sizeof(check) &&
+            verify.read(reinterpret_cast<uint8_t*>(&check),sizeof(check))==sizeof(check) &&
+            memcmp(&check,&closedCounts,sizeof(check))==0;
+        verify.close();
+    }
+    if (!same) {reportCountFault("CLOSED_DAY_SAVE_FAILED_KEEP_CHECKPOINT");return false;}
+    closedCounts={};return true;
 }
 bool parseCountNumber(const String& text, uint32_t& value, bool allowEmpty=false) {
     const char* p=text.c_str();
@@ -148,9 +178,15 @@ bool restoreCountState() {
         if (savedCounts.date/10000!=today/10000 || savedCounts.date>today) {
             reportCountFault("RESTORE_FAILED_DATE"); return false;
         }
+        if (savedCounts.date<today) {
+            closedCounts=savedCounts;
+            if (!persistClosedCounts()) return false;
+        }
         totalDailyCars=savedCounts.date==today ? savedCounts.daily : 0;
         totalShowCars=savedCounts.show;
         for(int i=0;i<24;++i) hourlyCount[i]=savedCounts.date==today ? savedCounts.hourly[i] : 0;
+        for(int i=0;i<24;++i) officialHourly[i]=savedCounts.date==today ? savedCounts.official[i]:0;
+        officialCountsComplete=savedCounts.date!=today || savedCounts.officialComplete;
         countDate=today;
         showResetDate=savedCounts.date==today ? savedCounts.showResetDate : 0;
     } else {
@@ -166,6 +202,9 @@ bool restoreCountState() {
             reportCountFault("RESTORE_FAILED_KEEP_FILES"); return false;
         }
     }
+    // Before today's show begins, a new official series is known complete.
+    // Mid-show migration remains explicitly incomplete; never fabricate history.
+    if (officialSeriesCanStart()) officialCountsComplete=true;
     countReady=true;
     dayOfMonth=lastDayOfMonth=today%100;
     daysRunning=recordingDaysRunning();
@@ -177,19 +216,21 @@ bool restoreCountState() {
 }
 
 bool persistCountState() {
-    if (!countReady) return false;
+    if (!countReady || !persistClosedCounts()) return false;
     if (SD.cardType()==CARD_NONE || !countToday() || countToday()!=countDate) {
         reportCountFault("SAVE_FAILED_CLOCK_OR_SD"); return false;
     }
     traffic::CountRecord next{};
-    next.magic=0x4d534231UL; next.sequence=savedCounts.sequence+1;
+    next.magic=0x4d534232UL; next.sequence=savedCounts.sequence+1;
     next.date=countDate; next.daily=totalDailyCars; next.show=totalShowCars;
     next.showResetDate=showResetDate;
     for(int i=0;i<24;++i) next.hourly[i]=hourlyCount[i];
+    for(int i=0;i<24;++i) next.official[i]=officialHourly[i];
+    next.officialComplete=officialCountsComplete;
     next.checksum=traffic::countChecksum(next);
     if (!traffic::validCountRecord(next)) { reportCountFault("SAVE_FAILED_INVALID_COUNTS"); return false; }
     // Skip unchanged state; retry a failed changed state on the main-loop timer.
-    if (savedCounts.sequence && memcmp(&next.date,&savedCounts.date,offsetof(traffic::CountRecord,checksum)-offsetof(traffic::CountRecord,date))==0) return true;
+    if (savedCounts.sequence && savedCounts.officialComplete==next.officialComplete && memcmp(&next.date,&savedCounts.date,offsetof(traffic::CountRecord,checksum)-offsetof(traffic::CountRecord,date))==0) return true;
     int target=countSlot==0 ? 1 : 0;
     File f=recordingOpen(countPath(target==0 ? "CountState.a" : "CountState.b"),FILE_WRITE);
     if (!f) { reportCountFault("SAVE_FAILED_OPEN"); return false; }
@@ -209,12 +250,22 @@ void serviceCountState() {
     uint32_t today=countToday();
     if (!today || today<countDate) { reportCountFault("CLOCK_INVALID_OR_BACKWARD"); return; }
     if (today>countDate) {
+        if (today/10000==countDate/10000) {
+            // Archive the exact closed day before either alternating checkpoint
+            // can be replaced. Failed archive blocks new checkpoints, not sensing.
+            closedCounts=savedCounts;
+            closedCounts.date=countDate;closedCounts.daily=totalDailyCars;closedCounts.show=totalShowCars;
+            closedCounts.showResetDate=showResetDate;closedCounts.officialComplete=officialCountsComplete;
+            for(int i=0;i<24;++i) {closedCounts.hourly[i]=hourlyCount[i];closedCounts.official[i]=officialHourly[i];}
+            closedCounts.checksum=traffic::countChecksum(closedCounts);
+        }
         // Full-date rollover, including a missed midnight/reboot. Never reset
         // at 23:59 or rely on an exact second to clear daily flags.
         if (today/10000!=countDate/10000) { totalShowCars=0; savedCounts={}; countSlot=-1; }
         countDate=today; showResetDate=0;
         totalDailyCars=0;
-        for (int i=0;i<24;++i) hourlyCount[i]=0;
+        officialCountsComplete=true;
+        for (int i=0;i<24;++i) { hourlyCount[i]=0;officialHourly[i]=0; }
         flagDailyShowStartReset=false;
         flagDailyShowSummarySaved=false;
         flagDailySummarySaved=false;
@@ -234,6 +285,8 @@ bool resetCountsForShow() {
     // Persist the reset marker together with the reset total. A reboot within
     // the same reset minute must not erase vehicles counted after that reset.
     totalDailyCars=0; showResetDate=today;
+    officialCountsComplete=true;
+    for (int i=0;i<24;++i) officialHourly[i]=0;
     flagDailyShowStartReset=true;
     persistCountState();
     saveDailyTotal();

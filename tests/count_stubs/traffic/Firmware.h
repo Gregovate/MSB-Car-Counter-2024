@@ -10,6 +10,8 @@
 #include <algorithm>
 #include "traffic/RecordingPolicy.h"
 struct String : std::string {
+    bool endsWith(const std::string& suffix) const {return size()>=suffix.size() && compare(size()-suffix.size(),suffix.size(),suffix)==0;}
+    int toInt() const {return atoi(c_str());}
     using std::string::string;
     String() = default;
     String(const std::string &s):std::string(s){}
@@ -119,3 +121,20 @@ inline bool recordingRename(const String&a,const String&b){
     if(a==failRename || !disk.count(a))return false;
     disk[b]=disk[a];disk.erase(a);return true;
 }
+
+#ifndef TRAFFIC_OPERATING_TEST
+inline bool officialShowNow(){return showTime;}
+inline bool officialSeriesCanStart(){return rtc.now().hour()<17;}
+#endif
+inline float hourlyTemp[24]{};
+#define MQTT_PUB_SUMMARY "summary"
+#include "traffic/OperatingSettings.h"
+
+#ifdef TRAFFIC_OPERATING_TEST
+inline bool recordingShowSeasonActive(){return rtc.current.m>=11 && (rtc.current.m>11 || rtc.current.d>=27) && !(rtc.current.m==12 && rtc.current.d==24);}
+inline struct ClientMock {bool connected(){return true;}} mqtt_client;
+inline bool mqttOnline(){return true;}
+inline const char* THIS_MQTT_CLIENT="espCarCounter";
+inline void applyOperatingDetector(int,int){}
+inline void KeepMqttAlive(){}
+#endif

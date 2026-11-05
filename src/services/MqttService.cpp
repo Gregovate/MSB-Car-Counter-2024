@@ -4,19 +4,9 @@
 
 
 void publishMQTT(const char *topic, const String &message, bool retainFlag) {
-    if (!countTopicPublishable(topic)) return;
-    if (mqtt_client.connected()) {
-        mqtt_client.publish(topic, message.c_str(), retainFlag);
-    } else {
-        if (publishQueue.size() >= MAX_QUEUE) {
-            publishQueue.pop();    // drop oldest
-        }
-        Serial.printf("MQTT offline. QUEUEING: %s -> %s (retain=%d)\n",
-                      topic, message.c_str(), retainFlag);
-
-        publishQueue.push(encodeQueuedMessage(topic, message, retainFlag));
-    }
-    start_MqttMillis = millis();
+    if (!countTopicPublishable(topic) || !mqttOnline()) return;
+    mqtt_client.publish(topic,message.c_str(),retainFlag);
+    start_MqttMillis=millis();
 }
 
 void publishMQTT(const char *topic, const String &message) {
@@ -31,6 +21,8 @@ void publishMQTT(const char *topic, const String &message) {
 
 void KeepMqttAlive() {
     publishTimingConfig();
+    publishOperatingSettings();
+    publishMQTT(MQTT_PUB_ALARM, carStuckAlarmActive ? "ALARM_ENTER_STUCK" : "CLEAR", true);
     publishCountHealth();
 
     // ---- Heartbeat (retained, ONLY here to prevent show spam) ----
@@ -67,8 +59,7 @@ void KeepMqttAlive() {
             showStartY, showStartM, showStartD);
     // HA owns Config/showStartDate. Accepted value is published under State.
     publishRecordingCalendar();
-    publishMQTT(MQTT_PUB_SHOW_START_MIN,  String(showStartMin), true);
-    publishMQTT(MQTT_PUB_SHOW_END_MIN,    String(showEndMin), true);
+    // Applied schedule values are published by the shared operating service.
 
     // Make sure Calendar branch exists & is retained on connect
     publishMQTT(MQTT_PUB_DAYOFMONTH,  String(dayOfMonth),  true);
@@ -92,103 +83,30 @@ void publishTimingConfig() {
     publishConfigState(MQTT_SUB_TOPIC6, String(waitDuration));
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
-
-    // Copy payload into a safe, null-terminated buffer
-    char message[length + 1];
-    strncpy(message, (char*)payload, length);
-    message[length] = '\0';
-
-    if (strcmp(topic, MQTT_SUB_TOPIC1) == 0)  {
-        /* Topic used to manually reset Enter Daily Cars */
-        totalDailyCars = atoi(message);
-        saveDailyTotal();
-        Serial.println(F(" Car Counter Updated"));
-        publishMQTT(MQTT_DEBUG_LOG, "Daily Total Updated");
-
-    } else if (strcmp(topic, MQTT_SUB_TOPIC2) == 0)  {
-        /* Topic used to manually reset Total Show Cars */
-        totalShowCars = atoi(message);
-        saveShowTotal();
-        Serial.println(F(" Show Counter Updated"));
-        publishMQTT(MQTT_DEBUG_LOG, "Show Counter Updated");
-
-    } else if (strcmp(topic, MQTT_SUB_TOPIC3) == 0)  {
-        /* Topic used to manually reset Calendar Day */
-        dayOfMonth = atoi(message);
-        saveDayOfMonth();
-        Serial.println(F(" Calendar Day of Month Updated"));
-        publishMQTT(MQTT_DEBUG_LOG, "Calendar Day Updated");
-
-    } else if (strcmp(topic, MQTT_SUB_TOPIC4) == 0)  {
-        /* Topic used to manually reset Days Running */
-        daysRunning = atoi(message);
-        saveDaysRunning();
-        Serial.println(F(" Days Running Updated"));
-        publishMQTT(MQTT_DEBUG_LOG, "Days Running Updated");
-
-    } else if (strcmp(topic, MQTT_SUB_TOPIC5) == 0)  {
-        // Topic used to change car counter timeout (ms)
-        unsigned long v = strtoul(message, nullptr, 10);
-        if (v < 5000) v = 5000;        // floor 5s
-        if (v > 600000) v = 600000;    // ceiling 10 min
-        carCounterTimeout = v;
-
-        Serial.println(F(" Counter Alarm Timer Updated"));
-        publishMQTT(MQTT_DEBUG_LOG, "Car Counter Timeout Updated");
-
-        // Acknowledge the applied value without replacing the HA command.
-        publishTimingConfig();
-
-    // *** DISABLE THIS FOR NOW ***
-    /*
-    } else if (strcmp(topic, MQTT_SUB_TOPIC6) == 0)  {
-        // Topic used to change beam stuck-high duration (ms)
-        unsigned long v = strtoul(message, nullptr, 10);
-        if (v < 5000) v = 5000;
-        if (v > 600000) v = 600000;
-        waitDuration = v;
-
-        Serial.println(F(" Beam Sensor Duration Updated"));
-        publishMQTT(MQTT_DEBUG_LOG, "Beam Sensor Duration Updated");
-    */
-    } else if (strcmp(topic, MQTT_SUB_SHOWSTART) == 0) {
-        // Date commands cannot change the recording folder or reset counts.
-        acceptShowStartDate(String(message));
-
-    } else if (strcmp(topic, MQTT_SUB_SHOWSTARTTIME) == 0) {
-        // Update show start time (minutes since midnight)
-        // Expect hh:mm
-        int hh = 0, mm = 0;
-        if (sscanf(message, "%d:%d", &hh, &mm) == 2) {
-            showStartMin = hh * 60 + mm;
-
-            Serial.printf("Show Start Time Updated → %02d:%02d (%d minutes)\n",
-                          hh, mm, showStartMin);
-
-            publishMQTT(MQTT_DEBUG_LOG,
-                        String("Show Start Time Updated to ") + message);
-        } else {
-            publishMQTT(MQTT_DEBUG_LOG,
-                        String("Invalid ShowStartTime payload: ") + message);
-        }
-
-    } else if (strcmp(topic, MQTT_SUB_SHOWENDTIME) == 0) {
-        // Update show end time (minutes since midnight)
-        // Expect hh:mm
-        int hh = 0, mm = 0;
-        if (sscanf(message, "%d:%d", &hh, &mm) == 2) {
-            showEndMin = hh * 60 + mm;
-
-            Serial.printf("Show End Time Updated → %02d:%02d (%d minutes)\n",
-                          hh, mm, showEndMin);
-
-            publishMQTT(MQTT_DEBUG_LOG,
-                        String("Show End Time Updated to ") + message);
-        } else {
-            publishMQTT(MQTT_DEBUG_LOG,
-                        String("Invalid ShowEndTime payload: ") + message);
-        }
+bool parseCountCorrection(const char* p,uint32_t& value) {
+    if (!*p) return false;
+    uint32_t n=0;
+    while (*p) {
+        if (*p<'0' || *p>'9' || n>(2147483647UL-(*p-'0'))/10) return false;
+        n=n*10+(*p++-'0');
     }
+    value=n;return true;
 }
 
+void callback(char* topic, byte* payload, unsigned int length) {
+    // Bound stack use and reject embedded NULs/truncated command payloads.
+    if (length>180) return;
+    char message[181];memcpy(message,payload,length);message[length]='\0';
+    if (strlen(message)!=length) return;
+    if (handleOperatingCommand(topic,message)) return;
+    String command(topic);
+    if (command==String(topic_base_path)+"/Config/showStartDate") {
+        acceptShowStartDate(String(message));return;
+    }
+    // Old retained resets, calendar mirrors and individual timing commands
+    // are deliberately inert. RTC owns the date; HA owns the full settings transaction.
+}
+
+void applyOperatingDetector(int alarmMs,int detectMs) {
+    carCounterTimeout=alarmMs;waitDuration=detectMs;
+}

@@ -6,7 +6,9 @@
 #include <iostream>
 
 void reboot() {
-    savedCounts={}; countDate=showResetDate=0;freshCountYear=0; countSlot=-1;
+    savedCounts={};closedCounts={}; countDate=showResetDate=0;freshCountYear=0; countSlot=-1;
+    for(auto& n:officialHourly) n=0;
+    officialCountsComplete=false;
     countReady=false; countFault="NOT_RESTORED";
     totalDailyCars=totalShowCars=0;
     for(auto& n:hourlyCount)n=0;
@@ -69,6 +71,23 @@ void testIdleRecoveryService() {
 }
 
 int main() {
+    { // Real .5 checkpoint migration, including its durable reset marker.
+    legacy();traffic::LegacyCountRecord old{};
+    old.magic=0x4d534231UL;old.sequence=8;old.date=20261104;
+    old.daily=7;old.show=77;old.showResetDate=old.date;old.hourly[16]=7;
+    old.checksum=traffic::countChecksum(old);
+    disk["/CC/2026/CountState.a"]=std::string(reinterpret_cast<const char*>(&old),sizeof(old));
+    assert(restoreCountState());assert(totalDailyCars==7 && totalShowCars==77);
+    assert(!resetCountsForShow());assert(totalDailyCars==7);
+    assert(persistCountState());assert(disk["/CC/2026/CountState.b"].size()==sizeof(traffic::CountRecord));
+    // A closing-day checkpoint is archived before its slots can be overwritten.
+    rtc.current=DateTime(2026,11,5);ticks+=5001;serviceCountState();
+    assert(disk.count("/CC/2026/ClosedCounts-20261104.bin"));
+    traffic::CountRecord archived{};
+    memcpy(&archived,disk["/CC/2026/ClosedCounts-20261104.bin"].data(),sizeof(archived));
+    assert(traffic::validCountRecord(archived) && archived.daily==7);
+    }
+
     testIdleRecoveryService();
     testLegacyZeroWithOlderHourlyRows();
     legacy();assert(restoreCountState());assert(totalDailyCars==40);

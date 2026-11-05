@@ -1,3 +1,5 @@
+> **Current release .9:** [Coordinated_Release_9.md](Coordinated_Release_9.md) supersedes older pending-work notes below. HA controls reset offsets; .9 commands and checkpoints require the coordinated HA companion. Installed devices were last confirmed on .5.
+
 # Recording year and show calendar — 2026-11-04
 
 Status: source implementation and automated validation; licensed-library build and hardware acceptance pending. No device was updated by this change.

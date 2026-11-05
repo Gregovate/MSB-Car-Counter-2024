@@ -1,3 +1,5 @@
+> **Current release .9:** [Coordinated_Release_9.md](Coordinated_Release_9.md) supersedes older pending-work notes below. HA controls reset offsets; .9 commands and checkpoints require the coordinated HA companion. Installed devices were last confirmed on .5.
+
 # Traffic MQTT contract — HA, Car Counter and Gate Counter
 
 Status: implemented reporting corrections in modular-test.8; operational configuration completion pending. User's HA configuration is private and is not copied into either public firmware repository. This document contains only device interface names and implementation status.

@@ -1,3 +1,5 @@
+> **Current release .9:** [Coordinated_Release_9.md](Coordinated_Release_9.md) supersedes older pending-work notes below. HA controls reset offsets; .9 commands and checkpoints require the coordinated HA companion. Installed devices were last confirmed on .5.
+
 # Count persistence and reboot recovery — 2026-11-04
 
 ## Status and evidence

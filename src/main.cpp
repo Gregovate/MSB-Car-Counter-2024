@@ -8,6 +8,13 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.9 — 2026-11-05
+ *   - Coordinate persisted HA schedules/tuning with both counter releases.
+ *   - Separate official show buckets from uninterrupted all-day traffic.
+ *   - Add conditional extension reporting and verified idempotent summaries.
+ *   - Include optional private AP 6 without committing secrets.h.
+ *   - Remove WiFi boot wait; preserve .5 counts with versioned checkpoints.
+ *   - Use Central daylight-saving rules and current-state MQTT reconnects.
  * 25.12.03.2-modular-test.8 — 2026-11-05
  *   - Share complete hourly JSON and canonical per-hour topic reporting.
  *   - Correct Gate double-slash hourly topics; preserve case-sensitive names.
@@ -53,7 +60,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.8";
+const char FWVersion[] = "25.12.03.2-modular-test.9";
 
 #include "traffic/Firmware.h"
 
@@ -80,25 +87,12 @@ void setup() {
         Serial.println("Failed to set hostname!");
     }
 
-    // Scan WiFi networks
+    // Connect asynchronously; RTC, SD and detection must start without WiFi.
     WiFi.mode(WIFI_STA);
-    int n = WiFi.scanNetworks();
-    Serial.println("WiFi scan completed.");
-    if (n == 0) {
-        Serial.println("No networks found.");
-    } else {
-        Serial.printf("%d networks found:\n", n);
-        for (int i = 0; i < n; ++i) {
-            Serial.printf("%d: %s (%d dBm) %s\n",
-                          i + 1,
-                          WiFi.SSID(i).c_str(),
-                          WiFi.RSSI(i),
-                          WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "OPEN" : "SECURE");
-        }
-    }
 
     // Add multiple WiFi APs
     configureWifiAccessPoints();
+    configureAdditionalWifiAccessPoints();
     setup_wifi();
 
     //If RTC not present, stop and check battery
@@ -117,7 +111,7 @@ void setup() {
     }
 
     // Get NTP time from Time Server 
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    configTzTime("CST6CDT,M3.2.0,M11.1.0", ntpServer);
     initializeRecordingCalendar();
     SetLocalTime();
     updateRecordingCalendar();
@@ -214,6 +208,7 @@ void setup() {
     setupServer();
 
     //on reboot, get totals saved on SD Card
+    initializeOperatingSettings();
     getSavedValuesOnReboot();  // Update/reset counts based on reboot day
     daysRunning = recordingDaysRunning();
     MQTTreconnect();
@@ -264,11 +259,7 @@ void loop() {
 
     currentTimeMinute = now.hour()*60 + now.minute(); // convert time to minutes since midnight
 
-    bool dateOk = recordingShowSeasonActive();
-
-    showTime = (dateOk &&
-                currentTimeMinute >= showStartMin &&
-                currentTimeMinute <= showEndMin);
+    showTime = officialShowNow();
 
     readTempandRH();          // Get Temperature and Humidity
 

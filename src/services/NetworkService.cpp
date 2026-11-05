@@ -11,101 +11,51 @@ void configureWifiAccessPoints() {
     wifiMulti.addAP(secret_ssid_AP_5, secret_pass_AP_5);
 }
 
+void configureAdditionalWifiAccessPoints() {
+    // The sixth entry is private, like the original five. A missing half-pair
+    // is a compile error rather than silently disabling the requested AP.
+#if defined(secret_ssid_AP_6) && defined(secret_pass_AP_6)
+    wifiMulti.addAP(secret_ssid_AP_6,secret_pass_AP_6);
+#elif defined(secret_ssid_AP_6) || defined(secret_pass_AP_6)
+#error "AP 6 requires both secret_ssid_AP_6 and secret_pass_AP_6"
+#endif
+}
+
 void setup_wifi() {
-    Serial.println("Connecting to WiFi");
-    display.println("Connecting to WiFi..");
-    display.display();
-
-    WiFi.mode(WIFI_STA);
-
-    // ----- Step 1: Scan once to see PRIMARY strength -----
-    int n = WiFi.scanNetworks(false, true);
-    int primaryRSSI = -127;
-    bool primarySeen = false;
-
-    for (int i = 0; i < n; i++) {
-        if (WiFi.SSID(i) == secret_ssid_AP_1) {
-            primaryRSSI = WiFi.RSSI(i);
-            primarySeen = true;
-            break;
-        }
-    }
-
-    // ----- Step 2: If PRIMARY is seen and decent, connect to it directly -----
-    if (primarySeen && primaryRSSI > -75) {
-        WiFi.begin(secret_ssid_AP_1, secret_pass_AP_1);
-
-        unsigned long startAttempt = millis();
-        const unsigned long primaryTimeout = 8000;
-        while (WiFi.status() != WL_CONNECTED && (millis() - startAttempt) < primaryTimeout) {
-            delay(200);
-        }
-    }
-
-    // ----- Step 3: If not connected, fall back to WiFiMulti (PRIMARY+BACKUP) -----
-    if (WiFi.status() != WL_CONNECTED) {
-        while (wifiMulti.run(connectTimeOutPerAP) != WL_CONNECTED) {
-            Serial.print(".");
-            delay(200);
-        }
-    }
-
-    // ----- Display / log final connection -----
-    Serial.println("Connected to the WiFi network");
-    display.clearDisplay();
-    display.setTextColor(WHITE);
-    display.setTextSize(1);
-    display.display();
-
-    display.setCursor(0, line1);
-    display.print("SSID: ");
-    display.println(WiFi.SSID());
-    Serial.print("SSID: ");
-    Serial.println(WiFi.SSID());
-
-    IPAddress ip = WiFi.localIP();
-    Serial.print("IP: ");
-    Serial.println(ip);
-    display.setCursor(0, line2);
-    display.print("IP: ");
-    display.println(ip);
-
-    long rssi = WiFi.RSSI();
-    Serial.print("signal strength (RSSI):");
-    Serial.print(rssi);
-    Serial.println(" dBm");
-    display.setCursor(0, line3);
-    display.print("signal: ");
-    display.print(rssi);
-    display.println(" dBm");
-
-    display.display();
-    delay(1000);
+    static unsigned long lastAttempt=0;
+    static unsigned int ap=0;
+    static bool started=false;
+    if (WiFi.status()==WL_CONNECTED) return;
+    if (started && millis()-lastAttempt<15000UL) return;
+    started=true;lastAttempt=millis();
+    const char* ssids[]={secret_ssid_AP_1,secret_ssid_AP_2,secret_ssid_AP_3,secret_ssid_AP_4,secret_ssid_AP_5
+#if defined(secret_ssid_AP_6) && defined(secret_pass_AP_6)
+        ,secret_ssid_AP_6
+#endif
+    };
+    const char* passwords[]={secret_pass_AP_1,secret_pass_AP_2,secret_pass_AP_3,secret_pass_AP_4,secret_pass_AP_5
+#if defined(secret_ssid_AP_6) && defined(secret_pass_AP_6)
+        ,secret_pass_AP_6
+#endif
+    };
+    WiFi.begin(ssids[ap],passwords[ap]);
+    ap=(ap+1)%(sizeof(ssids)/sizeof(ssids[0]));
 }
 
 void preferPrimaryIfAvailable() {
-if (WiFi.status() != WL_CONNECTED) return;
-    if (WiFi.SSID() == secret_ssid_AP_1) return;   // already on PRIMARY (MSB-CARCOUNTER)
-
-    // Scan for PRIMARY strength without wiping WiFi state
-    int n = WiFi.scanNetworks(false, true);
-        for (int i = 0; i < n; i++) {
-            if (WiFi.SSID(i) == secret_ssid_AP_1 && WiFi.RSSI(i) > -75) {
-                // Primary is detected AND strong → switch back
-                WiFi.disconnect(true);     // clear current connection
-                delay(200);
-                WiFi.begin(secret_ssid_AP_1, secret_pass_AP_1);
-                return;
-            }
-        }
+    // Keep a working AP. A foreground scan/handoff can miss a vehicle.
 }
 
 void MQTTreconnect() {
+    if (WiFi.status()!=WL_CONNECTED || mqttConnectionBusy()) return;
+    mqtt_client.setBufferSize(768);
+    mqtt_client.setSocketTimeout(1);
+
     static unsigned long lastReconnectAttempt = 0; // Tracks the last reconnect attempt time
     const unsigned long reconnectInterval = 5000; // Time between reconnect attempts (5 seconds)
 
     // If the client is already connected, do nothing
-    if (mqtt_client.connected()) {
+    if (mqttOnline()) {
         return;
     }
 
@@ -122,11 +72,11 @@ void MQTTreconnect() {
     mqtt_client.setCallback(callback);  // required to receive messages
 
     // Create a unique client ID
-    String clientId = THIS_MQTT_CLIENT;
+    // Client identity is supplied by the shared handshake worker.
 
     Serial.printf("Trying MQTT server: %s:%d\n", mqtt_Server, mqtt_Port);
 
-    if (mqtt_client.connect(clientId.c_str(), mqtt_UserName, mqtt_Password)) {
+    if (pollMqttConnection(mqtt_UserName, mqtt_Password)) {
 
         Serial.printf("Connected to MQTT server: %s\n", mqtt_Server);
 
@@ -186,17 +136,24 @@ void MQTTreconnect() {
         mqtt_client.subscribe(MQTT_SUB_SHOWSTARTTIME); // Set Show Start Time Detailed
         mqtt_client.subscribe(MQTT_SUB_SHOWENDTIME); // Set Show End Time Detailed
 
-        // Log subscriptions
+        mqtt_client.subscribe((String(topic_base_path)+"/Config/operatingSettings").c_str());
+                mqtt_client.subscribe((String(topic_base_path)+"/Config/countCorrection").c_str());
+                mqtt_client.subscribe((String(topic_base_path)+"/Config/showStartDate").c_str());
+                KeepMqttAlive();
+
+                // Log subscriptions
         Serial.println("Subscribed to MQTT topics.");
         publishDebugLog("MQTT connected and topics subscribed.");
 
         // Flush queued messages now that we're back online
-        publishQueuedMessages();
+        while (!publishQueue.empty()) publishQueue.pop();
+        KeepMqttAlive();
         publishRecordingCalendar();
 
         return;
 
     } else {
+        if (mqttConnectionBusy()) return;
         Serial.printf("Failed to connect to MQTT server: %s (rc=%d)\n",
                       mqtt_Server, mqtt_client.state());
 
@@ -209,27 +166,8 @@ void MQTTreconnect() {
 }
 
 void checkWiFiConnection() {
-
-/* non-blocking WiFi and MQTT Connectivity Checks 
-    First check if WiFi is connected */
-    if (wifiMulti.run() == WL_CONNECTED) {
-        /* If MQTT is not connected then Attempt MQTT Connection */
-        if (!mqtt_client.connected()) {
-            Serial.print("hour = ");
-            Serial.println(currentHr12);
-            Serial.println("Attempting MQTT Connection");
-            MQTTreconnect();
-            start_MqttMillis = millis();
-        } else {
-                //keep MQTT client connected when WiFi is connected
-                mqtt_client.loop();
-        }
-    } else {
-        // If WiFi if lost, then attemp non blocking WiFi Connection
-        if ((millis() - start_WiFiMillis) > wifi_connectioncheckMillis) {
-            setup_wifi();
-            start_WiFiMillis = millis();
-        }
-    }    
+    if (WiFi.status()!=WL_CONNECTED) { setup_wifi();return; }
+    if (!mqttOnline()) MQTTreconnect();
+    else mqtt_client.loop();
 }
 

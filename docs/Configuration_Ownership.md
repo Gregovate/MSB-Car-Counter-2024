@@ -1,3 +1,5 @@
+> **Current release .9:** [Coordinated_Release_9.md](Coordinated_Release_9.md) supersedes older pending-work notes below. HA controls reset offsets; .9 commands and checkpoints require the coordinated HA companion. Installed devices were last confirmed on .5.
+
 # Configuration ownership and remaining refactor work
 
 Source audit: 2026-11-05, modular-test.7. Governing operational design belongs to MSB-Show-Controls. This document records actual firmware behavior and gaps; it does not introduce traffic indicators or redo the 2025 traffic analysis.
