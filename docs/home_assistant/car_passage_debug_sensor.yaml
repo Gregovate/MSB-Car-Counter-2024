@@ -1,0 +1,14 @@
+# Append to mqtt_configs/sensors/carcounter.yaml (no mqtt: wrapper).
+- name: Car Last Passage
+  default_entity_id: sensor.car_last_passage
+  unique_id: msb_car_last_passage
+  icon: mdi:car-search
+  entity_category: diagnostic
+  state_topic: msb/traffic/CarCounter/Sensors/passageEvent
+  value_template: '{{ value_json.kind }} {{ value_json.decision }} #{{ value_json.event }}'
+  json_attributes_topic: msb/traffic/CarCounter/Sensors/passageEvent
+  availability_topic: msb/traffic/CarCounter/State/passageDebug
+  payload_available: 'ON'
+  payload_not_available: 'OFF'
+  device:
+    identifiers: [msb_car_counter]

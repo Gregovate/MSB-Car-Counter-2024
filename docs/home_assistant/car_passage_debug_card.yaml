@@ -1,0 +1,41 @@
+# Add one Manual card below Enter Timer Variables on the existing Admin view.
+type: vertical-stack
+cards:
+  - type: entities
+    title: Car Counter — Passage Testing
+    show_header_toggle: false
+    entities:
+      - entity: switch.car_passage_debug
+        name: Passage diagnostics
+  - type: markdown
+    content: |-
+      {% set e = 'sensor.car_last_passage' %}
+      {% if not is_state('switch.car_passage_debug', 'on') %}
+      Diagnostics are OFF. Counting continues normally.
+      {% elif states(e) in ['unknown', 'unavailable'] or state_attr(e, 'kind') == 'SESSION' %}
+      Diagnostics are ON. Waiting for a passage.
+      {% else %}
+      **{{ state_attr(e, 'decision') }} — {{ state_attr(e, 'reason') }}**
+
+      Event **{{ state_attr(e, 'event') }}** · {{ state_attr(e, 'kind') }}
+
+      **Count: {{ state_attr(e, 'before') }} → {{ state_attr(e, 'after') }}**
+
+      Start: {{ state_attr(e, 'startLocal') }}
+
+      End/observation: {{ state_attr(e, 'endLocal') }}
+
+      | Beam measurement | Milliseconds |
+      |---|---:|
+      | A blocked | {{ state_attr(e, 'aMs') }} |
+      | B blocked | {{ state_attr(e, 'bMs') }} |
+      | Longest simultaneous blockage | {{ state_attr(e, 'maxOverlapMs') }} |
+      | Required per beam | {{ state_attr(e, 'beamMinMs') }} |
+      | Required overlap (Car Detect ms) | {{ state_attr(e, 'detectMs') }} |
+
+      Order: **{{ state_attr(e, 'order') }}**
+
+      {% if state_attr(e, 'kind') == 'BLOCKED' %}
+      Passage is still pending. The alarm does not discard or count it.
+      {% endif %}
+      {% endif %}

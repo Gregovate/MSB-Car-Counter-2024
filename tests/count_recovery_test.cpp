@@ -1,0 +1,213 @@
+#include "traffic/Firmware.h"
+// Include the real service in one test translation unit to simulate cold boots
+// while preserving only the mock SD card between runs.
+#include "../src/services/CountPersistence.cpp"
+#include <cassert>
+#include <iostream>
+
+void reboot() {
+    retryClockRestore=false;lastRestoreAttempt=0;pendingLoaded=false;pendingVehicles=0;pendingDurable=true;
+    savedCounts={};closedCounts={}; countDate=showResetDate=0;freshCountYear=0; countSlot=-1;
+    for(auto& n:officialHourly) n=0;
+    officialCountsComplete=false;
+    countReady=false; countFault="NOT_RESTORED";
+    totalDailyCars=totalShowCars=0;
+    for(auto& n:hourlyCount)n=0;
+    flagDailyShowStartReset=false;
+}
+std::string row(const char* date, int hour=16,int count=40) {
+    std::string s=date;for(int i=0;i<24;++i)s+=","+std::to_string(i==hour ? count : 0);return s+"\n";
+}
+void legacy() {
+    disk.clear();failWrite=failRead="";
+    rtc.current=DateTime(2026,11,4,16,0,0);rtc.lost=false;sdAvailable=true;
+    seasonFolder="/CC/2026";
+    fileName1="/EnterTotal.txt";fileName2="/ShowTotal.txt";fileName3="/DayOfMonth.txt";fileName5="/HourlyData.csv";
+    disk["/CC/2026/EnterTotal.txt"]="40";
+    disk["/CC/2026/ShowTotal.txt"]="400";
+    disk["/CC/2026/DayOfMonth.txt"]="4";
+    disk["/CC/2026/HourlyData.csv"]="Date,Hours\n"+row("2026-11-04");
+    disk["/CC/2025/ShowSummaryBuckets.csv"]="OFFICIAL UNCHANGED";
+    reboot();
+}
+
+void testLegacyZeroWithOlderHourlyRows() {
+    legacy();
+    rtc.current=DateTime(2026,11,5,4,45,0);
+    disk["/CC/2026/EnterTotal.txt"]="0";
+    disk["/CC/2026/ShowTotal.txt"]="";
+    disk["/CC/2026/DayOfMonth.txt"]="4";
+    const std::string history=
+        "Date,Hr 00,Hr 01,Hr 02,Hr 03,Hr 04,Hr 05,Hr 06,Hr 07,Hr 08,Hr 09,Hr 10,Hr 11,Hr 12,Hr 13,Hr 14,Hr 15,Hr 16,Hr 17,Hr 18,Hr 19,Hr 20,Hr 21,Hr 22,Hr 23\n"
+        "2026-10-19,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n"
+        "2026-10-21,0,0,0,0,0,0,0,0,0,0,0,0,1,1,2,0,0,0,0,0,0,0,0,0\n";
+    disk["/CC/2026/HourlyData.csv"]=history;
+    assert(restoreCountState());
+    assert(totalDailyCars==0 && totalShowCars==0 && countDate==20261105);
+    for(auto n:hourlyCount) assert(n==0); // October's four cars are not today's traffic.
+    assert(disk["/CC/2026/HourlyData.csv"]==history);
+    assert(disk["/CC/2025/ShowSummaryBuckets.csv"]=="OFFICIAL UNCHANGED");
+    // Once migrated, a new vehicle is durable through another cold boot.
+    totalDailyCars=1;hourlyCount[4]=1;assert(persistCountState());
+    reboot();assert(restoreCountState());assert(totalDailyCars==1 && hourlyCount[4]==1);
+    // Do not broaden this exception to discard an ambiguous nonzero total.
+    disk.erase("/CC/2026/CountState.a");disk.erase("/CC/2026/CountState.b");
+    disk["/CC/2026/EnterTotal.txt"]="7";
+    reboot();auto untouched=disk;assert(!restoreCountState());assert(disk==untouched);
+}
+
+void testIdleRecoveryService() {
+    legacy();assert(restoreCountState());
+    ++totalDailyCars;++hourlyCount[16];
+    failWrite=countPath(countSlot==0 ? "CountState.b":"CountState.a");
+    assert(!persistCountState());
+    failWrite="";ticks+=5001;
+    serviceCountState(); // No additional vehicle: idle retry must persist 41.
+    reboot();assert(restoreCountState());assert(totalDailyCars==41);
+    rtc.current=DateTime(2026,11,5,0,0,1);ticks+=5001;
+    serviceCountState(); // Idle day change must not await the next detector event.
+    assert(totalDailyCars==0 && hourlyCount[16]==0 && totalShowCars==400);
+    reboot();assert(restoreCountState());assert(totalDailyCars==0 && totalShowCars==400);
+    assert(disk["/CC/2025/ShowSummaryBuckets.csv"]=="OFFICIAL UNCHANGED");
+}
+
+void testDelayedClockRecovery() {
+    legacy();stringPrefs.clear();
+    rtc.current=DateTime(2026,11,5,9,31,58);
+    traffic::CountRecord record{};
+    record.magic=0x4d534232;record.sequence=31;record.date=20261105;
+    record.daily=29;record.hourly[6]=1;record.hourly[8]=10;record.hourly[9]=18;
+    record.officialComplete=1;record.checksum=traffic::countChecksum(record);
+    disk["/CC/2026/CountState.a"]=std::string(reinterpret_cast<char*>(&record),sizeof(record));
+    --record.sequence;--record.daily;--record.hourly[9];record.checksum=traffic::countChecksum(record);
+    disk["/CC/2026/CountState.b"]=std::string(reinterpret_cast<char*>(&record),sizeof(record));
+    auto before=disk;
+    reboot();rtc.current=DateTime(2000,1,1,0,0,37);rtc.lost=true;
+    assert(!restoreCountState());assert(retryClockRestore);
+    assert(std::string(countFault)=="WAITING_FOR_VALID_CLOCK");
+    ticks+=2000;serviceCountState();assert(!countsReady() && disk==before);
+    recordPendingVehicle();recordPendingVehicle();assert(pendingVehicles==2);
+    // A second cold boot must keep undated detections separately in NVS.
+    reboot();assert(!restoreCountState());assert(pendingVehicles==2);
+    rtc.current=DateTime(2026,11,5,9,35,14);rtc.lost=false;
+    ticks+=2000;serviceCountState();
+    assert(countsReady() && totalDailyCars==29 && totalShowCars==0);
+    assert(hourlyCount[6]==1 && hourlyCount[8]==10 && hourlyCount[9]==18);
+    assert(pendingVehicles==2 && std::string(countFault)=="OK");
+    ++totalDailyCars;++hourlyCount[9];assert(persistCountState());
+    ticks+=2000;serviceCountState();assert(totalDailyCars==30);
+    assert(restoreCountState() && totalDailyCars==30); // retry cannot replace live counts
+    reboot();assert(restoreCountState() && totalDailyCars==30 && pendingVehicles==2);
+    // Corrupt evidence is not automatically retried or erased after clock recovery.
+    disk["/CC/2026/CountState.a"]="bad";disk["/CC/2026/CountState.b"]="bad";
+    reboot();assert(!restoreCountState());before=disk;ticks+=2000;serviceCountState();
+    assert(!countsReady() && !retryClockRestore && disk==before);
+    stringPrefs.clear();legacy();
+}
+
+int main() {
+    testDelayedClockRecovery();
+    { // Real .5 checkpoint migration, including its durable reset marker.
+    legacy();traffic::LegacyCountRecord old{};
+    old.magic=0x4d534231UL;old.sequence=8;old.date=20261104;
+    old.daily=7;old.show=77;old.showResetDate=old.date;old.hourly[16]=7;
+    old.checksum=traffic::countChecksum(old);
+    disk["/CC/2026/CountState.a"]=std::string(reinterpret_cast<const char*>(&old),sizeof(old));
+    assert(restoreCountState());assert(totalDailyCars==7 && totalShowCars==77);
+    assert(!resetCountsForShow());assert(totalDailyCars==7);
+    assert(persistCountState());assert(disk["/CC/2026/CountState.b"].size()==sizeof(traffic::CountRecord));
+    // A closing-day checkpoint is archived before its slots can be overwritten.
+    rtc.current=DateTime(2026,11,5);ticks+=5001;serviceCountState();
+    assert(disk.count("/CC/2026/ClosedCounts-20261104.bin"));
+    traffic::CountRecord archived{};
+    memcpy(&archived,disk["/CC/2026/ClosedCounts-20261104.bin"].data(),sizeof(archived));
+    assert(traffic::validCountRecord(archived) && archived.daily==7);
+    }
+
+    testIdleRecoveryService();
+    testLegacyZeroWithOlderHourlyRows();
+    legacy();assert(restoreCountState());assert(totalDailyCars==40);
+    // Per-event save survives immediate reboot, with no MQTT/timer cycle.
+    ++totalDailyCars;++hourlyCount[16];assert(persistCountState());
+    reboot();assert(restoreCountState());assert(totalDailyCars==41 && hourlyCount[16]==41 && totalShowCars==400);
+    // Web text files may be stale; the checkpoint remains authoritative.
+    disk["/CC/2026/EnterTotal.txt"]="0";
+    reboot();assert(restoreCountState());assert(totalDailyCars==41);
+    // Torn next save keeps the last completed copy; retry preserves RAM state.
+    ++totalDailyCars;++hourlyCount[16];
+    failWrite=countPath(countSlot==0 ? "CountState.b":"CountState.a");
+    assert(!persistCountState());assert(totalDailyCars==42);
+    failWrite="";assert(persistCountState());
+    reboot();assert(restoreCountState());assert(totalDailyCars==42);
+    // Tear a later save and reboot immediately: last completed state recovers.
+    ++totalDailyCars;failWrite=countPath(countSlot==0 ? "CountState.b":"CountState.a");assert(!persistCountState());
+    failWrite="";reboot();assert(restoreCountState());assert(totalDailyCars==42);
+    // Reset once, count seven, reboot during reset minute: seven must survive.
+    assert(resetCountsForShow());
+    totalDailyCars=7;hourlyCount[16]+=7;assert(persistCountState());
+    reboot();assert(restoreCountState());assert(totalDailyCars==7);assert(!resetCountsForShow());assert(totalDailyCars==7);
+    // Missed midnight: new full date resets daily/hours but keeps show total.
+    rtc.current=DateTime(2026,11,5);reboot();assert(restoreCountState());
+    assert(totalDailyCars==0 && totalShowCars==400 && hourlyCount[16]==0);
+    // Same day number next month is NOT the same date.
+    totalDailyCars=9;hourlyCount[8]=9;assert(persistCountState());
+    rtc.current=DateTime(2026,12,5);reboot();assert(restoreCountState());assert(totalDailyCars==0 && hourlyCount[8]==0);
+    assert(disk["/CC/2025/ShowSummaryBuckets.csv"]=="OFFICIAL UNCHANGED");
+    // Both damaged copies must never fall back to stale text or overwrite it.
+    disk["/CC/2026/CountState.a"]="broken";disk["/CC/2026/CountState.b"]="broken";
+    auto before=disk;reboot();assert(!restoreCountState());assert(!persistCountState());assert(disk==before);
+    assert(!countTopicPublishable("msb/traffic/TestCounter/Cars/EnterTotal"));
+    assert(countTopicPublishable("msb/traffic/TestCounter/System/countPersistence"));
+    // Read errors/malformed values remain unknown, not valid zeros.
+    legacy();failRead="/CC/2026/EnterTotal.txt";before=disk;assert(!restoreCountState());assert(disk==before);
+    legacy();disk["/CC/2026/EnterTotal.txt"]="garbage";assert(!restoreCountState());
+    legacy();disk["/CC/2026/EnterTotal.txt"]="2147483648";assert(!restoreCountState());
+    legacy();disk["/CC/2026/HourlyData.csv"]="2026-11-04,1,2\n";assert(!restoreCountState());
+    legacy();rtc.lost=true;before=disk;assert(!restoreCountState());assert(disk==before);
+    // Gate uses absolute filenames. Same recovery engine and guarantees.
+    legacy();seasonFolder="/GC/2026";
+    fileName1="/GC/2026/DAILYTOT.txt";fileName2="/GC/2026/SHOWTOT.txt";
+    fileName3="/GC/2026/DAYOFMONTH.txt";fileName5="/GC/2026/GateHourlyData.csv";
+    disk[fileName1]="40";disk[fileName2]="400";disk[fileName3]="4";disk[fileName5]=row("2026-11-04");
+    assert(restoreCountState());assert(totalDailyCars==40);assert(disk.count("/GC/2026/CountState.a"));
+    // New-year cold boot initializes only a folder created during this boot.
+    disk.clear();reboot();rtc.current=DateTime(2027,1,1);seasonFolder="/GC/2027";
+    noteFreshCountFolder();assert(restoreCountState());assert(totalDailyCars==0 && totalShowCars==0);
+    assert(disk.count("/GC/2027/CountState.a"));
+    // Interrupted hourly replacement keeps all prior rows, including a power
+    // cut between the original->previous and pending->original renames.
+    legacy();String hourly="/CC/2026/HourlyData.csv";
+    std::string old=disk[hourly];
+    failWrite=hourly+".pending";
+    assert(!writeHourlyExport(hourly,"new complete rows"));assert(disk[hourly]==old);
+    failWrite="";failRename=hourly+".pending";
+    assert(!writeHourlyExport(hourly,"new complete rows"));assert(disk[hourly]==old);
+    failRename="";
+    disk[hourly+".previous"]=old;disk.erase(hourly);
+    assert(recoverHourlyExport(hourly));assert(disk[hourly]==old);
+    assert(writeHourlyExport(hourly,"new complete rows"));
+    assert(disk[hourly]=="new complete rows" && disk[hourly+".previous"]==old);
+    // Startup publication may never reach MQTT. A later heartbeat must emit
+    // current export health without rewriting the CSV or replaying old counts.
+    messages.clear();messageRetained.clear();auto exported=disk;
+    publishCountHealth();
+    bool sawHourly=false;
+    for(size_t i=0;i<messages.size();++i) {
+        if(messages[i].first=="msb/traffic/TestCounter/System/hourlyExport") {
+            sawHourly=true;assert(messages[i].second=="OK" && messageRetained[i]);
+        }
+    }
+    assert(sawHourly && disk==exported);
+    failWrite=hourly+".pending";assert(!writeHourlyExport(hourly,"failed replacement"));
+    messages.clear();messageRetained.clear();publishCountHealth();sawHourly=false;
+    for(size_t i=0;i<messages.size();++i) {
+        if(messages[i].first=="msb/traffic/TestCounter/System/hourlyExport") {
+            sawHourly=true;assert(messages[i].second=="WRITE_VERIFY_FAILED" && messageRetained[i]);
+        }
+    }
+    assert(sawHourly && disk[hourly]=="new complete rows");
+    failWrite="";assert(writeHourlyExport(hourly,"verified later replacement"));
+    assert(hourlyExportHealth=="OK");
+    std::cout<<"PASS: count recovery, torn saves, per-event persistence, reset replay, full dates, read failures, archive protection, Gate paths\n";
+    return 0;
+}

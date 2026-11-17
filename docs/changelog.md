@@ -1,3 +1,70 @@
+# Release .10 — 2026-11-05
+
+- Retry count restoration after valid RTC time returns; preserve blocked detections separately in NVS.
+- Show recovery pending instead of zero; correct post-migration warning and stale diagnostic reporting.
+- Report RTC time-loss evidence on both devices without claiming a battery voltage measurement.
+- See [recovery release and test procedure](Recovery_Release_10.md).
+
+# Coordinated release .9 — 2026-11-05
+
+- Installed baseline is .5 on both devices. No separate .6/.7/.8 installation is required.
+- HA-owned, validated complete schedule/tuning transactions; verified SD and NVS fallback; applied State acknowledgements. Reset times come from HA offsets, not fixed scheduler hours.
+- Versioned .5 count migration; official show bins persisted alongside raw hourly traffic; closing-day binary archive; replay-protected manual corrections.
+- Normal cutoffs 21:10 Car / 21:25 Gate from HA values; date-scoped 0–30 minute extension; conditional 10PM reporting; current-year-only verified/idempotent summary updates.
+- Both devices attempt AP 6 when its private SSID/password macros are present; private secrets.h is untouched and never committed.
+- WiFi starts asynchronously; MQTT handshake runs separately from sensing with explicit client ownership; reconnect reports current values rather than replaying stale snapshots.
+- Central DST rules replace a fixed daylight offset. Both devices publish identical schedule/configuration health and hourly topic contracts.
+- Private HA companion corrects command publishers, duplicate/misassigned entities, applied state topics, date template and fault warnings. Unrelated LOR/production controls and analytics package remain unchanged.
+- See [Coordinated release / park acceptance](Coordinated_Release_9.md) for installation order, metrics meanings, rollback limits and remaining physical acceptance.
+
+## 25.12.03.2-modular-test.8 — 2026-11-05
+- Share 24-bin JSON and individual Cars/hour/00..23 snapshots on heartbeat. Skip disconnected/unrestored snapshots; ensure sufficient MQTT packet capacity.
+- Correct Gate's extra slash in all per-hour publishers. Do not clear existing broker retained topics automatically.
+- Call serviceCountState in each main loop before reporting/detection, enabling idle save retries and date rollover.
+- Record consistent MQTT naming and HA migration requirements. Full operational configuration persistence and offset handlers remain pending.
+- 16 host tests PASS per device; 25 shared files match. Licensed ESP32 builds and hardware acceptance pending.
+
+## 25.12.03.2-modular-test.7 — 2026-11-05
+- Share command-to-State reporting for detector timing; firmware no longer overwrites HA-owned retained tuning commands during startup.
+- Report actual settings on heartbeat and after supported command application; skip disconnected snapshots to avoid stale state replay.
+- Keep existing command subscriptions, detector behavior, defaults, reset timing and count storage unchanged. Car beam-duration command remains disabled and is documented explicitly.
+- See [Configuration ownership](Configuration_Ownership.md). 14 host tests PASS per device; 24 shared files match. Licensed builds and hardware verification pending.
+
+## 25.12.03.2-modular-test.6 — 2026-11-05
+- Latch and repeat current hourly-export health retained on heartbeat in both devices, so pre-connection startup messages do not disappear from monitoring.
+- Explicitly report skipped/checkpoint/SD/read failures. Do not replay old MQTT count queues or change counting/storage formats.
+- Add tests for lost initial publication, retained failure visibility, recovery to OK, and no SD writes from status publication.
+- Both devices confirmed on `.5`; `.6` licensed build/hardware verification pending.
+
+## 25.12.03.2-modular-test.5 — 2026-11-05
+- Fix `.4` migration rejection when a verified zero daily total/day marker is newer than valid older hourly rows; keep all older rows unchanged and do not derive today's count from them.
+- Exact field regression: EnterTotal=0, empty ShowTotal, day=4, October 19/21 hourly rows, RTC November 5. `.4` fails this fixture; `.5` restores zero and preserves a subsequent vehicle across reboot. Inconsistent nonzero totals still stop recovery.
+- Manual version/changelog updated. Same shared fix in both counters; licensed builds and `.5` hardware acceptance pending.
+
+## 25.12.03.2-modular-test.4 — 2026-11-04
+- Share immediate per-vehicle dated SD checkpoints and reboot recovery across both counters.
+- Verify alternating copies; retry failed saves independently of MQTT; report retained persistence faults.
+- Preserve counts across same-day/reset-minute reboots; use full-date rollover and stop uncertain recovery from overwriting files or HA counts.
+- Verify hourly CSV replacements with previous-file recovery; preserve all historical-year write guards.
+- Add real event/reboot and SD failure tests. Licensed build and hardware acceptance pending; see [Count persistence](Count_Persistence.md).
+
+## Verification manifest correction — 2026-11-04
+
+- Correct nine shared-file checksums generated from temporary copies with an extra trailing newline.
+- Reproduce and verify the correction in clean Git checkouts of both counters: source/peer checks and 11 tests per project PASS.
+- No firmware behavior change; manual firmware versions remain `.3`.
+
+## 25.12.03.2-modular-test.3 — 2026-11-04
+
+- Shared persistent calendar-year routing and historical-folder write protection.
+- Black Friday fallback; validated current-year HA override saved to NVS and two verified SD copies.
+- Shared days-running calculation (zero before opening), current-year show gating, and separate accepted-date telemetry.
+- Runtime year rollover and network-clock retry without moving the recording year backward.
+- Web upload/delete/rename protection; per-request upload handles.
+- MQTT connects after SD restoration; Car also restores show total on a new-day reboot.
+- Native regression checks and ESP32 compile/link checks pass; licensed build/hardware acceptance pending.
+- Scope and remaining reliability work: [Recording year protection](Recording_Year_Protection.md).
+
 ## Changelog
 
 ### [1.3.0] - 2024-12-19
@@ -62,3 +129,4 @@
 This changelog follows semantic versioning. For further details, please contact:
 **Greg Liebig**  
 Email: `greg@engrinnovations.com`
+

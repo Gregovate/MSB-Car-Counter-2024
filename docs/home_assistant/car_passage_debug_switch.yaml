@@ -1,0 +1,17 @@
+# Append to mqtt_configs/switches/switches.yaml (list entries, no mqtt: wrapper).
+- name: Car Passage Debug
+  default_entity_id: switch.car_passage_debug
+  unique_id: msb_car_passage_debug
+  icon: mdi:bug-check
+  command_topic: msb/traffic/CarCounter/Config/passageDebug
+  state_topic: msb/traffic/CarCounter/State/passageDebug
+  payload_on: 'ON'
+  payload_off: 'OFF'
+  state_on: 'ON'
+  state_off: 'OFF'
+  optimistic: false
+  qos: 1
+  retain: false
+  entity_category: config
+  device:
+    identifiers: [msb_car_counter]
