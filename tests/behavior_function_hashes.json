@@ -1,6 +1,6 @@
 {
   "KeepMqttAlive": "0d6f956d7e3cf2191eef80b93e3a08c272db19c9905672c68929a8a48f2baff8",
-  "MQTTreconnect": "6940ffc9489c37fc74227144ba151190edb8dd3981a7123ba6fa68c42fe7aaea",
+  "MQTTreconnect": "3872c111008d2fb0f7765d714554ba8b1ee9960d39f9150932e9f6371c9e7e4e",
   "SetLocalTime": "f2e9662d99e9af93794fdff67ac400016085c762f0b6c09f4da749287a9e888c",
   "acceptShowStartDate": "68e628189079b5766713940aa60905ae4063b733c988fec858afea7b631fea11",
   "applyRecordingCalendar": "2e5609f8c8324d77e110bb28527849b0425d25573fad29de76084a8329390ece",
@@ -24,7 +24,7 @@
   "initializeRecordingCalendar": "0c22a549a1f7c9052d822ee62ef906e3dd624d146cf4721a16277fcad48da606",
   "listSDFiles": "75fc5951fa7ad92cc47b26bc97ba797fed1739ed99b24228efe1123d4fac09a1",
   "loadRecordingCalendarFromSD": "f2f494ba8b1f7e91cc4e415b347e8cc872a1607f91c309265c2258eea06e87f6",
-  "loop": "664279ebd2e37584429e8b34926ad002638511420e188b6dfcf5522aaa0b6b41",
+  "loop": "b8909737d39f3e89c456c50009d6fb1694d6f50ecd37867d9889030a7d1611c7",
   "noteNetworkClock": "9746c106dbf97c3eaff080c3de054f0bacb12e15dcf41cb99f1fadd3d8b71e11",
   "persistCalendar": "7ca95413e27b05b1f7e6311f6c122c3c6b4f8c895ec6d1727249a6c1b057fadc",
   "publishRecordingCalendar": "096b28e92503e6419efa21989cae5fabb85b27aaa3fb41fa6aa427e61d49f014",
@@ -97,7 +97,7 @@
   "summaryReplace": "beb1016aecbd33df5160e8dad1f37d2069af8e8e30f4bd31fd686553ae6ca3c1",
   "upsertSummary": "a7a62f0998667d10c8d43641df7d370440ed0bbecf7d60f646650d68e42e0933",
   "recordOfficialVehicle": "11aa60c6dfdfebce73cb0571af625a7d390dc22db72cc5af8418208475137c9e",
-  "writeOfficialSummaries": "f0fba83fd95ab340713acdf6c339abbbbfd7f362036d3b46015960734732a49e",
+  "writeOfficialSummaries": "fc052c232d0aa75d6a1fac0f9961262fecce14943ad6df23a32c12e5b055ddd2",
   "publishQueuedMessages": "436dea4e1590b077d8d59affd9eb7e4c5ff6c9340c9fccfe3d23bcd0370299b2",
   "operatingSeasonEndDate": "61fa94609a3742ad60d0bf77a39c5264efb8550c6805c883e92d7e28cbd8ba1d",
   "operatingDownDate": "4689999aec05f047b35e83409bf8c186e77582f5c1d75b967e6826bdd352ab1c",
@@ -106,5 +106,11 @@
   "updateDisplay": "3ed25406408b6046f7922959de3e34a88ac268f21255380078d4b43ae0ddbd06",
   "loadPendingVehicles": "0865dc6f4855602962a018b2ab7fbb5e51e6399ad85f0668098dab8f67e836c4",
   "recordPendingVehicle": "956f34d0f200fac3875278dc33c89213e391a76e8ece9dd2f95ff915ec09b123",
-  "recordSettingsRejection": "4da347c7aad7486fa92e4780876a7c55150c40b0a84d8fb5c4163197f3d7b632"
+  "recordSettingsRejection": "4da347c7aad7486fa92e4780876a7c55150c40b0a84d8fb5c4163197f3d7b632",
+  "publishEnvironmentState": "c33f5d07070835cda4934677561653b0448e44cae0f016397be9f8bb326eba75",
+  "readTempandRH": "b5d9ffd6aa25f2998fcffb6c3960b0430b0d5991c7c15f0c194997d72d99a12c",
+  "publishCompletedEnvironmentHour": "5221a834a70a3c547037ffa6d7be93c1561515f0af3b50a3f8d3a21e4940281e",
+  "serviceEnvironmentHour": "869f612a7c1e39a8c59df9bce9ead8a0626f7ecf5c3916821a89982249f89959",
+  "averageHourlyTemp": "bf17405f3722765e233f11529911a9e417c71b3fb4d81f531ff6c660e9929e29",
+  "showTemperatureAverage": "dd86cefe6f9ef385b00a2274f79707d840bda37173e677a7f792581abba3456d"
 }

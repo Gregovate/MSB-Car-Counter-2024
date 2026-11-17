@@ -3,6 +3,7 @@
 #include "count_recovery_test.cpp"
 #undef main
 #include "../src/services/OperatingSettings.cpp"
+#include "../src/services/EnvironmentService.cpp"
 #include "../src/services/ShowSummary.cpp"
 
 void configure(bool gate,int extension=0) {

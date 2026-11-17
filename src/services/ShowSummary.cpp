@@ -67,9 +67,9 @@ bool writeOfficialSummaries() {
     // included in DailyTotal, never mislabeled as 8-9 PM traffic. The late
     // 10PM field is populated only on explicitly extended nights.
     unsigned int c6=b6,c7=c6+b7,c8=c7+b8,c9=c8+b9;
-    float sum=0;int samples=0;
-    for(int i=17;i<=20;++i) if(hourlyTemp[i]!=0) {sum+=hourlyTemp[i];++samples;}
-    float average=samples ? sum/samples:0;
+    // Missing is blank, not 0 F. Weight all valid official-window samples equally.
+    float average=0;char averageText[24]="";
+    if(showTemperatureAverage(average)) snprintf(averageText,sizeof(averageText),"%.1f",average);
     char suffix[48];
     if(extension) snprintf(suffix,sizeof(suffix),",%u,%d",officialHourly[21],extension);
     else snprintf(suffix,sizeof(suffix),",,");
@@ -77,10 +77,10 @@ bool writeOfficialSummaries() {
     if (extension) snprintf(cumulativeSuffix,sizeof(cumulativeSuffix),",%u,%d",c9+officialHourly[21],extension);
     else snprintf(cumulativeSuffix,sizeof(cumulativeSuffix),",,");
     char cumulative[256],buckets[256];
-    snprintf(cumulative,sizeof(cumulative),"%s,%d,%u,%u,%u,%u,%u,%d,%.1f%s",
-        date,recordingDaysRunning(),before,c6,c7,c8,c9,totalShowCars,average,cumulativeSuffix);
-    snprintf(buckets,sizeof(buckets),"%s,%d,%u,%u,%u,%u,%u,%d,%.1f%s",
-        date,recordingDaysRunning(),b6,b7,b8,b9,total,totalShowCars,average,suffix);
+    snprintf(cumulative,sizeof(cumulative),"%s,%d,%u,%u,%u,%u,%u,%d,%s%s",
+        date,recordingDaysRunning(),before,c6,c7,c8,c9,totalShowCars,averageText,cumulativeSuffix);
+    snprintf(buckets,sizeof(buckets),"%s,%d,%u,%u,%u,%u,%u,%d,%s%s",
+        date,recordingDaysRunning(),b6,b7,b8,b9,total,totalShowCars,averageText,suffix);
     // Both counters now provide the same cumulative AND hourly metrics schemas.
     bool a=upsertSummary(summaryPath("ShowSummary.csv"),
         "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp",date,cumulative);

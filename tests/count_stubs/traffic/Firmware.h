@@ -7,12 +7,14 @@
 #include <cstdio>
 #include <cstdint>
 #include <ctime>
+#include <cmath>
 #include <algorithm>
 #include "traffic/RecordingPolicy.h"
 struct String : std::string {
     bool endsWith(const std::string& suffix) const {return size()>=suffix.size() && compare(size()-suffix.size(),suffix.size(),suffix)==0;}
     int toInt() const {return atoi(c_str());}
     using std::string::string;
+    String(double value,int decimals) {char b[64];snprintf(b,sizeof(b),"%.*f",decimals,value);assign(b);}
     String() = default;
     String(const std::string &s):std::string(s){}
     String(int n):std::string(std::to_string(n)){}
@@ -138,3 +140,16 @@ inline const char* THIS_MQTT_CLIENT="espCarCounter";
 inline void applyOperatingDetector(int,int){}
 inline void KeepMqttAlive(){}
 #endif
+
+inline float tempF=-998,humidity=-998;
+inline unsigned long lastTempPubMillis=0;
+inline struct DhtMock {
+    float temperature=40,rh=50;int calls=0;
+    float readHumidity(){++calls;return rh;}
+    float readTemperature(bool){return temperature;}
+} dht;
+#define MQTT_PUB_TEMP "msb/traffic/TestCounter/Env/temp"
+inline void publishDebugLog(const String&){}
+void serviceEnvironmentHour();
+void averageHourlyTemp();
+bool showTemperatureAverage(float&);

@@ -8,6 +8,11 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.13 — 2026-11-17
+ *   - Publish first valid DHT sample/recovery promptly; use null for unavailable
+ *     measurements and separate health diagnostics; retain one-minute read timing.
+ *   - Average valid samples by local date/hour; close hours during sensor faults.
+ *   - Weight show temperature by valid official-window samples; blank if missing.
  * 25.12.03.2-modular-test.12 — 2026-11-17
  *   - Enlarge calendar and correction date buffers for full RTC component ranges;
  *     remove GCC format-truncation warnings without changing valid date strings.
@@ -68,7 +73,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.12";
+const char FWVersion[] = "25.12.03.2-modular-test.13";
 
 #include "traffic/Firmware.h"
 
@@ -252,10 +257,7 @@ void loop() {
     // GAL 25-11-22.4: publish temp/RH JSON every 10 minutes (retained)
     if (millis() - lastTempPubMillis >= TEMP_PUB_INTERVAL_MS) {
         lastTempPubMillis = millis();
-        char jsonPayload[100];
-        snprintf(jsonPayload, sizeof(jsonPayload),
-                "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
-        publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
+        publishEnvironmentState();
     }
 
     // Run SD health check every 60 seconds GAL 25-11-23.2

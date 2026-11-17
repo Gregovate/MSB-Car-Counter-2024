@@ -1,44 +1,41 @@
 #include "traffic/Firmware.h"
+#include "traffic/EnvironmentPolicy.h"
 
-// Extracted from the production baseline; behavior fixes are separate changes.
-void averageHourlyTemp() {
-    static int lastPublishedHour = -1;     // Tracks the last hour when data was published
-    static int tempReadingsCount = 0;      // Number of valid temperature readings
-    static float tempReadingsSum = 0.0;    // Sum of valid temperature readings
-    
+namespace {
+traffic::EnvironmentSamples environmentSamples;
+void publishCompletedEnvironmentHour(int hour,double sum,unsigned count) {
+    if (!count || hour<0) return;
+    char topic[96];
+    snprintf(topic,sizeof(topic),"%s/hourly/%02d",MQTT_PUB_TEMP,hour);
+    publishMQTT(topic,String(sum/count,1),false);
+}
+}
 
-    // Get the current time
-    DateTime now = rtc.now();
-    int nowHour = now.hour();
-
-    // Check if the hour has changed
-    if (nowHour != lastPublishedHour) {
-        // Publish the average for the completed hour
-        if (tempReadingsCount > 0 && lastPublishedHour >= 0) {
-            hourlyTemp[lastPublishedHour] = tempReadingsSum / tempReadingsCount;
-
-            // Publish to MQTT
-            char topic[50];
-            snprintf(topic, sizeof(topic), "%s/hourly/%02d", MQTT_PUB_TEMP, lastPublishedHour);
-            publishMQTT(topic, String(hourlyTemp[lastPublishedHour], 1)); // Publish with 1 decimal place
-
-            // Log the published temperature
-            Serial.printf("Hour %02d average temperature published: %.1f°F\n", lastPublishedHour, hourlyTemp[lastPublishedHour]);
-            //publishDebugLog("Hourly average temperature published: " + String(hourlyTemp[lastPublishedHour], 1));
-        }
-
-        // Reset for the new hour
-        lastPublishedHour = nowHour;
-        tempReadingsSum = 0.0;
-        tempReadingsCount = 0;
-    }
-
-    // Add the latest temperature reading if valid
-    if (tempF != -999) { // Ensure only valid readings are processed
-        tempReadingsSum += tempF;
-        tempReadingsCount++;
-        //publishDebugLog("Temperature added for averaging: " + String(tempF));
+void serviceEnvironmentHour() {
+    if (!rtcReady) return;
+    DateTime now=rtc.now();
+    int date=now.year()*10000+now.month()*100+now.day();
+    int previousDate=environmentSamples.date,previousHour=environmentSamples.hour;
+    double sum=previousHour>=0 ? environmentSamples.sum[previousHour]:0;
+    unsigned count=previousHour>=0 ? environmentSamples.count[previousHour]:0;
+    if(!environmentSamples.advance(date,now.hour())) return;
+    if(previousDate!=date || previousHour!=now.hour()) {
+        // Close the old bucket before any new-hour reading, even during failures.
+        publishCompletedEnvironmentHour(previousHour,sum,count);
+        if(previousDate!=date) for(float& value:hourlyTemp) value=NAN;
     }
 }
 
+void averageHourlyTemp() {
+    serviceEnvironmentHour();
+    if(!rtcReady) return;
+    DateTime now=rtc.now();int date=now.year()*10000+now.month()*100+now.day();
+    if(environmentSamples.add(date,now.hour(),tempF,humidity,officialShowNow()))
+        hourlyTemp[now.hour()]=environmentSamples.sum[now.hour()]/environmentSamples.count[now.hour()];
+}
 
+bool showTemperatureAverage(float& average) {
+    serviceEnvironmentHour();
+    if(!environmentSamples.showCount) return false;
+    average=environmentSamples.showSum/environmentSamples.showCount;return true;
+}

@@ -1,86 +1,50 @@
 #include "traffic/Firmware.h"
+#include "traffic/EnvironmentPolicy.h"
 
-// Shared implementation: keep identical in both projects (verify_modular.py).
+namespace {
+bool dhtAttempted=false,dhtHasValidReading=false,dhtCurrentValid=false;
+unsigned long lastDhtAttempt=0,lastDhtSuccess=0;
+unsigned long dhtFailures=0,dhtConsecutiveFailures=0;
+const char* dhtHealth="WARMING_UP";
+}
+
+void publishEnvironmentState() {
+    // Null means unavailable. Never publish internal sentinel temperatures to HA.
+    bool fresh=dhtHasValidReading && dhtCurrentValid && millis()-lastDhtSuccess<=120000UL;
+    char payload[100];
+    if(fresh) snprintf(payload,sizeof(payload),"{\"tempF\": %.1f, \"humidity\": %.1f}",tempF,humidity);
+    else snprintf(payload,sizeof(payload),"{\"tempF\": null, \"humidity\": null}");
+    publishMQTT(MQTT_PUB_TEMP,String(payload),true);
+    char diagnostic[256];
+    snprintf(diagnostic,sizeof(diagnostic),
+        "{\"status\":\"%s\",\"failures\":%lu,\"consecutiveFailures\":%lu,\"hasValidReading\":%s,\"lastSuccessUptimeMs\":%lu}",
+        fresh ? "OK":dhtCurrentValid ? "STALE":dhtHealth,dhtFailures,dhtConsecutiveFailures,
+        dhtHasValidReading ? "true":"false",lastDhtSuccess);
+    publishMQTT((String(topic_base_path)+"/System/dhtHealth").c_str(),String(diagnostic),true);
+}
+
 void readTempandRH() {
-    // --- Non-blocking warmup and timing state (function-local statics) ---
-    static bool dhtWarmupDone = false;
-    static unsigned long dhtWarmupStart = 0;
-
-    static unsigned long lastDHTReadMillis  = 0;    // Last time temperature was read
-    static unsigned long lastDHTPrintMillis = 0;    // Last time temperature was printed
-
-    const unsigned long DHT_WARMUP_MS      = 10000;   // 10 seconds warmup
-    const unsigned long dhtReadInterval    = 60000;   // 60 seconds interval for reading temp
-    const unsigned long dhtPrintInterval   = 600000;  // 10 minutes interval for printing temp
-
-    static bool tempOutOfRangeReported = false;
-
-    unsigned long currentMillis = millis();
-
-    // --- Warmup gate: don't touch tempF/humidity until sensor has stabilized ---
-    if (!dhtWarmupDone) {
-        if (dhtWarmupStart == 0) {
-            dhtWarmupStart = currentMillis;  // start warmup on first call
-        }
-        if (currentMillis - dhtWarmupStart < DHT_WARMUP_MS) {
-            return;  // too early, skip DHT entirely
-        }
-        dhtWarmupDone = true;  // from now on, reads are allowed
+    // Hour closure is independent of sensor success and never blocks counting.
+    serviceEnvironmentHour();
+    unsigned long now=millis();
+    if(now<60000UL && !dhtAttempted) return; // First read after one minute of uptime.
+    if(dhtAttempted && now-lastDhtAttempt<60000UL) return;
+    dhtAttempted=true;lastDhtAttempt=now;
+    // Validate a complete pair before replacing the last accepted sample.
+    float rh=dht.readHumidity(),temperature=dht.readTemperature(true);
+    if(!traffic::validEnvironment(temperature,rh)) {
+        ++dhtFailures;++dhtConsecutiveFailures;dhtCurrentValid=false;
+        dhtHealth=(!isfinite(temperature) || !isfinite(rh)) ? "READ_FAILED":"OUT_OF_RANGE";
+        if(dhtConsecutiveFailures==1) publishDebugLog("DHT reading invalid; measurements unavailable.");
+        publishEnvironmentState();return;
     }
-
-    // --- Interval gate: only read every dhtReadInterval ms ---
-    if (currentMillis - lastDHTReadMillis < dhtReadInterval) {
-        return;
-    }
-    lastDHTReadMillis = currentMillis;
-
-    // Read temperature and humidity
-    humidity = dht.readHumidity();
-    tempF   = dht.readTemperature(true); // Read Fahrenheit directly
-
-    // Check if the readings are valid
-    if (isnan(tempF) || isnan(humidity)) {
-        Serial.println("Failed to read from DHT sensor!");
-        publishDebugLog("DHT sensor reading failed.");
-        tempF   = -999;  // sentinel
-        humidity = -999;
-        return; // Exit function if the readings are invalid
-    }
-
-    // Check for temperature out of range
-    if (tempF < -40 || tempF > 120) {
-        if (!tempOutOfRangeReported) {
-            Serial.println("Temperature out of range!");
-            publishDebugLog("DHT temperature out of range: " + String(tempF));
-            tempOutOfRangeReported = true; // prevent duplicate reporting
-        }
-        tempF = -999; // sentinel for out-of-range condition
-    } else {
-        // Reset the flag if temperature is back in range
-        if (tempOutOfRangeReported) {
-            Serial.println("Temperature back in range.");
-            tempOutOfRangeReported = false;
-        }
-
-        // Build JSON for temp/RH (actual MQTT publish happens elsewhere on your 10-min timer)
-        char jsonPayload[100];
-        snprintf(jsonPayload, sizeof(jsonPayload),
-                 "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
-        // GAL 25-11-22.4: temp/RH publish moved to 10-min timer in loop to reduce spam
-        // publishMQTT(MQTT_PUB_TEMP, String(jsonPayload));
-
-        // Forward valid readings to the hourly average system
-        averageHourlyTemp(); // Ensure the reading is processed for summaries
-    }
-
-    // --- 10-minute printout for serial diagnostics ---
-    if (currentMillis - lastDHTPrintMillis >= dhtPrintInterval) {
-        lastDHTPrintMillis = currentMillis;
-
-        if (tempF != -999 && humidity != -999) {
-            Serial.printf("Temperature: %.1f °F, Humidity: %.1f %%\n", tempF, humidity);
-        } else {
-            Serial.println("Temperature/Humidity data invalid. Check sensor.");
-        }
+    bool recovered=!dhtCurrentValid;
+    tempF=temperature;humidity=rh;dhtHasValidReading=true;dhtCurrentValid=true;
+    lastDhtSuccess=now;dhtConsecutiveFailures=0;dhtHealth="OK";
+    averageHourlyTemp(); // Exactly once per new valid sensor sample.
+    if(recovered) {
+        publishDebugLog("DHT valid reading available.");
+        publishEnvironmentState();lastTempPubMillis=now;
+        Serial.printf("DHT valid: %.1f F, %.1f %% RH\n",tempF,humidity);
     }
 }

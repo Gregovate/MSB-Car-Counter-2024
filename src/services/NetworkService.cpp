@@ -98,11 +98,7 @@ void MQTTreconnect() {
 
         publishMQTT(MQTT_PUB_HELLO, helloPayload, true);
 
-        // GAL 25-11-22: publish temp/RH as JSON (match HA templates)
-        char jsonPayload[100];
-        snprintf(jsonPayload, sizeof(jsonPayload),
-                "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
-        publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
+        publishEnvironmentState(); // Never publish startup/failure sentinels.
         publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
         publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars), true);
 
