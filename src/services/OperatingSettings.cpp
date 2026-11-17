@@ -113,7 +113,7 @@ bool handleOperatingCommand(const char* topic,const char* message) {
         }
         if (!value.length() || (kind!="daily" && kind!="show")) return true;
         for (unsigned int i=0;i<stamp.length();++i) if(stamp[i]<'0' || stamp[i]>'9') return true;
-        DateTime now=rtc.now();char day[9];
+        DateTime now=rtc.now();/* Allow full RTC component ranges; format widths are minimums. */ char day[24];
         snprintf(day,sizeof(day),"%04d%02d%02d",now.year(),now.month(),now.day());
         int hh=stamp.substring(8,10).toInt(),mm=stamp.substring(10,12).toInt(),ss=stamp.substring(12,14).toInt();
         int age=now.hour()*3600+now.minute()*60+now.second()-(hh*3600+mm*60+ss);

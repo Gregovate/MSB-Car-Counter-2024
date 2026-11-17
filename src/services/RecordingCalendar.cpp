@@ -184,7 +184,7 @@ void publishRecordingCalendar() {
     publishMQTT(MQTT_PUB_SEASON_YEAR,String(activeYear),true);
     publishMQTT(MQTT_PUB_SEASON_FOLDER,String(seasonFolder),true);
     DateTime start=recordingShowStart();
-    char date[11]; snprintf(date,sizeof(date),"%04d-%02d-%02d",start.year(),start.month(),start.day());
+    /* Allow full RTC component ranges; format widths are minimums. */ char date[24]; snprintf(date,sizeof(date),"%04d-%02d-%02d",start.year(),start.month(),start.day());
     // Report on State, never back onto the HA command topic.
     publishMQTT((base+"/State/showStartDate").c_str(),date,true);
     publishMQTT((base+"/System/calendarHealth").c_str(),calendarFault,true);

@@ -60,3 +60,14 @@ Do not overwrite either device's configuration to remove those differences.
    On the next rejection, capture `settingsLastRejection` with `settingsHealth`
    and HA's sent payload/time. Do not inject invalid settings on production
    merely to exercise diagnostics.
+
+## .12 local-build warning correction — November 17, 2026
+
+Greg's licensed ElegantOTAPro build of .11 passed. GCC warned that the exact-size
+calendar publication and manual-correction date buffers could truncate RTC
+components outside ordinary month/day ranges. Both buffers now allow the full
+RTC accessor ranges; valid date output and validation behavior are unchanged.
+Version/changelog are .12. Host suite and preservation checks must pass again;
+the licensed ESP32 rebuild is still required to verify its compiler warnings.
+Gate peer comparison additionally differs in RecordingCalendar.cpp until that
+repository receives a separately controlled update.

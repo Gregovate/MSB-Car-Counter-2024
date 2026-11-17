@@ -8,6 +8,9 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.12 — 2026-11-17
+ *   - Enlarge calendar and correction date buffers for full RTC component ranges;
+ *     remove GCC format-truncation warnings without changing valid date strings.
  * 25.12.03.2-modular-test.11 — 2026-11-17
  *   - Retain settings rejection reason, CSV field, received/accepted dates,
  *     recording year and RTC local timestamp after health recovery.
@@ -65,7 +68,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.11";
+const char FWVersion[] = "25.12.03.2-modular-test.12";
 
 #include "traffic/Firmware.h"
 
