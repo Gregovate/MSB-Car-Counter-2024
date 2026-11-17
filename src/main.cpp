@@ -8,6 +8,13 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.15 — 2026-11-17
+ *   - Require A-before-B, per-beam minimum and continuous overlap qualification;
+ *     reject reverse/ambiguous passages until both beams clear, without cooldown.
+ *   - Count once after passage clears; blocked alarms preserve stopped passages.
+ *   - Only accepted vehicles pause idle arches; rejected beam activity is inert.
+ *   - Add HA-controlled MQTT-only passage debugging, OFF on boot/reconnect.
+
  * 25.12.03.2-modular-test.14 — 2026-11-17
  *   - Enable the 30-second idle arch pattern during daytime/setup, independent
  *     of official show counting; suspend immediately for beams/detection/alarm.
@@ -77,7 +84,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.14";
+const char FWVersion[] = "25.12.03.2-modular-test.15";
 
 #include "traffic/Firmware.h"
 

@@ -121,6 +121,8 @@ void MQTTreconnect() {
         publishMQTT(MQTT_PUB_FW_VERSION, String(FWVersion), true); // ok non-retained
 
         // Subscribe to necessary topics
+        resetPassageDebugConnection();
+        mqtt_client.subscribe((String(topic_base_path)+"/Config/passageDebug").c_str());
         mqtt_client.subscribe(MQTT_PUB_HELLO);
         mqtt_client.subscribe(MQTT_SUB_TOPIC1); // Reset Daily Count
         mqtt_client.subscribe(MQTT_SUB_TOPIC2); // Reset Show Count

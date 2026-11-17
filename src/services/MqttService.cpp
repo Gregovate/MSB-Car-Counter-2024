@@ -20,6 +20,7 @@ void publishMQTT(const char *topic, const String &message) {
 
 
 void KeepMqttAlive() {
+    publishPassageDebugState();
     publishTimingConfig();
     publishOperatingSettings();
     publishMQTT(MQTT_PUB_ALARM, carStuckAlarmActive ? "ALARM_ENTER_STUCK" : "CLEAR", true);
@@ -98,6 +99,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     if (length>180) return;
     char message[181];memcpy(message,payload,length);message[length]='\0';
     if (strlen(message)!=length) return;
+    if (handlePassageDebugCommand(topic,message)) return;
     if (handleOperatingCommand(topic,message)) return;
     String command(topic);
     if (command==String(topic_base_path)+"/Config/showStartDate") {

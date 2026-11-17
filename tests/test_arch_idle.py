@@ -26,19 +26,14 @@ int main(){
  ticks=29999;serviceIdleArchPattern();assert(writes==0);
  ticks=30000;serviceIdleArchPattern();assert(writes==2);
  ticks+=500;serviceIdleArchPattern();assert(pins[redArchPin]==LOW && pins[greenArchPin]==HIGH);
- // Raw beam interrupts before debounce, restoring the vehicle-ready state.
- pins[firstBeamPin]=HIGH;ticks+=1;serviceIdleArchPattern();
- assert(pins[redArchPin]==LOW && pins[greenArchPin]==HIGH && noCarTimer==ticks);
- auto n=writes;currentCarDetectState=BOTH_BEAMS_HIGH;
- digitalWrite(redArchPin,HIGH);digitalWrite(greenArchPin,LOW);n=writes;
- ticks+=60000;serviceIdleArchPattern();assert(writes==n);
- pins[firstBeamPin]=LOW;currentCarDetectState=WAITING_FOR_CAR;
+ // Unqualified beam activity and alarms leave the idle sequence running.
+ pins[firstBeamPin]=HIGH;stableSecondBeamState=true;carStuckAlarmActive=true;
+ auto n=writes;ticks+=500;serviceIdleArchPattern();assert(writes>n && noCarTimer==0);
+ // Only accepted passage code resets noCarTimer and pattern state.
+ noCarTimer=ticks;stopIdleArchPattern();n=writes;
  ticks+=29999;serviceIdleArchPattern();assert(writes==n);
  ticks+=1;serviceIdleArchPattern();assert(writes>n);
- carStuckAlarmActive=true;ticks+=1;serviceIdleArchPattern();n=writes;
- ticks+=60000;serviceIdleArchPattern();assert(writes==n);
- carStuckAlarmActive=false;stableSecondBeamState=true;ticks+=1;serviceIdleArchPattern();
- assert(noCarTimer==ticks);
+
 }
 ''')
             subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror','-I'+str(p),str(p/'test.cpp'),'-o',str(p/'test')],check=True)

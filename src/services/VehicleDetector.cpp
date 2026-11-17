@@ -1,4 +1,5 @@
 #include "traffic/Firmware.h"
+#include "traffic/PassagePolicy.h"
 
 // Extracted from the production baseline; behavior fixes are separate changes.
 void countTheCar() {
@@ -91,193 +92,104 @@ void countTheCar() {
     }
 }
 
-void detectCar() {
-    unsigned long currentMillis = millis();
-    bool rawFirstBeamState  = digitalRead(firstBeamPin);
-    bool rawSecondBeamState = digitalRead(secondBeamPin);
-
-    // ---- Debounce first beam sensor ----
-    if (rawFirstBeamState != stableFirstBeamState) {
-        if (currentMillis - lastFirstBeamChangeTime > debounceDelay) {
-            stableFirstBeamState = rawFirstBeamState;
-            lastFirstBeamChangeTime = currentMillis;
-            // Publish the state change only when it's stable
-            publishMQTT(MQTT_PUB_BEAM_A_STATE  , String(stableFirstBeamState), true);
-        }
-    } else {
-        lastFirstBeamChangeTime = currentMillis;
-    }
-
-    // ---- Debounce second beam sensor ----
-    if (rawSecondBeamState != stableSecondBeamState) {
-        if (currentMillis - lastSecondBeamChangeTime > debounceDelay) {
-            stableSecondBeamState = rawSecondBeamState;
-            lastSecondBeamChangeTime = currentMillis;
-            // Publish the state change only when it's stable
-            publishMQTT(MQTT_PUB_BEAM_B_STATE, String(stableSecondBeamState), true);
-        }
-    } else {
-        lastSecondBeamChangeTime = currentMillis;
-    }
-
-    // Use the stable beam states instead of the raw readings
-    firstBeamState  = stableFirstBeamState;
-    secondBeamState = stableSecondBeamState;
-
-    // ---- State machine Car Counter BEGIN ----
-    switch (currentCarDetectState) {
-
-        case WAITING_FOR_CAR: {
-            unsigned long now = currentMillis;
-
-            // Beam 1 health
-            if (firstBeamState == 1) {
-                if (firstBeamHealth_ms == 0) {
-                    firstBeamHealth_ms = now;  // start timing
-                } else if ((now - firstBeamHealth_ms) >= carCounterTimeout && !carStuckAlarmActive) {
-                    publishMQTT(MQTT_COUNTER_LOG, "Beam 1 stuck HIGH (idle)");
-                    publishMQTT(MQTT_PUB_ALARM, "ALARM_ENTER_STUCK", true);
-                    carStuckAlarmActive = true;
-                }
-            } else {
-                // Beam 1 is clear
-                firstBeamHealth_ms = 0;
-                // *** NO CLEAR HERE ANYMORE ***
-            }
-
-            // Beam 2 health
-            if (secondBeamState == 1) {
-                if (secondBeamHealth_ms == 0) {
-                    secondBeamHealth_ms = now;  // start timing
-                } else if ((now - secondBeamHealth_ms) >= carCounterTimeout && !carStuckAlarmActive) {
-                    publishMQTT(MQTT_COUNTER_LOG, "Beam 2 stuck HIGH (idle)");
-                    publishMQTT(MQTT_PUB_ALARM, "ALARM_ENTER_STUCK", true);
-                    carStuckAlarmActive = true;
-                }
-            } else {
-                // Beam 2 is clear
-                secondBeamHealth_ms = 0;
-                // *** NO CLEAR HERE ANYMORE ***
-            }
-
-            // *** NEW: single CLEAR gate ***
-            if (firstBeamState == 0 && secondBeamState == 0 && carStuckAlarmActive) {
-                publishMQTT(MQTT_PUB_ALARM, "CLEAR", true);
-                carStuckAlarmActive = false;
-            }
-
-            // Normal entry into car detection
-            if (firstBeamState == 1) {
-                firstBeamTripTime      = currentMillis;
-                abFollowCaptured       = false;            // reset GLOBAL flag
-                currentCarDetectState  = FIRST_BEAM_HIGH;
-                publishMQTT(MQTT_COUNTER_LOG, "First Beam High");
-                digitalWrite(greenArchPin, HIGH);         // Green arch ON
-            }
-            break;
-        }
-
-        case FIRST_BEAM_HIGH:
-            if (secondBeamState == 1) {
-
-                // First time Beam B follows Beam A → capture A→B follow ONCE
-                if (!abFollowCaptured) {
-                    abFollow_ms = currentMillis - firstBeamTripTime;
-                    publishMQTT(MQTT_PUB_BEAM_AB_MS, String(abFollow_ms));
-                    abFollowCaptured = true;
-                }
-
-                // Use current time for activation thresholds
-                unsigned long timeBeamsHighNow = currentMillis - firstBeamTripTime;
-
-                // Only move to BOTH_BEAMS_HIGH if duration exceeds activation thresholds
-                if (timeBeamsHighNow >= minActivationDuration &&
-                    timeBeamsHighNow >= waitDuration) {
-                    bothBeamsHighTime     = currentMillis;
-                    carPresentFlag        = true;
-                    currentCarDetectState = BOTH_BEAMS_HIGH;
-                    publishMQTT(MQTT_COUNTER_LOG, "State Changed: Both Beams High");
-                    digitalWrite(greenArchPin, LOW);   // Green arch OFF
-                    digitalWrite(redArchPin, HIGH);    // Red arch ON
-                }
-
-            } else if (firstBeamState == 0) {
-                // First beam cleared before second beam ever went high -> reset
-                currentCarDetectState = WAITING_FOR_CAR;
-                publishMQTT(MQTT_COUNTER_LOG, "1st Beam Low, Changed Waiting for Car");
-                digitalWrite(greenArchPin, HIGH);      // Green arch ON
-                digitalWrite(redArchPin, LOW);         // Red arch OFF
-
-            } else {
-                // firstBeamState == 1 and secondBeamState == 0 → Beam 1 has been high alone
-                if ((currentMillis - firstBeamTripTime) >= carCounterTimeout && !carStuckAlarmActive) {
-                    publishMQTT(MQTT_COUNTER_LOG, "Beam 1 stuck HIGH (FIRST_BEAM_HIGH)");
-                    publishMQTT(MQTT_PUB_ALARM, "ALARM_ENTER_STUCK", true);
-                    carStuckAlarmActive = true;
-                }
-            }
-            break;
-
-        case BOTH_BEAMS_HIGH:
-            // Stuck-vehicle alarm using carCounterTimeout
-            if ((currentMillis - firstBeamTripTime) >= carCounterTimeout) {
-                if (!carStuckAlarmActive) {
-                    publishMQTT(MQTT_COUNTER_LOG, "Sensor blocked", true);
-                    publishMQTT(MQTT_PUB_ALARM, "ALARM_ENTER_STUCK", true);
-                    carStuckAlarmActive = true;   // latch so we don't spam
-                }
-            }
-
-            // Beam B cleared and we think a car is present -> end of event
-            if (secondBeamState == 0 && carPresentFlag) {
-                // Measure how long both beams / Beam B were high
-                unsigned long brokenDuration = currentMillis - bothBeamsHighTime;
-
-                publishMQTT(
-                    MQTT_COUNTER_LOG,
-                    "Beam B clear. Broken duration: " + String(brokenDuration) + " ms"
-                );
-                publishMQTT(MQTT_PUB_BEAM_B_BROKEN_MS , String(brokenDuration));
-
-                // IMPORTANT: Always treat this as a real car if we got this far,
-                // just like the 2024 version. No gating on brokenDuration.
-                currentCarDetectState = CAR_DETECTED;
-                publishMQTT(MQTT_COUNTER_LOG, "Changed state to Car Detected", false);
-
-                // Clear alarm when the event ends (Beam B clear)
-                if (carStuckAlarmActive) {
-                    publishMQTT(MQTT_PUB_ALARM, "CLEAR", true);
-                    carStuckAlarmActive = false;
-                }
-            }
-            break;
-
-        case CAR_DETECTED:
-            if (carPresentFlag) {
-                // Compute full pass time into GLOBAL timeToPassMS for logging
-                timeToPassMS = currentMillis - firstBeamTripTime;
-
-                // Count the car and update files (countTheCar() will log timeToPassMS)
-                countTheCar();
-                publishMQTT(MQTT_PUB_TTP, String(timeToPassMS));
-                publishMQTT(MQTT_COUNTER_LOG, "Car Counted Successfully!!");
-                carPresentFlag = false;
-
-                // Lights on successful detection
-                digitalWrite(redArchPin, LOW);    // Red OFF
-                digitalWrite(greenArchPin, HIGH); // Green ON
-
-                // Time between cars
-                timeBetweenCars_ms = currentMillis - lastCarDetectedMillis;
-                publishMQTT(MQTT_PUB_BETWEENCARS_MS, String(timeBetweenCars_ms), true);
-                lastCarDetectedMillis = currentMillis;
-
-                // Back to idle
-                currentCarDetectState = WAITING_FOR_CAR;
-                publishMQTT(MQTT_COUNTER_LOG, "Idle-Waiting For Car");
-            }
-            break;
-
-    }   // ---- State machine Car Counter END ----
+namespace {
+traffic::PassagePolicy passage;
+bool passageDebug=false;
+uint32_t passageSequence=0;
+int passageCountBefore=0;
+String passageStartedLocal;
+bool passageAlarmReported=false;
+void reportPassage(const char* kind,int after) {
+    if(!passageDebug || !mqttOnline()) return;
+    // The debug record is MQTT-only; never enqueue or append diagnostic SD data.
+    char message[768];
+    snprintf(message,sizeof(message),
+        "{\"event\":%lu,\"kind\":\"%s\",\"boot\":\"%s\",\"startLocal\":\"%s\","
+        "\"endLocal\":\"%s\",\"order\":\"%s\",\"decision\":\"%s\",\"reason\":\"%s\","
+        "\"aMs\":%lu,\"bMs\":%lu,\"overlapMs\":%lu,\"maxOverlapMs\":%lu,"
+        "\"beamMinMs\":%lu,\"detectMs\":%lu,\"before\":%d,\"after\":%d}",
+        static_cast<unsigned long>(passageSequence),kind,bootTimestamp.c_str(),passageStartedLocal.c_str(),
+        getRtcTimestamp().c_str(),passage.order,
+        passage.finished ? (passage.accepted ? "ACCEPT":"REJECT"):"PENDING",passage.reason,
+        static_cast<unsigned long>(passage.aMs),static_cast<unsigned long>(passage.bMs),
+        static_cast<unsigned long>(passage.overlapMs),static_cast<unsigned long>(passage.maxOverlap),
+        static_cast<unsigned long>(passage.beamMinimum),static_cast<unsigned long>(passage.overlapMinimum),
+        passageCountBefore,after);
+    if(mqtt_client.getBufferSize()<1024 && !mqtt_client.setBufferSize(1024)) return;
+    publishMQTT((String(topic_base_path)+"/Sensors/passageEvent").c_str(),String(message),false);
+}
 }
 
+void publishPassageDebugState() {
+    publishMQTT((String(topic_base_path)+"/State/passageDebug").c_str(),passageDebug ? "ON":"OFF",true);
+}
+void resetPassageDebugConnection() {
+    // PubSubClient does not expose retain flags. Clear old commands BEFORE
+    // subscribing so a retained ON cannot silently re-enable a new connection.
+    passageDebug=false;
+    publishMQTT((String(topic_base_path)+"/Config/passageDebug").c_str(),"",true);
+    publishMQTT((String(topic_base_path)+"/Sensors/passageEvent").c_str(),"",true);
+    publishPassageDebugState();
+}
+bool handlePassageDebugCommand(const char* topic,const char* message) {
+    if(String(topic)!=String(topic_base_path)+"/Config/passageDebug") return false;
+    if(strcmp(message,"ON")==0) passageDebug=true;
+    else if(strcmp(message,"OFF")==0) passageDebug=false;
+    else return true;
+    if(!passageDebug) publishMQTT((String(topic_base_path)+"/Sensors/passageEvent").c_str(),"",true);
+    publishPassageDebugState();
+    if(passageDebug) publishMQTT((String(topic_base_path)+"/Sensors/passageEvent").c_str(),
+        "{\"event\":0,\"kind\":\"SESSION\",\"decision\":\"WAITING\"}",false);
+    return true;
+}
+
+void detectCar() {
+    uint32_t now=millis();
+    bool rawA=digitalRead(firstBeamPin),rawB=digitalRead(secondBeamPin);
+    // Preserve the existing 50 ms debounce independently for each beam.
+    if(rawA!=stableFirstBeamState) {
+        if(now-lastFirstBeamChangeTime>debounceDelay) {
+            stableFirstBeamState=rawA;lastFirstBeamChangeTime=now;
+            publishMQTT(MQTT_PUB_BEAM_A_STATE,String(rawA),true);
+        }
+    } else lastFirstBeamChangeTime=now;
+    if(rawB!=stableSecondBeamState) {
+        if(now-lastSecondBeamChangeTime>debounceDelay) {
+            stableSecondBeamState=rawB;lastSecondBeamChangeTime=now;
+            publishMQTT(MQTT_PUB_BEAM_B_STATE,String(rawB),true);
+        }
+    } else lastSecondBeamChangeTime=now;
+    firstBeamState=stableFirstBeamState;secondBeamState=stableSecondBeamState;
+    passage.update(firstBeamState,secondBeamState,now,minActivationDuration,waitDuration);
+    if(passage.started) {
+        ++passageSequence;passageCountBefore=totalDailyCars;
+        passageStartedLocal=getRtcTimestamp();passageAlarmReported=false;
+        firstBeamTripTime=now;
+    }
+    // Alarm reports a blocked passage but never resets it or counts it twice.
+    if(passage.active && now-passage.start>=carCounterTimeout && !passageAlarmReported) {
+        passageAlarmReported=true;carStuckAlarmActive=true;
+        publishMQTT(MQTT_PUB_ALARM,"ALARM_ENTER_STUCK",true);
+        reportPassage("BLOCKED",totalDailyCars);
+    }
+    if(passage.finished) {
+        if(carStuckAlarmActive) {carStuckAlarmActive=false;publishMQTT(MQTT_PUB_ALARM,"CLEAR",true);}
+        if(passage.accepted) {
+            abFollow_ms=passage.followMs;timeToPassMS=now-passage.start;
+            timeBetweenCars_ms=now-lastCarDetectedMillis;
+            lastCarDetectedMillis=now;
+            countTheCar(); // Existing persistence/official-show policy remains authoritative.
+            noCarTimer=now; // Even undated accepted vehicles interrupt the effect once.
+            stopIdleArchPattern();
+            digitalWrite(redArchPin,LOW);digitalWrite(greenArchPin,HIGH);
+            publishMQTT(MQTT_PUB_BEAM_AB_MS,String(abFollow_ms));
+            publishMQTT(MQTT_PUB_BEAM_B_BROKEN_MS,String(passage.bMs));
+            publishMQTT(MQTT_PUB_TTP,String(timeToPassMS));
+            publishMQTT(MQTT_PUB_BETWEENCARS_MS,String(timeBetweenCars_ms),true);
+            publishMQTT(MQTT_COUNTER_LOG,"Car Counted Successfully!!");
+        }
+        reportPassage("COMPLETE",totalDailyCars);
+    }
+    // Compatibility state is observational; unqualified passages do not drive arches.
+    currentCarDetectState=passage.active ? (firstBeamState && secondBeamState ? BOTH_BEAMS_HIGH:FIRST_BEAM_HIGH):WAITING_FOR_CAR;
+}
