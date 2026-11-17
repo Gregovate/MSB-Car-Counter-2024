@@ -69,3 +69,24 @@ void playPattern() {
             break;
     }
 }
+
+// Idle effects are independent of official show-count eligibility.
+void serviceIdleArchPattern() {
+    static bool patternActive=false;
+    unsigned long now=millis();
+    bool clear=currentCarDetectState==WAITING_FOR_CAR && !carStuckAlarmActive &&
+        !stableFirstBeamState && !stableSecondBeamState &&
+        digitalRead(firstBeamPin)==LOW && digitalRead(secondBeamPin)==LOW;
+    if(!clear) {
+        noCarTimer=now; // A partial/blocked passage also interrupts inactivity.
+        if(patternActive) {
+            digitalWrite(redArchPin,LOW);
+            digitalWrite(greenArchPin,HIGH);
+        }
+        patternActive=false;currentPatternState=INITIAL_OFF;patternModeMillis=now;
+        return;
+    }
+    if(now-noCarTimer<30000UL) return;
+    patternActive=true;
+    playPattern();
+}

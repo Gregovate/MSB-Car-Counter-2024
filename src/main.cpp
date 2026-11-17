@@ -8,6 +8,10 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.14 — 2026-11-17
+ *   - Enable the 30-second idle arch pattern during daytime/setup, independent
+ *     of official show counting; suspend immediately for beams/detection/alarm.
+ *   - Restore normal arch outputs before handing control back to detection.
  * 25.12.03.2-modular-test.13 — 2026-11-17
  *   - Publish first valid DHT sample/recovery promptly; use null for unavailable
  *     measurements and separate health diagnostics; retain one-minute read timing.
@@ -73,7 +77,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.13";
+const char FWVersion[] = "25.12.03.2-modular-test.14";
 
 #include "traffic/Firmware.h"
 
@@ -287,12 +291,9 @@ void loop() {
 
     timeTriggeredEvents();    // Various functions/saves/resets based on time of day
 
+    // Let vehicle detection own the outputs as soon as either beam is active.
+    serviceIdleArchPattern();
     detectCar();              // Detect cars
-
-    // ----- IDLE PATTERN: run if no car for 30s -----
-    if (showTime && (millis() - noCarTimer) >= 30000UL) {
-        playPattern();
-    }
 
     // //Added to kepp mqtt connection alive and periodically publish select values
     // if ((millis() - start_MqttMillis) > (mqttKeepAlive * 1000)) {

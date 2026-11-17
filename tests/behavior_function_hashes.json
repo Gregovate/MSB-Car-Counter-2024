@@ -24,7 +24,7 @@
   "initializeRecordingCalendar": "0c22a549a1f7c9052d822ee62ef906e3dd624d146cf4721a16277fcad48da606",
   "listSDFiles": "75fc5951fa7ad92cc47b26bc97ba797fed1739ed99b24228efe1123d4fac09a1",
   "loadRecordingCalendarFromSD": "f2f494ba8b1f7e91cc4e415b347e8cc872a1607f91c309265c2258eea06e87f6",
-  "loop": "b8909737d39f3e89c456c50009d6fb1694d6f50ecd37867d9889030a7d1611c7",
+  "loop": "2027ea96ffa5eaa25ce928b222e785d926531b5b5cb265be786b455282c6b469",
   "noteNetworkClock": "9746c106dbf97c3eaff080c3de054f0bacb12e15dcf41cb99f1fadd3d8b71e11",
   "persistCalendar": "7ca95413e27b05b1f7e6311f6c122c3c6b4f8c895ec6d1727249a6c1b057fadc",
   "publishRecordingCalendar": "096b28e92503e6419efa21989cae5fabb85b27aaa3fb41fa6aa427e61d49f014",
@@ -112,5 +112,7 @@
   "publishCompletedEnvironmentHour": "5221a834a70a3c547037ffa6d7be93c1561515f0af3b50a3f8d3a21e4940281e",
   "serviceEnvironmentHour": "869f612a7c1e39a8c59df9bce9ead8a0626f7ecf5c3916821a89982249f89959",
   "averageHourlyTemp": "bf17405f3722765e233f11529911a9e417c71b3fb4d81f531ff6c660e9929e29",
-  "showTemperatureAverage": "dd86cefe6f9ef385b00a2274f79707d840bda37173e677a7f792581abba3456d"
+  "showTemperatureAverage": "dd86cefe6f9ef385b00a2274f79707d840bda37173e677a7f792581abba3456d",
+  "playPattern": "1180590ea85fee4c1412233cd0d7d09a41f7657bf9cf25e7f4acfc23d60d3a82",
+  "serviceIdleArchPattern": "3543dc5c52a5e83523bddecc471c810409dca1092090adf5b9613a7592883d1a"
 }
