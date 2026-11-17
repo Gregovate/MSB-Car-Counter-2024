@@ -8,3 +8,5 @@ void detectCar();
 void publishPassageDebugState();
 void resetPassageDebugConnection();
 bool handlePassageDebugCommand(const char* topic,const char* message);
+
+bool vehicleArchFeedbackActive();

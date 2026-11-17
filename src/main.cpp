@@ -8,6 +8,11 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.16 — 2026-11-17
+ *   - Restore red for qualified forward passage, green on B-clear acceptance;
+ *     update lights before synchronous SD saving and retain reverse lockout.
+ *   - Decide once at B-clear; wait for both-clear only to rearm, not to count.
+
  * 25.12.03.2-modular-test.15 — 2026-11-17
  *   - Require A-before-B, per-beam minimum and continuous overlap qualification;
  *     reject reverse/ambiguous passages until both beams clear, without cooldown.
@@ -84,7 +89,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.15";
+const char FWVersion[] = "25.12.03.2-modular-test.16";
 
 #include "traffic/Firmware.h"
 

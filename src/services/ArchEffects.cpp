@@ -76,5 +76,5 @@ void stopIdleArchPattern() {
     currentPatternState=INITIAL_OFF;patternModeMillis=millis();
 }
 void serviceIdleArchPattern() {
-    if(millis()-noCarTimer>=30000UL) playPattern();
+    if(!vehicleArchFeedbackActive() && millis()-noCarTimer>=30000UL) playPattern();
 }

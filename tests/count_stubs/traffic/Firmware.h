@@ -153,3 +153,9 @@ inline void publishDebugLog(const String&){}
 void serviceEnvironmentHour();
 void averageHourlyTemp();
 bool showTemperatureAverage(float&);
+
+// Count acceptance drives camera feedback before synchronous storage.
+#define LOW 0
+#define HIGH 1
+inline const int redArchPin=25,greenArchPin=26;
+inline void digitalWrite(int,int){}

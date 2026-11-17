@@ -10,6 +10,7 @@ class IdleArches(unittest.TestCase):
 #define HIGH 1
 #define LOW 0
 unsigned long ticks=0,noCarTimer=0,patternModeMillis=0;
+bool vehicleArchFeedbackActive(){return false;}
 unsigned long millis(){return ticks;}
 enum Pattern {INITIAL_OFF,RED_ON,GREEN_ON,BOTH_ON,BOTH_OFF,RED_OFF_GREEN_ON,GREEN_OFF_RED_ON};
 Pattern currentPatternState=INITIAL_OFF;

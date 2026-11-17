@@ -42,6 +42,10 @@ void countTheCar() {
     // Increase Show Count only when show is open
     recordOfficialVehicle();
 
+    // The camera's green indication means the count increment succeeded.
+    // Do this before synchronous SD/export work can delay visible feedback.
+    digitalWrite(redArchPin,LOW);digitalWrite(greenArchPin,HIGH);
+
     // Commit this vehicle as one dated daily/show/hourly checkpoint before
     // MQTT or the web-facing files can delay persistence.
     persistCountState();
@@ -99,6 +103,7 @@ uint32_t passageSequence=0;
 int passageCountBefore=0;
 String passageStartedLocal;
 bool passageAlarmReported=false;
+bool passageRedShown=false;
 void reportPassage(const char* kind,int after) {
     if(!passageDebug || !mqttOnline()) return;
     // The debug record is MQTT-only; never enqueue or append diagnostic SD data.
@@ -163,8 +168,13 @@ void detectCar() {
     passage.update(firstBeamState,secondBeamState,now,minActivationDuration,waitDuration);
     if(passage.started) {
         ++passageSequence;passageCountBefore=totalDailyCars;
-        passageStartedLocal=getRtcTimestamp();passageAlarmReported=false;
+        passageStartedLocal=getRtcTimestamp();passageAlarmReported=false;passageRedShown=false;
         firstBeamTripTime=now;
+    }
+    // Restore the camera-visible qualification indication, before storage/network work.
+    if(passage.qualified && !passageRedShown && !passage.finished) {
+        passageRedShown=true;stopIdleArchPattern();
+        digitalWrite(greenArchPin,LOW);digitalWrite(redArchPin,HIGH);
     }
     // Alarm reports a blocked passage but never resets it or counts it twice.
     if(passage.active && now-passage.start>=carCounterTimeout && !passageAlarmReported) {
@@ -178,10 +188,9 @@ void detectCar() {
             abFollow_ms=passage.followMs;timeToPassMS=now-passage.start;
             timeBetweenCars_ms=now-lastCarDetectedMillis;
             lastCarDetectedMillis=now;
-            countTheCar(); // Existing persistence/official-show policy remains authoritative.
-            noCarTimer=now; // Even undated accepted vehicles interrupt the effect once.
-            stopIdleArchPattern();
-            digitalWrite(redArchPin,LOW);digitalWrite(greenArchPin,HIGH);
+            // Show count acceptance immediately; synchronous SD verification follows.
+            noCarTimer=now;stopIdleArchPattern();
+            countTheCar(); // Green is set only after its dated count increment.
             publishMQTT(MQTT_PUB_BEAM_AB_MS,String(abFollow_ms));
             publishMQTT(MQTT_PUB_BEAM_B_BROKEN_MS,String(passage.bMs));
             publishMQTT(MQTT_PUB_TTP,String(timeToPassMS));
@@ -193,3 +202,6 @@ void detectCar() {
     // Compatibility state is observational; unqualified passages do not drive arches.
     currentCarDetectState=passage.active ? (firstBeamState && secondBeamState ? BOTH_BEAMS_HIGH:FIRST_BEAM_HIGH):WAITING_FOR_CAR;
 }
+
+// Only a qualified vehicle pauses the idle pattern, not raw beam activity.
+bool vehicleArchFeedbackActive() { return passage.qualified && !passage.completed; }

@@ -6,7 +6,7 @@ class DetectorIntegration(unittest.TestCase):
         # Compile the actual detection, debounce, debug and arch services. Count
         # persistence is covered by the existing real count-service suite.
         source=(ROOT/'src/services/VehicleDetector.cpp').read_text()
-        source=re.sub(r'void countTheCar\(\) \{.*?^\}', 'void countTheCar(){++totalDailyCars;noCarTimer=millis();}',source,count=1,flags=re.S|re.M)
+        source=re.sub(r'void countTheCar\(\) \{.*?^\}', 'void countTheCar(){++totalDailyCars;noCarTimer=millis();digitalWrite(redArchPin,LOW);digitalWrite(greenArchPin,HIGH);}',source,count=1,flags=re.S|re.M)
         header=r'''#pragma once
 #include <string>
 #include <cstring>
@@ -49,6 +49,7 @@ struct Client {int getBufferSize(){return 256;}bool setBufferSize(int){return tr
 String bootTimestamp="2026-11-17 12:00:00";
 String getRtcTimestamp(){return "2026-11-17 12:01:00";}
 void stopIdleArchPattern();
+bool vehicleArchFeedbackActive();
 #define topic_base_path "msb/traffic/CarCounter"
 #define MQTT_PUB_BEAM_A_STATE "beamA"
 #define MQTT_PUB_BEAM_B_STATE "beamB"
@@ -75,15 +76,20 @@ int main(){
  // Short walking-length overlap: no counts or arch writes.
  sample(1,0,20000);sample(1,1,20200);sample(0,1,20400);sample(0,0,20600);
  assert(totalDailyCars==26 && writes==0);
- forward(26000);assert(totalDailyCars==27 && noCarTimer>26000 && writes==2);
+ forward(26000);assert(totalDailyCars==27 && noCarTimer>26000 && writes==4);
  forward(32000);assert(totalDailyCars==28); // six seconds apart
+ // Count at B-clear even while A is held; never repeat until both clear.
+ sample(1,0,36000);sample(1,1,36200);sample(1,1,36800);
+ assert(pins[redArchPin]==HIGH && pins[greenArchPin]==LOW);
+ sample(1,0,37200);assert(totalDailyCars==29 && pins[redArchPin]==LOW && pins[greenArchPin]==HIGH);
+ sample(1,0,37500);assert(totalDailyCars==29);sample(0,0,38000);
  // Both held through stuck timeout: alarm is diagnostic, not a discard/reset.
  sample(1,0,40000);sample(1,1,40200);sample(1,1,102000);
- assert(totalDailyCars==28 && carStuckAlarmActive);
- sample(0,1,103000);sample(0,0,104000);assert(totalDailyCars==29 && !carStuckAlarmActive);
- sample(0,0,105000);assert(totalDailyCars==29);
+ assert(totalDailyCars==29 && carStuckAlarmActive);
+ sample(0,1,103000);sample(0,0,104000);assert(totalDailyCars==30 && !carStuckAlarmActive);
+ sample(0,0,105000);assert(totalDailyCars==30);
  unsigned before=events();handlePassageDebugCommand("msb/traffic/CarCounter/Config/passageDebug","OFF");
- forward(110000);assert(totalDailyCars==30 && events()==before);
+ forward(110000);assert(totalDailyCars==31 && events()==before);
  handlePassageDebugCommand("msb/traffic/CarCounter/Config/passageDebug","ON");resetPassageDebugConnection();assert(!passageDebug);
  assert(messages.back().payload=="OFF");
  std::cout<<"PASS: actual debounce/direction/count callback, reverse pair, walkers, six-second cars, stopped car, debug ON/OFF/reconnect and arch ownership\n";

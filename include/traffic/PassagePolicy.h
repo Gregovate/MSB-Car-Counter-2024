@@ -6,6 +6,7 @@ namespace traffic {
 // A transaction stays locked until both beams clear; alarms never expire a car.
 struct PassagePolicy {
     bool armed=false,active=false,started=false,finished=false,accepted=false;
+    bool qualified=false,completed=false;
     bool a=false,b=false,sawB=false,overlap=false;
     uint32_t start=0,last=0,aMs=0,bMs=0,overlapMs=0,overlapRun=0,maxOverlap=0,followMs=0;
     uint32_t beamMinimum=100,overlapMinimum=500;
@@ -16,7 +17,7 @@ struct PassagePolicy {
         if(!armed) {if(!nextA && !nextB) armed=true;return;}
         if(!active) {
             if(!nextA && !nextB) return;
-            active=started=true;accepted=false;start=last=now;
+            active=started=true;accepted=qualified=completed=false;start=last=now;
             a=nextA;b=nextB;sawB=nextB;overlap=nextA && nextB;
             aMs=bMs=overlapMs=overlapRun=maxOverlap=followMs=0;
             beamMinimum=beamMin;overlapMinimum=detectMin;
@@ -24,6 +25,8 @@ struct PassagePolicy {
             reason=nextA && !nextB ? "PENDING" : nextB && !nextA ? "REVERSE_B_FIRST":"AMBIGUOUS_START";
             return;
         }
+        // B-clear decides once; BOTH-clear is required only for rearming.
+        if(completed) {a=nextA;b=nextB;if(!a && !b) active=false;return;}
         uint32_t elapsed=now-last;last=now;
         if(a) aMs+=elapsed;
         if(b) bMs+=elapsed;
@@ -36,11 +39,15 @@ struct PassagePolicy {
             }
             if(a && !nextA && !sawB) reason="A_ONLY";
             if(!a && nextA) reason="AMBIGUOUS_REBREAK";
-            if(b && !nextB && nextA) reason="REVERSED_EXIT";
+
         }
+        bool bCleared=b && !nextB;
+        if(strcmp(reason,"PENDING")==0 && overlap && aMs>=beamMinimum &&
+            bMs>=beamMinimum && maxOverlap>=overlapMinimum) qualified=true;
         a=nextA;b=nextB;
-        if(a || b) return;
-        active=false;finished=true;
+        if((a || b) && (!bCleared || strcmp(reason,"PENDING")!=0)) return;
+        completed=finished=true;
+        if(!a && !b) active=false;
         if(strcmp(reason,"PENDING")!=0) return;
         if(!overlap) reason="NO_OVERLAP";
         else if(aMs<beamMinimum) reason="SHORT_BEAM_A";
