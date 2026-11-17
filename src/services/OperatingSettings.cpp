@@ -5,6 +5,21 @@ namespace {
 traffic::OperatingSettings settings;
 Preferences settingsPrefs;
 String settingsHealth="DEFAULTS_NOT_YET_CONFIGURED";
+// Preserve the last event after health recovers; broker retention survives reconnects.
+String lastSettingsRejection;
+uint32_t settingsRejectionCount=0;
+void recordSettingsRejection(const char* reason,int field,int receivedDate,const DateTime& now) {
+    char diagnostic[480];
+    snprintf(diagnostic,sizeof(diagnostic),
+        "{\"reason\":\"%s\",\"field\":%d,\"receivedIssuedDate\":%d,"
+        "\"acceptedIssuedDate\":%d,\"recordingYear\":%d,\"rtcReady\":%s,"
+        "\"rtcLocal\":\"%04d-%02d-%02d %02d:%02d:%02d\",\"uptimeMs\":%lu,\"rejectionCount\":%lu}",
+        reason,field,receivedDate,settings.issuedDate,recordingYear(),rtcReady ? "true":"false",
+        now.year(),now.month(),now.day(),now.hour(),now.minute(),now.second(),
+        static_cast<unsigned long>(millis()),static_cast<unsigned long>(++settingsRejectionCount));
+    lastSettingsRejection=diagnostic;
+    Serial.print("Operating settings rejected: ");Serial.println(lastSettingsRejection);
+}
 bool gateDevice() { return String(THIS_MQTT_CLIENT)=="espGateCounter"; }
 int settingsToday() {
     DateTime n=rtc.now();
@@ -74,6 +89,9 @@ void publishOperatingSettings() {
     publishMQTT((base+"extensionMinutes").c_str(),String(effectiveExtension()),true);
     publishMQTT((base+"alarmTimeoutMs").c_str(),String(settings.alarmMs),true);
     publishMQTT((base+"carDetectMs").c_str(),String(settings.detectMs),true);
+    // Publish evidence before health so warning consumers can retrieve its details.
+    if (lastSettingsRejection.length())
+        publishMQTT((String(topic_base_path)+"/System/settingsLastRejection").c_str(),lastSettingsRejection,true);
     publishMQTT((String(topic_base_path)+"/System/settingsHealth").c_str(),settingsHealth,true);
     publishMQTT((String(topic_base_path)+"/System/summaryExport").c_str(),summaryExportStatus(),true);
 }
@@ -107,17 +125,27 @@ bool handleOperatingCommand(const char* topic,const char* message) {
     }
     if (String(topic)!=String(topic_base_path)+"/Config/operatingSettings") return false;
     traffic::OperatingSettings proposed;
-    if (!traffic::parseOperatingSettings(message,proposed,recordingYear()) ||
-        proposed.issuedDate>settingsToday() || proposed.issuedDate<settings.issuedDate) {
+    traffic::OperatingParseDiagnostic diagnostic;
+    // One RTC snapshot makes the comparison and diagnostic describe the same instant.
+    DateTime receivedAt=rtc.now();
+    int receivedToday=receivedAt.year()*10000+receivedAt.month()*100+receivedAt.day();
+    bool parsed=traffic::parseOperatingSettings(message,proposed,recordingYear(),&diagnostic);
+    const char* rejection=!parsed ? diagnostic.reason :
+        proposed.issuedDate>receivedToday ? "FUTURE_ISSUED_DATE" :
+        proposed.issuedDate<settings.issuedDate ? "STALE_ISSUED_DATE" : nullptr;
+    if (rejection) {
+        recordSettingsRejection(rejection,parsed ? 6:diagnostic.field,diagnostic.issuedDate,receivedAt);
         settingsHealth="REJECTED_INVALID_SETTINGS";publishOperatingSettings();return true;
     }
     // Once late admission begins, an extension cannot be accidentally shortened
     // by replaying an older retained snapshot; next date expires it naturally.
     if (proposed.issuedDate==settingsToday() && effectiveExtension()>proposed.extension &&
         rtc.now().hour()*60+rtc.now().minute()>=settings.end) {
+        recordSettingsRejection("EXTENSION_REDUCTION",5,proposed.issuedDate,receivedAt);
         settingsHealth="REJECTED_EXTENSION_REDUCTION";publishOperatingSettings();return true;
     }
     if (proposed.extension>effectiveExtension() && rtc.now().hour()*60+rtc.now().minute()>=effectiveShowEnd()) {
+        recordSettingsRejection("EXTENSION_AFTER_CUTOFF",5,proposed.issuedDate,receivedAt);
         settingsHealth="REJECTED_EXTENSION_AFTER_CUTOFF";publishOperatingSettings();return true;
     }
     if (settingsText(proposed)!=settingsText(settings)) {

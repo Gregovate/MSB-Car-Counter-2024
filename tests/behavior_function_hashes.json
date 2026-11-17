@@ -84,8 +84,8 @@
   "effectiveExtension": "485917ffe4720610561b7b95322a6c4bc21496459a0c7f61374613ca7df12056",
   "effectiveShowEnd": "c61ab3885d2e73da2d7b20b96e2b1099cb36741bb3f1086af1b4573a329b82fb",
   "officialShowNow": "343f126d6773817b97f6e3e369f0e4281596c593e3dd893241b53878b68194d7",
-  "publishOperatingSettings": "a32ec86990cde2181b61c98fdeee086a84dec20132e77bc4e24f36c01733b286",
-  "handleOperatingCommand": "b4381f343ba4ca48b87eb5c9939977ea03c0c7f5c824b322d2bcfb65cc3da60b",
+  "publishOperatingSettings": "7548c0d6c936d1ae810e13261230fc945ebafde66aff740ef5c9482805073fff",
+  "handleOperatingCommand": "b486ba33d3acf507cdec2398089d28dac0c11cad6f880d823031b93f1dc6dde4",
   "serviceShowSchedule": "f2bcc69b60c8cbeb3f409e9d21ee9e8b3b1446361997e01a10437d356b81be10",
   "officialSeriesCanStart": "98476aaf3f694dcad4a15442f4ab433c429bf62ee01483470c139276ac414713",
   "parseCountCorrection": "1a0fd79aebef48323665b8df97b50204e002c5c8c2698c03562adac66b0ad024",
@@ -105,5 +105,6 @@
   "configureAdditionalWifiAccessPoints": "5b658e56bf999194665024e245a24760d0a16aba67a4e506a8e3a5b9c2ea140f",
   "updateDisplay": "3ed25406408b6046f7922959de3e34a88ac268f21255380078d4b43ae0ddbd06",
   "loadPendingVehicles": "0865dc6f4855602962a018b2ab7fbb5e51e6399ad85f0668098dab8f67e836c4",
-  "recordPendingVehicle": "956f34d0f200fac3875278dc33c89213e391a76e8ece9dd2f95ff915ec09b123"
+  "recordPendingVehicle": "956f34d0f200fac3875278dc33c89213e391a76e8ece9dd2f95ff915ec09b123",
+  "recordSettingsRejection": "4da347c7aad7486fa92e4780876a7c55150c40b0a84d8fb5c4163197f3d7b632"
 }

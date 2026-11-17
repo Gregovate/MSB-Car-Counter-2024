@@ -25,6 +25,46 @@ int main() {
         "1,1020,1260,10,25,0,20261127,60000x,100,20261231,20261224,2026",
         "1,1020,1260,10,25,0,20261127,60000,100,20261231,20261224,2026,7"})
         assert(!traffic::parseOperatingSettings(invalid,parsed,2026));
+    // Reproduce a next-day HA transaction arriving before RTC local midnight.
+    legacy();rtc.current=DateTime(2026,11,16,23,59,58);configure(false);
+    settings.issuedDate=20261116;
+    const char* settingsTopic="msb/traffic/TestCounter/Config/operatingSettings";
+    const char* nextDay="1,1020,1260,-1,10,0,20261117,60000,500,20261231,20261224,2026";
+    auto beforeDisk=disk;int beforeDaily=totalDailyCars,beforeShow=totalShowCars;
+    messages.clear();messageRetained.clear();
+    handleOperatingCommand(settingsTopic,nextDay);
+    assert(settingsHealth=="REJECTED_INVALID_SETTINGS");
+    assert(lastSettingsRejection.find("FUTURE_ISSUED_DATE")!=std::string::npos);
+    assert(lastSettingsRejection.find("\"receivedIssuedDate\":20261117")!=std::string::npos);
+    assert(lastSettingsRejection.find("\"acceptedIssuedDate\":20261116")!=std::string::npos);
+    assert(lastSettingsRejection.find("2026-11-16 23:59:58")!=std::string::npos);
+    assert(disk==beforeDisk && totalDailyCars==beforeDaily && totalShowCars==beforeShow);
+    bool retainedEvidence=false;
+    for(size_t i=0;i<messages.size();++i)
+        if(messages[i].first=="msb/traffic/TestCounter/System/settingsLastRejection")
+            retainedEvidence=messageRetained[i] && messages[i].second==lastSettingsRejection;
+    assert(retainedEvidence);
+    String evidence=lastSettingsRejection;
+    rtc.current=DateTime(2026,11,17,0,5);handleOperatingCommand(settingsTopic,nextDay);
+    assert(settingsHealth=="OK" && settings.issuedDate==20261117);
+    assert(lastSettingsRejection==evidence); // Valid retries cannot erase the evidence.
+    assert(totalDailyCars==beforeDaily && totalShowCars==beforeShow);
+    beforeDisk=disk;
+    handleOperatingCommand(settingsTopic,"1,1020,1260,-1,10,0,20261116,60000,500,20261231,20261224,2026");
+    assert(lastSettingsRejection.find("STALE_ISSUED_DATE")!=std::string::npos);
+    assert(settings.issuedDate==20261117 && disk==beforeDisk);
+    handleOperatingCommand(settingsTopic,"1,1020,1260,-1,10,0,20261117,60000,500,20261231,20261224,2025");
+    assert(lastSettingsRejection.find("RECORDING_YEAR_MISMATCH")!=std::string::npos);
+    assert(settings.issuedDate==20261117 && disk==beforeDisk);
+    traffic::OperatingParseDiagnostic detail;
+    assert(!traffic::parseOperatingSettings("1,x",parsed,2026,&detail));
+    assert(std::string(detail.reason)=="EXPECTED_INTEGER" && detail.field==1);
+    assert(!traffic::parseOperatingSettings(nullptr,parsed,2026,&detail));
+    assert(std::string(detail.reason)=="MISSING_PAYLOAD");
+    assert(!traffic::parseOperatingSettings("1,1020,1260,-1,10,0,20261117,60000,3001,20261231,20261224,2026",parsed,2026,&detail));
+    assert(std::string(detail.reason)=="INVALID_DETECT_TIME" && detail.field==8);
+    assert(!traffic::parseOperatingSettings("1,1020,1260,-1,10,0,20260230,60000,500,20261231,20261224,2026",parsed,2026,&detail));
+    assert(std::string(detail.reason)=="INVALID_DATE" && detail.field==6);
     for(bool gate:{false,true}) for(int extension:{0,15,30}) {
         legacy();rtc.current=DateTime(2026,11,27,4);noteFreshCountFolder();assert(restoreCountState());
         configure(gate,extension);
