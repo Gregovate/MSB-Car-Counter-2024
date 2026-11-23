@@ -46,13 +46,12 @@ void countTheCar() {
     // Do this before synchronous SD/export work can delay visible feedback.
     digitalWrite(redArchPin,LOW);digitalWrite(greenArchPin,HIGH);
 
-    // Commit this vehicle as one dated daily/show/hourly checkpoint before
-    // MQTT or the web-facing files can delay persistence.
-    persistCountState();
-    // Reporting continues if SD fails; countPersistence identifies durability.
+    // Publish the accepted RAM count immediately. SD durability is reported
+    // separately; a publication does not claim checkpoint success.
     publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
     publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars), true);
     publishMQTT(topic, String(hourlyCount[currentHour]), true);
+    persistCountState(); // Retain per-vehicle verified reboot recovery.
     saveDailyTotal();
     saveShowTotal();
     saveHourlyCounts();
@@ -203,5 +202,9 @@ void detectCar() {
     currentCarDetectState=passage.active ? (firstBeamState && secondBeamState ? BOTH_BEAMS_HIGH:FIRST_BEAM_HIGH):WAITING_FOR_CAR;
 }
 
-// Only a qualified vehicle pauses the idle pattern, not raw beam activity.
-bool vehicleArchFeedbackActive() { return passage.qualified && !passage.completed; }
+// Occupancy owns the arches, even before qualification and after B-clear.
+// An alarm never releases an unresolved passage to the idle animation.
+bool vehicleArchFeedbackActive() {
+    return passage.active || stableFirstBeamState || stableSecondBeamState ||
+        digitalRead(firstBeamPin) || digitalRead(secondBeamPin) || carStuckAlarmActive;
+}

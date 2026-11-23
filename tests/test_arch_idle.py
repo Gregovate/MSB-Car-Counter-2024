@@ -10,7 +10,8 @@ class IdleArches(unittest.TestCase):
 #define HIGH 1
 #define LOW 0
 unsigned long ticks=0,noCarTimer=0,patternModeMillis=0;
-bool vehicleArchFeedbackActive(){return false;}
+bool occupied=false;
+bool vehicleArchFeedbackActive(){return occupied;}
 unsigned long millis(){return ticks;}
 enum Pattern {INITIAL_OFF,RED_ON,GREEN_ON,BOTH_ON,BOTH_OFF,RED_OFF_GREEN_ON,GREEN_OFF_RED_ON};
 Pattern currentPatternState=INITIAL_OFF;
@@ -27,11 +28,11 @@ int main(){
  ticks=29999;serviceIdleArchPattern();assert(writes==0);
  ticks=30000;serviceIdleArchPattern();assert(writes==2);
  ticks+=500;serviceIdleArchPattern();assert(pins[redArchPin]==LOW && pins[greenArchPin]==HIGH);
- // Unqualified beam activity and alarms leave the idle sequence running.
- pins[firstBeamPin]=HIGH;stableSecondBeamState=true;carStuckAlarmActive=true;
- auto n=writes;ticks+=500;serviceIdleArchPattern();assert(writes>n && noCarTimer==0);
- // Only accepted passage code resets noCarTimer and pattern state.
- noCarTimer=ticks;stopIdleArchPattern();n=writes;
+ // Raw/unqualified occupancy and alarms suspend idle for the full stop.
+ occupied=true;pins[firstBeamPin]=HIGH;stableSecondBeamState=true;carStuckAlarmActive=true;
+ auto n=writes;ticks+=600000;serviceIdleArchPattern();assert(writes==n && noCarTimer==ticks);
+ ticks+=500;serviceIdleArchPattern();assert(writes==n && noCarTimer==ticks);
+ occupied=false;pins[firstBeamPin]=LOW;stableSecondBeamState=false;carStuckAlarmActive=false;
  ticks+=29999;serviceIdleArchPattern();assert(writes==n);
  ticks+=1;serviceIdleArchPattern();assert(writes>n);
 
@@ -42,6 +43,6 @@ int main(){
     def test_loop_prioritizes_detection_without_show_gate(self):
         s=(ROOT/'src/main.cpp').read_text()
         self.assertIn('serviceIdleArchPattern();',s)
-        self.assertLess(s.index('serviceIdleArchPattern();'),s.index('detectCar();'))
+        self.assertLess(s.index('detectCar();'),s.index('serviceIdleArchPattern();'))
         self.assertNotIn('if (showTime && (millis() - noCarTimer)',s)
 if __name__=='__main__':unittest.main()

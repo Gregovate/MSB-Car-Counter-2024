@@ -38,7 +38,9 @@ struct PassagePolicy {
                 else {sawB=true;followMs=now-start;overlap=true;}
             }
             if(a && !nextA && !sawB) reason="A_ONLY";
-            if(!a && nextA) reason="AMBIGUOUS_REBREAK";
+            // A may clear/rebreak at a trailer or axle gap while B is still held.
+            // Once forward overlap is established, preserve this same vehicle.
+            if(!a && nextA && !sawB) reason="AMBIGUOUS_REBREAK";
 
         }
         bool bCleared=b && !nextB;

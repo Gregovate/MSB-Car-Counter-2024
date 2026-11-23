@@ -32,6 +32,17 @@ int main(){
  assert(p.active && !p.finished);update(p,false,true,180100);update(p,false,false,180300);
  assert(p.finished && p.accepted);update(p,false,false,180400);assert(!p.finished);
  update(p,true,true,190000);update(p,false,false,191000);assert(!p.accepted);
+ // Forward vehicle at 17:33:44 holds for 582 s; A may clear/rebreak
+ // while B remains occupied. Qualification and the one eventual count survive.
+ PassagePolicy truck;update(truck,false,false,0);update(truck,true,false,100);
+ update(truck,true,true,400);update(truck,true,true,1200);
+ update(truck,false,true,60000);update(truck,true,true,120000);
+ update(truck,true,true,582000);assert(truck.active && truck.qualified && !truck.finished);
+ update(truck,false,true,582100);update(truck,false,false,582200);
+ assert(truck.finished && truck.accepted);update(truck,false,false,582300);assert(!truck.finished);
+ // Repeated close arrivals with 100 ms both-clear intervals: no cooldown.
+ PassagePolicy queue;
+ for(unsigned i=0;i<100;++i) forward(queue,i*1300U);
  // Startup with a blocked beam cannot count a partial event.
  PassagePolicy boot;update(boot,true,false,0);update(boot,true,true,1000);
  update(boot,false,false,2000);assert(!boot.finished);forward(boot,3000);

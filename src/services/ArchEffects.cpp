@@ -70,11 +70,14 @@ void playPattern() {
     }
 }
 
-// Only an accepted vehicle pauses the idle effect. Raw/unqualified beam
-// activity (including rejected pedestrians and reverse passages) leaves it alone.
+// Every occupied or unresolved passage suspends idle output. Restart the
+// full idle interval after the last occupied observation, including long stops.
 void stopIdleArchPattern() {
     currentPatternState=INITIAL_OFF;patternModeMillis=millis();
 }
 void serviceIdleArchPattern() {
-    if(!vehicleArchFeedbackActive() && millis()-noCarTimer>=30000UL) playPattern();
+    if(vehicleArchFeedbackActive()) {
+        noCarTimer=millis();stopIdleArchPattern();return;
+    }
+    if(millis()-noCarTimer>=30000UL) playPattern();
 }

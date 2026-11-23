@@ -23,7 +23,7 @@
   "tests/count_recovery_test.cpp": "3a1783d4601871cbb45d67b3f8d9dc0d6395bcec2d3d260dba38cef20b556a34",
   "tests/test_count_recovery.py": "bf3071fb3b05cfb80ba9d784d59acc5579c3bc9ee8ef9f4b9fbc7b7e3dc1afa9",
   "tests/test_configuration_ownership.py": "365c202e2adfb3157ad6772e1045997f5a192134186b76fac2ca934bf4c28492",
-  "tests/test_hourly_contract.py": "7b7bc9358236c1eed2661b95f1489804e75e5296705e34fd6b6cb140f9e19eec",
+  "tests/test_hourly_contract.py": "f7c2c7520bf8f09f5f6c242ce6030116edac403dd9cf3e40339e71e4a8fe1f15",
   "include/traffic/OperatingPolicy.h": "93fed668dae7b14191837e36770d58dea51b198b43ae7ce6554ab18801d0e6b5",
   "include/traffic/OperatingSettings.h": "f77a76f6c7003e02b44bd277744fae94f7303fe8a0c9328f681103ce3d62372c",
   "src/services/OperatingSettings.cpp": "b2c4e5cd1b27df1bf3ac17611df6620872cc2374cd4efe99bebae9233cabdf75",

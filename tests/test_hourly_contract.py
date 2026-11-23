@@ -51,8 +51,9 @@ int main(){
         start=loop.index('updateRecordingCalendar();')
         service=loop.index('serviceCountState();')
         self.assertLess(start,service)
-        for call in ['KeepMqttAlive();','timeTriggeredEvents();','detectCar();']:
+        for call in ['KeepMqttAlive();','timeTriggeredEvents();']:
             self.assertLess(service,loop.index(call))
+        self.assertLess(loop.index('detectCar();'),start)
         mqtt=(ROOT/'src/services/MqttService.cpp').read_text()
         self.assertIn('publishHourlySnapshot();',function(mqtt,'KeepMqttAlive'))
         for p in (ROOT/'src').rglob('*.cpp'):
