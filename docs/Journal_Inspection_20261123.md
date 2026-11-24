@@ -51,3 +51,5 @@ failure and corrupted SD readback, and verify there is no erase/write route.
 ESP32 compile/link and IRAM audit use a disposable nonfunctional OTA interface;
 only the operator's licensed build is deployable. PowerShell execution itself
 requires the operator's Windows environment and was not run on this Linux host.
+
+Follow-up: controlled initialization of the exact verified region is documented in [Journal provisioning](Journal_Provisioning_20261123.md) for Car .21. The .20 inspection service itself remains read-only.

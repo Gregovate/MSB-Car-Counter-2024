@@ -1,4 +1,5 @@
 #include "traffic/Firmware.h"
+#include "traffic/JournalProvisioning.h"
 #include "secrets.h"
 
 // Extracted from the production baseline; behavior fixes are separate changes.
@@ -146,6 +147,7 @@ void MQTTreconnect() {
         // Flush queued messages now that we're back online
         while (!publishQueue.empty()) publishQueue.pop();
         KeepMqttAlive();
+        publishJournalProvisioningState();
         publishRecordingCalendar();
 
         return;

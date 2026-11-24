@@ -8,6 +8,9 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.21 — 2026-11-23
+ *   - Provision only the exact inspected legacy image after SHA256 backup checks.
+ *   - Preserve verified SD counts and both OTA slots; receipt protects erase resume.
  * 25.12.03.2-modular-test.20 — 2026-11-23
  *   - Inspect rejected journal DATA bytes and preserve a verified SD backup.
  *   - Add read-only diagnostics independent of SD UI; never format unknown data.
@@ -104,10 +107,11 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.20";
+const char FWVersion[] = "25.12.03.2-modular-test.21";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"
+#include "traffic/JournalProvisioning.h"
 
 void setup() {
     Serial.begin(115200);
@@ -337,7 +341,8 @@ void loop() {
     //     KeepMqttAlive();
     // }
 
-    serviceJournalInspection();
+    serviceJournalProvisioning();
+    if(!journalProvisioningActive())serviceJournalInspection();
     detectCar();
     serviceTrafficJournal();
     detectCar();

@@ -2,7 +2,7 @@
   "src/services/TemperatureSensor.cpp": "af6e01465318aee957af9c90c3a62a1302aed2501261ddad6e3353e600474bf5",
   "include/traffic/EnvironmentService.h": "5d338af59667c32f3cf5df40bdd5ff1dafe32608b8f6e5edbf04c4f8c0483edd",
   "src/services/RecordingCalendar.cpp": "c46ca4072eeba483b0d8c3a86f72af18d95d44723af7593e0ac47a99684528a1",
-  "tests/count_stubs/traffic/Firmware.h": "6665f71f6e728e928e017e9105a488f2beb54129fd56eb8d003d922ba1220b53",
+  "tests/count_stubs/traffic/Firmware.h": "ebe98c1b0c25b2db0750b2d7404b5d471e1742ef0d3fbba07758b99cdc248bb0",
   "include/traffic/OperatingPolicy.h": "93fed668dae7b14191837e36770d58dea51b198b43ae7ce6554ab18801d0e6b5",
   "src/services/OperatingSettings.cpp": "37743250e23ae89892e58a0a471f3378b549d082bb5ce5d479fac41fed473c3e",
   "src/services/ShowSummary.cpp": "35da6187914f91eca9fe257cb1f2514333fd4fef9f8c816a141a80c67d47c757",
@@ -11,5 +11,14 @@
   "src/services/JournalInspection.cpp": "53ea30f446d0a9b81de5745f0225645362ae0111d1680fc291c62283c7cf8acd",
   "tools/Collect-CarJournalInspection.ps1": "a608f0d35e3d3a7d04f2b4424aebcb6da6569573307ae7f1789e84232d526590",
   "tests/test_journal_inspection.py": "958243901907d700d58be9099ab973f875ebc02b4d05b570dea1d2547031c4b0",
-  "docs/Journal_Inspection_20261123.md": "ac8d5111650f59efcb30f845755843a5c67433a8f392567fa522c030487cf154"
+  "docs/Journal_Inspection_20261123.md": "b709a20e43c6695d90632c8e6b96b95ac6b714e9871810b4730f85a49cf93e92",
+  "include/traffic/JournalProvisioning.h": "7718f003a8a82d72b0b0c8906336ed5fc073bbe3c486205946067e2b8385cc7e",
+  "include/traffic/ProvisioningPolicy.h": "9c34db4eb79f77a136a8fc87152910ed009c01cc8bc89d4366b55ee3cbba3150",
+  "src/services/JournalProvisioning.cpp": "0ed530370564ec1a26d783cff1fd0aab320dae434468a49ea785786480063fa5",
+  "tests/test_journal_provisioning.py": "b1729774897d07f108c7cd6a46107917b82088b735e05c34662ac65e82a4b8a0",
+  "docs/Journal_Provisioning_20261123.md": "9770f12684ce78bf60fb2d6df14e4e20e1279a415e0a4734e43dd42f3e672a8a",
+  "tests/provision_stubs/esp_partition.h": "d9717102e569756225296a42da5f8dabb26c564ddc97ddb72202f5443fc23771",
+  "tests/provision_stubs/Preferences.h": "d05ff4644bf55f8fbd026fdfe585acd8327bddd7102aff2733ee557d1d3a63f4",
+  "tests/provision_stubs/esp_ota_ops.h": "2e4d90cc3d2452507d8eea54a55f77b8f9080db1c9dda1180624e172bfa40967",
+  "tests/provision_stubs/mbedtls/sha256.h": "7175eb8f596083a16da023adda9f02a4dfb2749773ebe45bd7f6a0003f9c2c6d"
 }

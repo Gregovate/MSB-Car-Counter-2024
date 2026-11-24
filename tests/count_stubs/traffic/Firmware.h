@@ -45,10 +45,21 @@ inline struct SerialMock { template<class T>void print(T){} template<class T>voi
 #define FILE_WRITE "w"
 inline std::map<std::string,std::string> disk;
 inline std::string failWrite, failRead, failRename;
+inline int nativeBackupReadMutateOn=-1,nativeBackupReadCount=0;
 struct File {
     std::string path; bool valid=false; size_t pos=0;
     operator bool() const {return valid;}
     size_t position() const {return pos;}
+    size_t directoryCursor=0;
+    bool seek(size_t n){if(n>size())return false;pos=n;return true;}
+    bool isDirectory()const{return path.size()>=24 && path.find("/TrafficJournalInspection")!=std::string::npos && path.find(".bin")==std::string::npos;}
+    const char* name()const{return path.c_str();}
+    File openNextFile(){
+        size_t index=0;for(auto& entry:disk){
+            if(entry.first.rfind(path+"/",0)!=0)continue;
+            if(index++==directoryCursor){++directoryCursor;return {entry.first,true};}
+        }return {};
+    }
     size_t size() const {return valid ? disk[path].size() : 0;}
     size_t write(const uint8_t* p,size_t n) {
         size_t written=path==failWrite ? n/2 : n;
@@ -56,7 +67,9 @@ struct File {
     }
     size_t read(uint8_t* p,size_t n) {
         if(path==failRead)return 0;
-        n=std::min(n,size()-pos);memcpy(p,disk[path].data()+pos,n);pos+=n;return n;
+        n=std::min(n,size()-pos);memcpy(p,disk[path].data()+pos,n);pos+=n;
+        if(path.find("/TrafficJournalInspection/")!=std::string::npos && ++nativeBackupReadCount==nativeBackupReadMutateOn && n)p[0]^=2;
+        return n;
     }
     size_t print(const char* s){return write(reinterpret_cast<const uint8_t*>(s),strlen(s));}
     size_t print(const String& s){return print(s.c_str());}
@@ -184,7 +197,8 @@ inline uint32_t journalCorrectionNonce(){return nativeJournalEnabled?nativeJourn
 inline void carryJournalPending(uint32_t n){if(nativeJournalEnabled)nativeJournal.carryPending(n);}
 inline bool appendTrafficCorrection(const traffic::CountRecord& c,uint32_t n){if(!nativeJournalEnabled)return false;traffic::JournalEvent e{};e.kind=6;e.correctionEpoch=n;return nativeJournal.append(e,c)==traffic::JournalAppend::Durable;}
 
-inline const char* trafficJournalHealth(){return nativeJournalEnabled?"OK":"NOT_INITIALIZED";}
+inline const char* nativeJournalHealthOverride=nullptr;
+inline const char* trafficJournalHealth(){return nativeJournalHealthOverride?nativeJournalHealthOverride:nativeJournalEnabled?"OK":"NOT_INITIALIZED";}
 
 inline void activateTrafficVehicleEvent(){}
 #ifndef TRAFFIC_OPERATING_TEST
