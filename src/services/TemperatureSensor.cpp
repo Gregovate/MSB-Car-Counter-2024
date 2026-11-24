@@ -33,9 +33,9 @@ void publishEnvironmentState() {
     char diagnostic[512];
     snprintf(diagnostic,sizeof(diagnostic),
         "{\"status\":\"%s\",\"failures\":%lu,\"consecutiveFailures\":%lu,\"hasValidReading\":%s,\"lastSuccessUptimeMs\":%lu,"
-        "\"pin\":%d,\"type\":\"DHT%d\",\"lastReadUptimeMs\":%lu,\"lastReadTempF\":%s,\"lastReadHumidity\":%s,\"rejection\":\"%s\",\"encoding\":\"%s\"}",
+        "\"pin\":%d,\"type\":\"DHT%d\",\"lastReadUptimeMs\":%lu,\"lastReadTempF\":%s,\"lastReadHumidity\":%s,\"rejection\":\"%s\",\"encoding\":\"%s\",\"samplePersistence\":\"%s\"}",
         fresh ? "OK":dhtCurrentValid ? "STALE":dhtHealth,dhtFailures,dhtConsecutiveFailures,
-        dhtHasValidReading ? "true":"false",lastDhtSuccess,DHTPIN,DHTTYPE,lastDhtAttempt,rawTemperature,rawHumidity,dhtRejection,dhtEncodingCorrected?"TWOS_COMPLEMENT_COMPAT":"STANDARD");
+        dhtHasValidReading ? "true":"false",lastDhtSuccess,DHTPIN,DHTTYPE,lastDhtAttempt,rawTemperature,rawHumidity,dhtRejection,dhtEncodingCorrected?"TWOS_COMPLEMENT_COMPAT":"STANDARD",environmentPersistenceStatus());
     publishMQTT((String(topic_base_path)+"/System/dhtHealth").c_str(),String(diagnostic),true);
 }
 

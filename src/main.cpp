@@ -8,6 +8,10 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.28 — 2026-11-24
+ *   - Preserve Car outdoor temperature sample averages across reboots in NVS.
+ *   - Keep saved report temperatures when no new valid average is available.
+ *   - Label Gate enclosure temperature as unofficial backup; keep common modules.
  * 25.12.03.2-modular-test.27 — 2026-11-24
  *   - Restore shared daily report views, date selection and copy/print for email.
  *   - Replace deprecated response API; guard post-backup closed-snapshot deletion.
@@ -126,7 +130,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.27";
+const char FWVersion[] = "25.12.03.2-modular-test.28";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"

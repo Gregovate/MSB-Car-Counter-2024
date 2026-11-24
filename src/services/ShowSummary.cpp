@@ -1,4 +1,5 @@
 #include "traffic/Firmware.h"
+#include <stdlib.h>
 
 namespace {
 const char* summaryHealth="NOT_DUE";
@@ -19,6 +20,24 @@ bool summaryReplace(const String& path,const String& text) {
     if (recordingRename(pending,path)) return true;
     if (SD.exists(previous)) recordingRename(previous,path);
     return false;
+}
+String summaryCell(const String& line,unsigned column) {
+    int start=0;
+    for(unsigned i=0;i<column;++i){int end=line.indexOf(',',start);if(end<0)return "";start=end+1;}
+    int end=line.indexOf(',',start);return end<0?line.substring(start):line.substring(start,end);
+}
+String savedSummaryTemperature(const String& path,const String& date) {
+    File f=recordingOpen(path,FILE_READ);if(!f || f.size()>65536){f.close();return "";}
+    String header=f.readStringUntil('\n');header.trim();
+    if(summaryCell(header,8)!="DailyAvgTemp"){f.close();return "";}
+    while(f.available()) {
+        String line=f.readStringUntil('\n');line.trim();
+        if(!line.startsWith(date+","))continue;
+        String text=summaryCell(line,8);text.trim();char* end=nullptr;
+        const float value=strtof(text.c_str(),&end);
+        if(text.length() && end && !*end && isfinite(value) && value>=-40 && value<=120){f.close();return text;}
+    }
+    f.close();return "";
 }
 bool upsertSummary(const String& path,const String& header,const String& date,const String& row) {
     // Recovery precedes any initialization. The prior complete CSV survives
@@ -70,6 +89,15 @@ bool writeOfficialSummaries() {
     // Missing is blank, not 0 F. Weight all valid official-window samples equally.
     float average=0;char averageText[24]="";
     if(showTemperatureAverage(average)) snprintf(averageText,sizeof(averageText),"%.1f",average);
+    else {
+        // Reboot/no valid samples must not erase an already exported average.
+        // Same date and validated schema/value only; never substitute today's
+        // live reading or another counter's enclosure temperature for a night.
+        for(const char* name:{"ShowSummary.csv","ShowSummary.csv.previous","ShowSummaryBuckets.csv","ShowSummaryBuckets.csv.previous"}) {
+            String saved=savedSummaryTemperature(summaryPath(name),String(date));
+            if(saved.length()){snprintf(averageText,sizeof(averageText),"%s",saved.c_str());break;}
+        }
+    }
     char suffix[48];
     if(extension) snprintf(suffix,sizeof(suffix),",%u,%d",officialHourly[21],extension);
     else snprintf(suffix,sizeof(suffix),",,");
