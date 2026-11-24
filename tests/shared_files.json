@@ -45,5 +45,8 @@
   "tests/test_journal_integration.py": "589e7538c459ec4a8993b2e03c85de88e6efe1af92a02ecea12b734d8d531c7f",
   "tests/test_sd_display.py": "96441d5f99301070d1fae74da0e31a8cd1091adaa4e8350b302a557409122f84",
   "tests/test_sd_health_recovery.py": "452e003d720e8ee04a8f64a007ec83189df619eebf62faf3a69ae8a9049e2519",
-  "docs/Traffic_Journal_Release_20261123.md": "ee85dbac8d109e547fb72bdc6df223335d7373b41353051ed197fa5cf662d0ef"
+  "docs/Traffic_Journal_Release_20261123.md": "ee85dbac8d109e547fb72bdc6df223335d7373b41353051ed197fa5cf662d0ef",
+  "include/traffic/DhtCompatibility.h": "768f6b0fec520c0cadf582eede5f3bd4f09d276c4f948db593ffe30102c442c7",
+  "tests/dht_compatibility_test.cpp": "347632364c49821c9e29ea1689e119d1afab5a513044f13c964f6c0e232e3d69",
+  "tests/test_dht_compatibility.py": "52fc016ff72023c93f9883b9b6900a8bf49baad7c893b091e24969d5cec6102f"
 }

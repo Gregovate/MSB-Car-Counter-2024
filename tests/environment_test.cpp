@@ -58,6 +58,12 @@ int main() {
     assert(!traffic::validEnvironment(INFINITY,50));
     assert(!traffic::validEnvironment(-998,50));
     assert(!traffic::validEnvironment(-999,50));
+    // Actual sensor path must accept the observed negative-encoding packet.
+    ticks=480000;dht.temperature=-5860.66f;dht.rh=66.8f;readTempandRH();
+    assert(fabs(tempF-26.42f)<.01f && dhtCurrentValid && dhtEncodingCorrected);
+    publishEnvironmentState();
+    assert(messages.back().second.find("TWOS_COMPLEMENT_COMPAT")!=std::string::npos);
+    assert(lastRawTemperature==dht.temperature);
     // No valid samples after reboot: CSV field must be blank, never invented 0.
     legacy();rtc.current=DateTime(2026,11,29,22);configure(false);assert(restoreCountState());officialCountsComplete=true;
     environmentSamples={};assert(writeOfficialSummaries());

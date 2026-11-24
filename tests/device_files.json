@@ -1,5 +1,5 @@
 {
-  "src/services/TemperatureSensor.cpp": "d910c23bc9e3a572ab5125678eda0f88e58817092925a69cde58cbd9b34df507",
+  "src/services/TemperatureSensor.cpp": "bc12d444a7d77cfc4111eb41781646f74fe33c3a154d146e19a765b0f6493c3c",
   "include/traffic/EnvironmentService.h": "5d338af59667c32f3cf5df40bdd5ff1dafe32608b8f6e5edbf04c4f8c0483edd",
   "src/services/RecordingCalendar.cpp": "c46ca4072eeba483b0d8c3a86f72af18d95d44723af7593e0ac47a99684528a1",
   "tests/count_stubs/traffic/Firmware.h": "f314b983a96bef2d7dda2e8ed6ab60a7bb2252d08e12ef27b8f43f79d3094392",
@@ -22,5 +22,6 @@
   "tests/provision_stubs/esp_ota_ops.h": "2e4d90cc3d2452507d8eea54a55f77b8f9080db1c9dda1180624e172bfa40967",
   "tests/provision_stubs/mbedtls/sha256.h": "7175eb8f596083a16da023adda9f02a4dfb2749773ebe45bd7f6a0003f9c2c6d",
   "docs/DHT_Investigation_20261123.md": "034d46e305b3445f33d0d7d93ad2eaaf1da9a2740814aca01d5634e8a3796658",
-  "tests/environment_test.cpp": "520c8e3d96f8712c1a1852f66bc82f2b50d6b1ea12ac92b72f1372bc0f4b994b"
+  "tests/environment_test.cpp": "bcd62792b7f00200fa4ac6cc5a8bf129feb373a2a1fbb4b792a7d304d412483f",
+  "docs/DHT_Compatibility_20261123.md": "41b87c59bedf2239182d2108ff061bba2532d28af3f8b0d40fd2e58dc90af9ae"
 }

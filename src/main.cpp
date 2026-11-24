@@ -8,6 +8,9 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.23 — 2026-11-23
+ *   - Decode bounded DHT22 two's-complement negative-temperature variants.
+ *   - Preserve raw diagnostics, standard encoding, counting and journal paths.
  * 25.12.03.2-modular-test.22 — 2026-11-23
  *   - Report raw DHT readings, GPIO and exact rejection reason for sensor failures.
  *   - Preserve existing validation, averaging, detector and journal behavior.
@@ -110,7 +113,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.22";
+const char FWVersion[] = "25.12.03.2-modular-test.23";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"

@@ -1,5 +1,6 @@
 #include "traffic/Firmware.h"
 #include "traffic/EnvironmentPolicy.h"
+#include "traffic/DhtCompatibility.h"
 
 namespace {
 bool dhtAttempted=false,dhtHasValidReading=false,dhtCurrentValid=false;
@@ -8,6 +9,7 @@ unsigned long dhtFailures=0,dhtConsecutiveFailures=0;
 const char* dhtHealth="WARMING_UP";
 float lastRawTemperature=NAN,lastRawHumidity=NAN;
 const char* dhtRejection="NOT_READ";
+bool dhtEncodingCorrected=false;
 void formatDhtNumber(float value,char (&out)[24]) {
     if(isfinite(value))snprintf(out,sizeof(out),"%.6g",value);
     else snprintf(out,sizeof(out),"null"); // Never emit NaN/Infinity as JSON numbers.
@@ -26,9 +28,9 @@ void publishEnvironmentState() {
     char diagnostic[512];
     snprintf(diagnostic,sizeof(diagnostic),
         "{\"status\":\"%s\",\"failures\":%lu,\"consecutiveFailures\":%lu,\"hasValidReading\":%s,\"lastSuccessUptimeMs\":%lu,"
-        "\"pin\":%d,\"type\":\"DHT%d\",\"lastReadUptimeMs\":%lu,\"lastReadTempF\":%s,\"lastReadHumidity\":%s,\"rejection\":\"%s\"}",
+        "\"pin\":%d,\"type\":\"DHT%d\",\"lastReadUptimeMs\":%lu,\"lastReadTempF\":%s,\"lastReadHumidity\":%s,\"rejection\":\"%s\",\"encoding\":\"%s\"}",
         fresh ? "OK":dhtCurrentValid ? "STALE":dhtHealth,dhtFailures,dhtConsecutiveFailures,
-        dhtHasValidReading ? "true":"false",lastDhtSuccess,DHTPIN,DHTTYPE,lastDhtAttempt,rawTemperature,rawHumidity,dhtRejection);
+        dhtHasValidReading ? "true":"false",lastDhtSuccess,DHTPIN,DHTTYPE,lastDhtAttempt,rawTemperature,rawHumidity,dhtRejection,dhtEncodingCorrected?"TWOS_COMPLEMENT_COMPAT":"STANDARD");
     publishMQTT((String(topic_base_path)+"/System/dhtHealth").c_str(),String(diagnostic),true);
 }
 
@@ -42,6 +44,7 @@ void readTempandRH() {
     // Validate a complete pair before replacing the last accepted sample.
     float rh=dht.readHumidity(),temperature=dht.readTemperature(true);
     lastRawTemperature=temperature;lastRawHumidity=rh;
+    temperature=traffic::compatibleDht22F(temperature,dhtEncodingCorrected);
     if(!traffic::validEnvironment(temperature,rh)) {
         ++dhtFailures;++dhtConsecutiveFailures;dhtCurrentValid=false;
         dhtHealth=(!isfinite(temperature) || !isfinite(rh)) ? "READ_FAILED":"OUT_OF_RANGE";
