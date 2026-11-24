@@ -1,3 +1,5 @@
+Current release: see [Traffic journal integration](Traffic_Journal_Release_20261123.md). Internal flash now independently protects counts and detailed events; the SD-only authority described below is historical.
+
 > **Current release .9:** [Coordinated_Release_9.md](Coordinated_Release_9.md) supersedes older pending-work notes below. HA controls reset offsets; .9 commands and checkpoints require the coordinated HA companion. Installed devices were last confirmed on .5.
 
 # Count persistence and reboot recovery — 2026-11-04

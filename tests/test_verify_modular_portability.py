@@ -17,7 +17,7 @@ class VerifierPortabilityTests(unittest.TestCase):
         self.workspace = tempfile.TemporaryDirectory()
         self.addCleanup(self.workspace.cleanup)
         self.root = Path(self.workspace.name) / 'project'
-        for folder in ['src', 'include/traffic', 'tests', 'tools']:
+        for folder in ['src', 'include/traffic', 'tests', 'tools', 'docs']:
             shutil.copytree(ROOT / folder, self.root / folder)
 
     def run_windows_verifier(self):

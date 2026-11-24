@@ -92,11 +92,16 @@ int main(){
  forward(110000);assert(totalDailyCars==31 && events()==before);
  handlePassageDebugCommand("msb/traffic/CarCounter/Config/passageDebug","ON");resetPassageDebugConnection();assert(!passageDebug);
  assert(messages.back().payload=="OFF");
+ // All raw transitions arrive while foreground storage is stalled.
+ unsigned beforeStall=totalDailyCars;
+ for(unsigned i=0;i<100;++i){unsigned t=2000000+i*1300;captureForLater(t,1,0);captureForLater(t+200,1,1);captureForLater(t+900,0,1);captureForLater(t+1100,0,0);}
+ ticks=2200000;detectCar();assert(totalDailyCars==int(beforeStall+100));
+ assert(timeBetweenCars_ms==1300);
  std::cout<<"PASS: actual debounce/direction/count callback, reverse pair, walkers, six-second cars, stopped car, debug ON/OFF/reconnect and arch ownership\n";
 }
 '''
         with tempfile.TemporaryDirectory() as tmp:
-            p=Path(tmp);(p/'traffic').mkdir();(p/'traffic/Firmware.h').write_text(header)
+            p=Path(tmp);(p/'traffic').mkdir();(p/'traffic/Firmware.h').write_text(header+'\n#define BEAM_TEST_A firstBeamPin\n#define BEAM_TEST_B secondBeamPin\n#include \"'+str(ROOT/'tests/beam_native.h')+'\"\n')
             (p/'test.cpp').write_text(source+'\n#include "'+str(ROOT/'src/services/ArchEffects.cpp')+'"\n'+harness)
             subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror','-I'+str(p),'-I'+str(ROOT/'include'),str(p/'test.cpp'),'-o',str(p/'test')],check=True)
             subprocess.run([str(p/'test')],check=True)

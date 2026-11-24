@@ -4,6 +4,7 @@
 namespace {
 traffic::OperatingSettings settings;
 Preferences settingsPrefs;
+int resetArmedDate=0;
 String settingsHealth="DEFAULTS_NOT_YET_CONFIGURED";
 // Preserve the last event after health recovers; broker retention survives reconnects.
 String lastSettingsRejection;
@@ -45,6 +46,10 @@ bool writeSettingsCopy(const char* path,const traffic::OperatingSettings& value)
     traffic::OperatingSettings check;
     return written==text.length() && readSettingsCopy(path,check) && settingsText(check)==text;
 }
+void armUpcomingReset() {
+    DateTime now=rtc.now();
+    resetArmedDate=now.hour()*60+now.minute()<=settings.start+settings.resetOffset?settingsToday():0;
+}
 void applyDetectorSettings() {
     // Device-specific detector semantics remain intact; only accepted setpoints change.
     applyOperatingDetector(settings.alarmMs,settings.detectMs);
@@ -67,14 +72,16 @@ void initializeOperatingSettings() {
         settings=saved;settingsHealth="OK_RESTORED";
     }
     applyDetectorSettings();
+    armUpcomingReset();
 }
 
 int effectiveExtension() { return traffic::extensionForDate(settings,settingsToday()); }
 int effectiveShowEnd() { return traffic::officialEnd(settings,settingsToday()); }
 bool officialShowNow() {
     if (!recordingShowSeasonActive()) return false;
-    DateTime now=rtc.now();
-    return traffic::insideOfficialWindow(settings,gateDevice(),settingsToday(),now.hour()*60+now.minute());
+    DateTime now=countEventTime();
+    int date=now.year()*10000+now.month()*100+now.day();
+    return traffic::insideOfficialWindow(settings,gateDevice(),date,now.hour()*60+now.minute());
 }
 
 void publishOperatingSettings() {
@@ -119,9 +126,11 @@ bool handleOperatingCommand(const char* topic,const char* message) {
         int age=now.hour()*3600+now.minute()*60+now.second()-(hh*3600+mm*60+ss);
         if (stamp.substring(0,8)!=day || hh>23 || mm>59 || ss>59 || age<0 || age>60 ||
             stamp<=settingsPrefs.getString("correction","")) return true;
-        if (settingsPrefs.putString("correction",stamp)!=stamp.length()) return true;
-        if (kind=="daily") totalDailyCars=corrected;else totalShowCars=corrected;
-        persistCountState();saveDailyTotal();saveShowTotal();KeepMqttAlive();return true;
+        detectCar(); // Correction supersedes every already captured passage.
+        uint32_t nonce=DateTime(now.year(),now.month(),now.day(),hh,mm,ss).unixtime();
+        if(!correctCountState(kind=="daily",corrected,nonce)){publishCountHealth();return true;}
+        settingsPrefs.putString("correction",stamp); // Journal also retains replay identity.
+        saveDailyTotal();saveShowTotal();KeepMqttAlive();return true;
     }
     if (String(topic)!=String(topic_base_path)+"/Config/operatingSettings") return false;
     traffic::OperatingSettings proposed;
@@ -157,13 +166,24 @@ bool handleOperatingCommand(const char* topic,const char* message) {
         if (!writeSettingsCopy("/operating-settings.a",proposed)) {
             settingsHealth="SAVE_FAILED_KEEP_PREVIOUS";publishOperatingSettings();return true;
         }
+        detectCar();
         settings=proposed;
         bool nvsOk=settingsPrefs.putString("settings",settingsText(settings))==settingsText(settings).length();
         settingsHealth=nvsOk ? "OK":"OK_SD_NVS_FAILED";
         applyDetectorSettings();
+        armUpcomingReset();
         flagDailyShowSummarySaved=false;
     }
     publishOperatingSettings();return true;
+}
+
+void serviceEventReset() {
+    if(!countsReady() || !recordingShowSeasonActive())return;
+    DateTime now=countEventTime();int date=now.year()*10000+now.month()*100+now.day();
+    int minute=now.hour()*60+now.minute(),deadline=settings.start+settings.resetOffset;
+    if(minute<deadline){resetArmedDate=date;return;}
+    if(date==resetArmedDate && date<=settings.endDate && date!=settings.downDate && !flagDailyShowStartReset)
+        resetCountsForShow();
 }
 
 void serviceShowSchedule() {
@@ -171,10 +191,10 @@ void serviceShowSchedule() {
     if (!countsReady() || !recordingShowSeasonActive()) return;
     DateTime now=rtc.now();int minute=now.hour()*60+now.minute();
     if (settingsToday()>settings.endDate || settingsToday()==settings.downDate) return;
-    // Reset exactly at HA's requested minute, with a durable once-per-date
-    // marker. Never zero recovered counts merely because boot occurs later.
-    if (minute==settings.start+settings.resetOffset && !flagDailyShowStartReset)
-        resetCountsForShow();
+    // A boot after the deadline never arms a retroactive reset. An uptime
+    // stall may cross the minute: drain old events, then catch up this armed reset.
+    detectCar();
+    serviceEventReset();
     static unsigned long lastSummaryAttempt=0;
     if (minute>=effectiveShowEnd() && !flagDailyShowSummarySaved && millis()-lastSummaryAttempt>=10000UL) {
         lastSummaryAttempt=millis();

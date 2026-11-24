@@ -89,6 +89,14 @@ def main():
             raise SystemExit('FAIL: shared file changed: ' + name)
         if args.peer and data != (args.peer / name).read_bytes().replace(b'\r\n', b'\n'):
             raise SystemExit('FAIL: counterpart shared file differs: ' + name)
+    # Deployed Car/Gate feature histories already differ in DHT/summary and
+    # settings diagnostics. Pin those per device; do not force unrelated changes
+    # merely to make the peer comparison pass.
+    device_files=json.loads((root / 'tests/device_files.json').read_text(encoding="utf-8"))
+    for name,digest in device_files.items():
+        data=(root/name).read_bytes().replace(b'\r\n',b'\n')
+        if hashlib.sha256(data).hexdigest()!=digest:
+            raise SystemExit('FAIL: device-specific file changed: '+name)
     print(f'PASS: {len(expected)} function bodies verified ({len(behavior)} explicit behavior revisions); original unaffected bodies, AP registration, GPIO/topics, state initialization and enums preserved; {len(shared)} shared files verified' + (' against peer' if args.peer else ''))
 
 if __name__ == '__main__':

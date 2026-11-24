@@ -15,3 +15,9 @@ void reportHourlyExportStatus(const char* status);
 
 extern unsigned int officialHourly[24];
 extern bool officialCountsComplete;
+
+bool countEventCanApply();
+
+bool correctCountState(bool daily,uint32_t value,uint32_t nonce);
+
+bool commitCountJournal();

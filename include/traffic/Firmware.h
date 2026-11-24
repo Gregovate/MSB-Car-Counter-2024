@@ -19,3 +19,6 @@
 #include "CountPersistence.h"
 
 #include "OperatingSettings.h"
+
+#include "TrafficJournal.h"
+#include "BeamCapture.h"

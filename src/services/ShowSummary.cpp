@@ -50,7 +50,7 @@ const char* summaryExportStatus() { return summaryHealth; }
 
 void recordOfficialVehicle() {
     // Determine eligibility using the event's current RTC, never stale showTime.
-    if (officialShowNow()) { ++totalShowCars;++officialHourly[rtc.now().hour()]; }
+    if (officialShowNow()) { ++totalShowCars;++officialHourly[countEventTime().hour()]; }
 }
 
 bool writeOfficialSummaries() {

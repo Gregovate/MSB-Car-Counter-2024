@@ -14,6 +14,7 @@ traffic::CountRecord closedCounts{};
 uint32_t countDate=0, showResetDate=0;
 int freshCountYear=0;
 int countSlot=-1;
+bool sdCheckpointKnown=false;
 bool countReady=false;
 bool retryClockRestore=false;
 unsigned long lastRestoreAttempt=0;
@@ -27,13 +28,17 @@ void loadPendingVehicles() {
     pendingLoaded=true;
     pendingDurable=pendingPrefs.begin("traffic-pending",false);
     if (pendingDurable) pendingVehicles=pendingPrefs.getUInt("vehicles",0);
+    uint32_t journalPending=journalPendingVehicles();
+    if(journalPending>pendingVehicles)pendingVehicles=journalPending;
+    carryJournalPending(pendingVehicles);
+    pendingDurable=pendingDurable || strcmp(trafficJournalHealth(),"OK")==0;
 }
 const char* countFault="NOT_RESTORED";
 String hourlyExportHealth="NOT_ATTEMPTED";
 
 uint32_t countToday() {
     if (!rtcReady || rtc.lostPower()) return 0;
-    DateTime now=rtc.now();
+    DateTime now=countEventTime();
     if (!now.isValid() || now.year()!=recordingYear()) return 0;
     return now.year()*10000UL+now.month()*100UL+now.day();
 }
@@ -168,21 +173,25 @@ void recordPendingVehicle() {
     loadPendingVehicles();
     if (pendingVehicles<UINT32_MAX) ++pendingVehicles;
     // Preferences commits each accepted event. No invalid RTC date enters SD.
-    pendingDurable=pendingPrefs.putUInt("vehicles",pendingVehicles)==sizeof(uint32_t);
+    bool flashSaved=appendUndatedTraffic(pendingVehicles);
+    bool nvsSaved=pendingPrefs.putUInt("vehicles",pendingVehicles)==sizeof(uint32_t);
+    pendingDurable=flashSaved || nvsSaved;
     publishCountHealth();
 }
 
 void publishCountHealth() {
     loadPendingVehicles();
+    publishTrafficJournalHealth();
     publishMQTT((String(topic_base_path)+"/System/unassignedRecoveryCount").c_str(),String(pendingVehicles),true);
     publishMQTT((String(topic_base_path)+"/System/pendingCountHealth").c_str(),
-        pendingDurable ? (pendingVehicles ? "UNASSIGNED_EVENTS_REQUIRE_REVIEW":"OK") : "SAVE_FAILED_NVS",true);
+        pendingDurable ? (pendingVehicles ? "UNASSIGNED_EVENTS_REQUIRE_REVIEW":"OK") : "SAVE_FAILED_FLASH_AND_NVS",true);
     reportCountFault(countFault);
     publishMQTT((String(topic_base_path)+"/System/hourlyExport").c_str(),hourlyExportHealth,true);
     publishMQTT((String(topic_base_path)+"/System/unrestoredDailyCount").c_str(),String(countReady ? 0 : totalDailyCars),true);
 }
 
 bool countsReady() { return countReady; }
+bool countEventCanApply(){return countReady && countEventClockValid() && countToday()==countDate;}
 
 bool countTopicPublishable(const char* topic) {
     if (countReady) return true;
@@ -200,12 +209,25 @@ bool restoreCountState() {
         retryClockRestore=true;
         reportCountFault("WAITING_FOR_VALID_CLOCK"); return false;
     }
-    // Only the clock dependency is automatically retried. Corrupt/unreadable
-    // checkpoints remain protected and require inspection.
     retryClockRestore=false;
-    if (SD.cardType()==CARD_NONE) { reportCountFault("RESTORE_FAILED_CLOCK_OR_SD"); return false; }
+    // Internal flash is independently authoritative when SD is absent. Compare
+    // CountRecord sequences in one lineage; journal event sequence is unrelated.
     traffic::CountRecord a{},b{};
-    bool va=readCountRecord(0,a), vb=readCountRecord(1,b);
+    bool va=false,vb=false;
+    const traffic::CountRecord* flash=latestTrafficSnapshot();
+    if(SD.cardType()!=CARD_NONE){va=readCountRecord(0,a);vb=readCountRecord(1,b);}
+    sdCheckpointKnown=va || vb;
+    if(flash) {
+        traffic::CountRecord sd{};
+        if(va || vb)sd=vb && (!va || b.sequence>a.sequence)?b:a;
+        if(sd.sequence==flash->sequence && memcmp(&sd,flash,sizeof(sd))) {
+            reportCountFault("RESTORE_CONFLICT_KEEP_RECORDS");return false;
+        }
+        if(flash->sequence>=sd.sequence){sdCheckpointKnown=sd.sequence==flash->sequence;a=*flash;va=true;vb=false;}
+    }
+    if(!va && !vb && SD.cardType()==CARD_NONE) {
+        retryClockRestore=true;reportCountFault("RESTORE_FAILED_CLOCK_OR_SD");return false;
+    }
     if (va || vb) {
         countSlot=vb && (!va || b.sequence>a.sequence) ? 1 : 0;
         savedCounts=countSlot==0 ? a : b;
@@ -214,7 +236,7 @@ bool restoreCountState() {
         }
         if (savedCounts.date<today) {
             closedCounts=savedCounts;
-            if (!persistClosedCounts()) return false;
+            if (!flash && !persistClosedCounts()) return false;
         }
         totalDailyCars=savedCounts.date==today ? savedCounts.daily : 0;
         totalShowCars=savedCounts.show;
@@ -253,13 +275,16 @@ bool restoreCountState() {
     return true;
 }
 
-bool persistCountState() {
-    if (!countReady || !persistClosedCounts()) return false;
-    if (SD.cardType()==CARD_NONE || !countToday() || countToday()!=countDate) {
+bool checkpointCountState(bool exportSD) {
+    if (!countReady) return false;
+    if (!countToday() || countToday()!=countDate) {
         reportCountFault("SAVE_FAILED_CLOCK_OR_SD"); return false;
     }
     traffic::CountRecord next{};
-    next.magic=0x4d534232UL; next.sequence=savedCounts.sequence+1;
+    const traffic::CountRecord* flash=latestTrafficSnapshot();
+    uint32_t sequence=flash && flash->sequence>savedCounts.sequence?flash->sequence:savedCounts.sequence;
+    if(sequence==UINT32_MAX){reportCountFault("SAVE_FAILED_SEQUENCE_FULL");return false;}
+    next.magic=0x4d534232UL; next.sequence=sequence+1;
     next.date=countDate; next.daily=totalDailyCars; next.show=totalShowCars;
     next.showResetDate=showResetDate;
     for(int i=0;i<24;++i) next.hourly[i]=hourlyCount[i];
@@ -267,21 +292,33 @@ bool persistCountState() {
     next.officialComplete=officialCountsComplete;
     next.checksum=traffic::countChecksum(next);
     if (!traffic::validCountRecord(next)) { reportCountFault("SAVE_FAILED_INVALID_COUNTS"); return false; }
+    bool flashSame=flash && memcmp(&next.date,&flash->date,offsetof(traffic::CountRecord,checksum)-offsetof(traffic::CountRecord,date))==0;
+    bool flashOk=flashSame;
+    if(flashSame)next=*flash;
+    else flashOk=appendTrafficSnapshot(next);
+    if(!exportSD)return flashOk;
+    // SD loss does not prevent the flash commit above. Exports remain retryable.
+    if(!sdAvailable || SD.cardType()==CARD_NONE || !persistClosedCounts()) {
+        reportCountFault(flashOk?"OK_FLASH_SD_PENDING":"SAVE_FAILED_FLASH_AND_SD");return false;
+    }
     // Skip unchanged state; retry a failed changed state on the main-loop timer.
-    if (savedCounts.sequence && savedCounts.officialComplete==next.officialComplete && memcmp(&next.date,&savedCounts.date,offsetof(traffic::CountRecord,checksum)-offsetof(traffic::CountRecord,date))==0) return true;
+    if (sdCheckpointKnown && savedCounts.sequence && savedCounts.officialComplete==next.officialComplete && memcmp(&next.date,&savedCounts.date,offsetof(traffic::CountRecord,checksum)-offsetof(traffic::CountRecord,date))==0) {reportCountFault(flashOk?"OK":"SD_ONLY_FLASH_FAULT");return true;}
     int target=countSlot==0 ? 1 : 0;
     File f=recordingOpen(countPath(target==0 ? "CountState.a" : "CountState.b"),FILE_WRITE);
-    if (!f) { reportCountFault("SAVE_FAILED_OPEN"); return false; }
+    if (!f) { reportCountFault(flashOk?"OK_FLASH_SD_PENDING":"SAVE_FAILED_OPEN"); return false; }
     size_t n=f.write(reinterpret_cast<const uint8_t*>(&next),sizeof(next));
     f.flush(); f.close();
     traffic::CountRecord check{};
     if (n!=sizeof(next) || !readCountRecord(target,check) || memcmp(&next,&check,sizeof(next))!=0) {
-        reportCountFault("SAVE_FAILED_VERIFY"); return false;
+        reportCountFault(flashOk?"OK_FLASH_SD_PENDING":"SAVE_FAILED_VERIFY"); return false;
     }
-    savedCounts=next; countSlot=target;
-    reportCountFault("OK");
+    savedCounts=next; countSlot=target;sdCheckpointKnown=true;
+    reportCountFault(flashOk?"OK":"SD_ONLY_FLASH_FAULT");
     return true;
 }
+
+bool persistCountState(){return checkpointCountState(true);}
+bool commitCountJournal(){return checkpointCountState(false);}
 
 void serviceCountState() {
     if (!countReady) {
@@ -309,7 +346,7 @@ void serviceCountState() {
         }
         // Full-date rollover, including a missed midnight/reboot. Never reset
         // at 23:59 or rely on an exact second to clear daily flags.
-        if (today/10000!=countDate/10000) { totalShowCars=0; savedCounts={}; countSlot=-1; }
+        if (today/10000!=countDate/10000) { totalShowCars=0; countSlot=-1; }
         countDate=today; showResetDate=0;
         totalDailyCars=0;
         officialCountsComplete=true;
@@ -328,6 +365,7 @@ void serviceCountState() {
 }
 
 bool resetCountsForShow() {
+    detectCar(); // Apply queued pre-reset passages before writing the reset snapshot.
     uint32_t today=countToday();
     if (!countReady || !today || countDate!=today || showResetDate==today) return false;
     // Persist the reset marker together with the reset total. A reboot within
@@ -339,6 +377,25 @@ bool resetCountsForShow() {
     persistCountState();
     saveDailyTotal();
     return true;
+}
+
+// A correction's identity and resulting count share ONE flash commit. NVS
+// acknowledgement may follow; losing power cannot consume an unapplied command
+// or replay a correction over vehicles counted after it.
+bool correctCountState(bool daily,uint32_t value,uint32_t nonce) {
+    if(!countEventCanApply() || value>INT_MAX || nonce<=journalCorrectionNonce())return false;
+    const traffic::CountRecord* flash=latestTrafficSnapshot();
+    uint32_t sequence=flash && flash->sequence>savedCounts.sequence?flash->sequence:savedCounts.sequence;
+    if(sequence==UINT32_MAX)return false;
+    traffic::CountRecord next{};next.magic=0x4d534232;next.sequence=sequence+1;
+    next.date=countDate;next.daily=daily?value:totalDailyCars;next.show=daily?totalShowCars:value;
+    next.showResetDate=showResetDate;next.officialComplete=officialCountsComplete;
+    for(int i=0;i<24;++i){next.hourly[i]=hourlyCount[i];next.official[i]=officialHourly[i];}
+    next.checksum=traffic::countChecksum(next);
+    if(!traffic::validCountRecord(next) || !appendTrafficCorrection(next,nonce)) {
+        reportCountFault("CORRECTION_NOT_APPLIED_FLASH_FAULT");return false;
+    }
+    totalDailyCars=next.daily;totalShowCars=next.show;persistCountState();return true;
 }
 
 // Keep the previous complete hourly CSV until its replacement is verified.

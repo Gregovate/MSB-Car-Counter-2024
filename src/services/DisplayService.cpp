@@ -41,6 +41,19 @@ void updateDisplay() {
     display.setCursor(0, 40);
     display.printf("Cars: %d", totalDailyCars);
 
+    // A normal redraw must never erase a live storage warning.
+    if (!sdAvailable) {
+        display.fillRect(0,0,128,16,BLACK);
+        display.setTextColor(WHITE);display.setTextSize(1);display.setCursor(0,0);
+        display.println("SD FAULT");display.println(trafficJournalDurable()?"FLASH SAVING COUNTS":"COUNTS MAY BE UNSAVED");
+    }
+    // Count visibility remains; these faults require action even when SD is OK.
+    if(strcmp(beamCaptureHealth(),"OK") || strcmp(trafficJournalHealth(),"OK")) {
+        display.fillRect(0,0,128,16,BLACK);
+        display.setTextColor(WHITE);display.setTextSize(1);display.setCursor(0,0);
+        display.println(strcmp(beamCaptureHealth(),"OK")?"BEAM CAPTURE FAULT":"FLASH JOURNAL FAULT");
+        display.println("CHECK HA / SERIAL");
+    }
     // Write to the display
     display.display();
 }

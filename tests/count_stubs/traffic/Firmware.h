@@ -159,3 +159,34 @@ bool showTemperatureAverage(float&);
 #define HIGH 1
 inline const int redArchPin=25,greenArchPin=26;
 inline void digitalWrite(int,int){}
+
+#include "traffic/TrafficJournal.h"
+inline bool nativeJournalEnabled=false;
+struct NativeFlash {
+ std::vector<uint8_t> bytes=std::vector<uint8_t>(2*traffic::journalBankBytes,0xff);
+ bool read(uint32_t off,void* out,size_t n){if(uint64_t(off)+n>bytes.size())return false;memcpy(out,bytes.data()+off,n);return true;}
+ bool write(uint32_t off,const void* data,size_t n){if(uint64_t(off)+n>bytes.size())return false;const auto* p=static_cast<const uint8_t*>(data);for(size_t i=0;i<n;++i)bytes[off+i]&=p[i];return true;}
+ bool erase(uint32_t off,size_t n){if(uint64_t(off)+n>bytes.size())return false;std::fill(bytes.begin()+off,bytes.begin()+off+n,0xff);return true;}
+};
+inline NativeFlash nativeFlash;
+inline traffic::JournalStore<NativeFlash> nativeJournal(nativeFlash);
+inline void initializeTrafficJournal(){}
+inline const traffic::CountRecord* latestTrafficSnapshot(){return nativeJournalEnabled?nativeJournal.snapshot():nullptr;}
+inline bool appendTrafficSnapshot(const traffic::CountRecord& c){if(!nativeJournalEnabled)return false;traffic::JournalEvent e{};e.kind=3;return nativeJournal.append(e,c)==traffic::JournalAppend::Durable;}
+inline bool appendUndatedTraffic(uint32_t p){if(!nativeJournalEnabled)return false;traffic::JournalEvent e{};e.kind=2;e.beforeDaily=p;return nativeJournal.append(e,{})==traffic::JournalAppend::Durable;}
+inline uint32_t journalPendingVehicles(){return nativeJournalEnabled?nativeJournal.pendingCount():0;}
+inline void publishTrafficJournalHealth(){}
+inline DateTime countEventTime(){return rtc.now();}
+inline bool countEventClockValid(){return rtcReady && !rtc.lostPower();}
+inline void detectCar(){}
+
+inline uint32_t journalCorrectionNonce(){return nativeJournalEnabled?nativeJournal.correctionNonce():0;}
+inline void carryJournalPending(uint32_t n){if(nativeJournalEnabled)nativeJournal.carryPending(n);}
+inline bool appendTrafficCorrection(const traffic::CountRecord& c,uint32_t n){if(!nativeJournalEnabled)return false;traffic::JournalEvent e{};e.kind=6;e.correctionEpoch=n;return nativeJournal.append(e,c)==traffic::JournalAppend::Durable;}
+
+inline const char* trafficJournalHealth(){return nativeJournalEnabled?"OK":"NOT_INITIALIZED";}
+
+inline void activateTrafficVehicleEvent(){}
+#ifndef TRAFFIC_OPERATING_TEST
+inline void serviceEventReset(){}
+#endif

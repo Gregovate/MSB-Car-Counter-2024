@@ -15,7 +15,7 @@ void configure(bool gate,int extension=0) {
     settings.extension=extension;settingsHealth="OK";
 }
 void vehicle() {
-    serviceCountState();++totalDailyCars;++hourlyCount[rtc.now().hour()];
+    serviceCountState();serviceEventReset();++totalDailyCars;++hourlyCount[rtc.now().hour()];
     recordOfficialVehicle();assert(persistCountState());
 }
 int main() {
@@ -116,6 +116,17 @@ int main() {
     auto previous=disk["/CC/2026/ShowSummaryBuckets.csv"];
     failWrite="/CC/2026/ShowSummaryBuckets.csv.pending";assert(!writeOfficialSummaries());
     assert(disk["/CC/2026/ShowSummaryBuckets.csv"]==previous);failWrite="";
+    // Foreground stall skips the reset minute; first post-deadline vehicle
+    // must be retained after the reset, not zeroed by the delayed scheduler.
+    rtc.current=DateTime(2026,11,27,16,58);configure(false);
+    flagDailyShowStartReset=false;showResetDate=0;totalDailyCars=99;persistCountState();
+    rtc.current=DateTime(2026,11,27,17,1);vehicle();
+    assert(totalDailyCars==1 && flagDailyShowStartReset);
+    serviceShowSchedule();assert(totalDailyCars==1);
+    reboot();assert(restoreCountState());assert(totalDailyCars==1 && !resetCountsForShow());
+    // Resume existing correction scenario at 22:00.
+    rtc.current=DateTime(2026,11,27,22);
+    nativeJournalEnabled=true;assert(nativeJournal.open(true));
     // Fresh manual correction is applied once, never replayed after another vehicle.
     handleOperatingCommand("msb/traffic/TestCounter/Config/countCorrection","20261127220000,daily,20");
     assert(totalDailyCars==20);vehicle();

@@ -8,6 +8,14 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.19 — 2026-11-23
+ *   - Commit vehicle/reset/correction snapshots to OTA-preserving flash journal.
+ *   - Restore without SD; archive immutable timing records with verified bank reuse.
+ *   - Capture beam edges in IRAM/DRAM during flash writes; replay debounce by time.
+ *   - Report flash, SD and capture-overflow faults on MQTT and OLED.
+ * 25.12.03.2-modular-test.18 — 2026-11-23
+ *   - Retry startup count restoration after a missing SD becomes available.
+ *   - Preserve corrupt checkpoints and live totals; show persistent SD faults.
  * 25.12.03.2-modular-test.17 — 2026-11-22
  *   - Preserve occupied/long passages; publish counts before SD verification.
  *   - Poll beams before and between foreground maintenance operations.
@@ -93,14 +101,17 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.17";
+const char FWVersion[] = "25.12.03.2-modular-test.19";
 
 #include "traffic/Firmware.h"
 
 void setup() {
     Serial.begin(115200);
+    pinMode(firstBeamPin, INPUT_PULLDOWN);pinMode(secondBeamPin, INPUT_PULLDOWN);
+    initializeBeamCapture(firstBeamPin,secondBeamPin);
+    initializeTrafficJournal();
     ElegantOTA.setAutoReboot(true);
-    ElegantOTA.setFilesystemMode(true);
+    ElegantOTA.setFilesystemMode(false); // Internal data contains the traffic journal; firmware OTA remains enabled.
     Serial.println("Starting Car Counter...");
     lastCarDetectedMillis = millis(); // Synced initial time at boot  //GAL 25-11-25
 
@@ -322,5 +333,7 @@ void loop() {
     //     KeepMqttAlive();
     // }
 
+    serviceTrafficJournal();
+    detectCar();
 }
 

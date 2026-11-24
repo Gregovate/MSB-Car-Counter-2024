@@ -3,9 +3,14 @@
 // Extracted from the production baseline; behavior fixes are separate changes.
 void checkSdHealth() {
     if (SD.cardType()==CARD_NONE) {
-        sdAvailable=false;
-        publishMQTT(MQTT_PUB_SD_HEALTH, "OFFLINE", true);
-        return;
+        // One bounded mount attempt on the existing health timer. Do not end a
+        // mounted filesystem underneath asynchronous downloads or live files.
+        if(!SD.begin(PIN_SPI_CS,SPI,4000000) || SD.cardType()==CARD_NONE) {
+            sdAvailable=false;
+            publishMQTT(MQTT_PUB_SD_HEALTH, "OFFLINE", true);
+            return;
+        }
+        ensureSeasonFolderExists(); // Never replaces already restored live totals.
     }
     File test=recordingOpen("/_sd_test.tmp",FILE_WRITE);
     size_t written=test ? test.print("1") : 0;
@@ -15,8 +20,11 @@ void checkSdHealth() {
     check.close();
     sdAvailable=ok;
     publishMQTT(MQTT_PUB_SD_HEALTH, ok ? "OK" : "WRITE_VERIFY_FAIL", true);
-    if (ok) recordingRemove("/_sd_test.tmp");
-    else publishMQTT(MQTT_DEBUG_LOG, "SD health write/read verification failed; counts may be unsaved");
+    if (ok) {
+        recordingRemove("/_sd_test.tmp");
+        char status[48];snprintf(status,sizeof(status),"OK_%lluMB",(unsigned long long)(SD.totalBytes()/(1024ULL*1024ULL)));
+        publishMQTT(MQTT_PUB_SD_STATUS,status,true);
+    } else publishMQTT(MQTT_DEBUG_LOG, "SD verification failed; check journalHealth for flash count durability");
 }
 
 void publishSdDiag_(const char* step, const char* file, const char* mode, const char* err) {

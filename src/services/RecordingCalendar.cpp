@@ -223,5 +223,5 @@ bool recordingWebWritable(const String &path) {
 
     String lower=path; lower.toLowerCase();
     return !lower.startsWith("/recording-calendar.") && lower.indexOf("/countstate.")<0 && lower.indexOf("/closedcounts-")<0 &&
-           lower.indexOf("hourlydata.csv.")<0 && recordingPathWritable(path);
+           lower.indexOf("hourlydata.csv.")<0 && lower.indexOf("/trafficjournal")<0 && recordingPathWritable(path);
 }

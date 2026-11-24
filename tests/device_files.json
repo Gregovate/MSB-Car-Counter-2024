@@ -1,0 +1,10 @@
+{
+  "src/services/TemperatureSensor.cpp": "af6e01465318aee957af9c90c3a62a1302aed2501261ddad6e3353e600474bf5",
+  "include/traffic/EnvironmentService.h": "5d338af59667c32f3cf5df40bdd5ff1dafe32608b8f6e5edbf04c4f8c0483edd",
+  "src/services/RecordingCalendar.cpp": "c46ca4072eeba483b0d8c3a86f72af18d95d44723af7593e0ac47a99684528a1",
+  "tests/count_stubs/traffic/Firmware.h": "6665f71f6e728e928e017e9105a488f2beb54129fd56eb8d003d922ba1220b53",
+  "include/traffic/OperatingPolicy.h": "93fed668dae7b14191837e36770d58dea51b198b43ae7ce6554ab18801d0e6b5",
+  "src/services/OperatingSettings.cpp": "37743250e23ae89892e58a0a471f3378b549d082bb5ce5d479fac41fed473c3e",
+  "src/services/ShowSummary.cpp": "35da6187914f91eca9fe257cb1f2514333fd4fef9f8c816a141a80c67d47c757",
+  "tests/operating_release_test.cpp": "fbf017e86fa152ddf33e25da23db333958e64ba3e6d1381c26f5809c3bb9a026"
+}

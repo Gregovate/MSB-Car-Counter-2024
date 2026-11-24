@@ -75,6 +75,8 @@ int main(int argc,char** argv) {
     assert(recordingPathWritable("/GC/2030/log.csv"));
     assert(recordingPathWritable("/data/index.html"));
     assert(!recordingWebWritable("/recording-calendar.a"));
+    assert(!recordingWebWritable("/CC/2026/TrafficJournal/0000000001.bin"));
+    assert(!recordingWebWritable("/GC/2026/TrafficJournal"));
     disk["/CC/2025/ShowSummaryBuckets.csv"]="official metrics";
     assert(recordingOpen("/CC/2025/ShowSummaryBuckets.csv",FILE_READ));
     assert(!recordingOpen("/CC/2025/ShowSummaryBuckets.csv",FILE_WRITE));

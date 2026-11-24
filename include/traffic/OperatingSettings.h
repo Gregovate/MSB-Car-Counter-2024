@@ -14,3 +14,5 @@ const char* summaryExportStatus();
 bool officialSeriesCanStart();
 int operatingSeasonEndDate();
 int operatingDownDate();
+
+void serviceEventReset();

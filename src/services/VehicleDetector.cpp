@@ -3,8 +3,10 @@
 
 // Extracted from the production baseline; behavior fixes are separate changes.
 void countTheCar() {
-    serviceCountState(); // Network work may have crossed midnight since loop start.
-    if (!countsReady()) {
+    serviceCountState(); // Captured event date owns rollover, even after a stall.
+    serviceEventReset(); // Apply an armed logical reset before this event increments.
+    activateTrafficVehicleEvent();
+    if (!countEventCanApply()) {
         // Preserve events during recovery without writing zero/fictitious dates.
         recordPendingVehicle();
         return;
@@ -14,7 +16,7 @@ void countTheCar() {
     noCarTimer = millis();
 
     // RTC snapshot
-    DateTime now = rtc.now();
+    DateTime now = countEventTime();
 
     // Build a fresh timestamp string (do NOT use now.toString here)
     char timeBuf[25];
@@ -42,16 +44,20 @@ void countTheCar() {
     // Increase Show Count only when show is open
     recordOfficialVehicle();
 
+    commitCountJournal(); // Only internal flash; no SD or network wait here.
+
     // The camera's green indication means the count increment succeeded.
     // Do this before synchronous SD/export work can delay visible feedback.
     digitalWrite(redArchPin,LOW);digitalWrite(greenArchPin,HIGH);
+
 
     // Publish the accepted RAM count immediately. SD durability is reported
     // separately; a publication does not claim checkpoint success.
     publishMQTT(MQTT_PUB_ENTER_CARS, String(totalDailyCars), true);
     publishMQTT(MQTT_PUB_SHOWTOTAL, String(totalShowCars), true);
     publishMQTT(topic, String(hourlyCount[currentHour]), true);
-    persistCountState(); // Retain per-vehicle verified reboot recovery.
+    publishMQTT(MQTT_PUB_TIME,timeBuf);
+    persistCountState(); // SD projection follows immediate current-state publication.
     saveDailyTotal();
     saveShowTotal();
     saveHourlyCounts();
@@ -63,7 +69,7 @@ void countTheCar() {
     String enterLogPath = String(seasonFolder) + fileName6;
 
     // Open file for writing Car Data
-    myFile = recordingOpen(enterLogPath.c_str(), FILE_APPEND); // EnterLog.csv in season folder
+    myFile = sdAvailable ? recordingOpen(enterLogPath.c_str(), FILE_APPEND) : File(); // EnterLog.csv in season folder
     if (myFile) {
         // NEW CSV FORMAT:
         // DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms
@@ -147,25 +153,18 @@ bool handlePassageDebugCommand(const char* topic,const char* message) {
     return true;
 }
 
-void detectCar() {
-    uint32_t now=millis();
-    bool rawA=digitalRead(firstBeamPin),rawB=digitalRead(secondBeamPin);
-    // Preserve the existing 50 ms debounce independently for each beam.
-    if(rawA!=stableFirstBeamState) {
-        if(now-lastFirstBeamChangeTime>debounceDelay) {
-            stableFirstBeamState=rawA;lastFirstBeamChangeTime=now;
-            publishMQTT(MQTT_PUB_BEAM_A_STATE,String(rawA),true);
-        }
-    } else lastFirstBeamChangeTime=now;
-    if(rawB!=stableSecondBeamState) {
-        if(now-lastSecondBeamChangeTime>debounceDelay) {
-            stableSecondBeamState=rawB;lastSecondBeamChangeTime=now;
-            publishMQTT(MQTT_PUB_BEAM_B_STATE,String(rawB),true);
-        }
-    } else lastSecondBeamChangeTime=now;
+namespace {uint32_t bothClearAt=0,clearBeforePassage=0;bool wasBothClear=false;}
+void processBeamSample(uint32_t now,bool rawA,bool rawB) {
+    setCountEventMillis(now);
+    if(!rawA && !rawB && !wasBothClear)bothClearAt=now;
+    wasBothClear=!rawA && !rawB;
+    if(rawA!=stableFirstBeamState) publishMQTT(MQTT_PUB_BEAM_A_STATE,String(rawA),true);
+    if(rawB!=stableSecondBeamState) publishMQTT(MQTT_PUB_BEAM_B_STATE,String(rawB),true);
+    stableFirstBeamState=rawA;stableSecondBeamState=rawB;
     firstBeamState=stableFirstBeamState;secondBeamState=stableSecondBeamState;
     passage.update(firstBeamState,secondBeamState,now,minActivationDuration,waitDuration);
     if(passage.started) {
+        clearBeforePassage=now-bothClearAt;
         ++passageSequence;passageCountBefore=totalDailyCars;
         passageStartedLocal=getRtcTimestamp();passageAlarmReported=false;passageRedShown=false;
         firstBeamTripTime=now;
@@ -189,6 +188,7 @@ void detectCar() {
             lastCarDetectedMillis=now;
             // Show count acceptance immediately; synchronous SD verification follows.
             noCarTimer=now;stopIdleArchPattern();
+            setTrafficVehicleEvent(now,timeToPassMS,abFollow_ms,passage.bMs,timeBetweenCars_ms,clearBeforePassage);
             countTheCar(); // Green is set only after its dated count increment.
             publishMQTT(MQTT_PUB_BEAM_AB_MS,String(abFollow_ms));
             publishMQTT(MQTT_PUB_BEAM_B_BROKEN_MS,String(passage.bMs));
@@ -208,3 +208,6 @@ bool vehicleArchFeedbackActive() {
     return passage.active || stableFirstBeamState || stableSecondBeamState ||
         digitalRead(firstBeamPin) || digitalRead(secondBeamPin) || carStuckAlarmActive;
 }
+
+void detectCar(){serviceBeamCapture(debounceDelay,processBeamSample);}
+void resetBeamDetectorAfterLoss(){passage=traffic::PassagePolicy{};}
