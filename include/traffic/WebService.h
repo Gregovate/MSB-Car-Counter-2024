@@ -13,3 +13,5 @@ void changeDirectory(AsyncWebServerRequest *request);
 void deleteSDFile(AsyncWebServerRequest *request);
 void renameSDFile(AsyncWebServerRequest *request);
 void setupServer();
+
+void setupFileManagerRoutes();

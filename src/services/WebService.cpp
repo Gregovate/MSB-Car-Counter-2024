@@ -10,59 +10,6 @@
 
 
 
-void listSDFiles(AsyncWebServerRequest *request) {
-    if (!sdAvailable) {
-        request->send(503, "text/plain", "SD not available");
-        return;
-    }
-
-    // Header for UI alignment (same as Gate Counter)
-    String fileList = "Files in " + currentDirectory + ":\n";
-    fileList += "Name\tSize (bytes)\tLast Write\n";
-
-    File root = recordingOpen(currentDirectory);
-    if (!root || !root.isDirectory()) {
-        request->send(500, "text/plain",
-                      "Failed to open directory: " + currentDirectory);
-        return;
-    }
-
-    while (true) {
-        File file = root.openNextFile();
-        if (!file) {
-            break;  // no more files
-        }
-
-        if (!file.isDirectory()) {
-            // Add file name
-            fileList += String(file.name());
-            fileList += "\t";
-
-            // Add file size
-            fileList += String(file.size());
-            fileList += "\t";
-
-            // Add last write timestamp
-            time_t lw = file.getLastWrite();
-            if (lw > 0) {
-                struct tm *tmstruct = localtime(&lw);
-                char buf[20];
-                strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", tmstruct);
-                fileList += buf;
-            } else {
-                fileList += "unknown";
-            }
-
-            fileList += "\n";
-        }
-
-        file.close();
-    }
-
-    root.close();
-
-    request->send(200, "text/plain", fileList);
-}
 
 void downloadSDFile(AsyncWebServerRequest *request) {
     if (!request->hasParam("filename")) {
@@ -276,17 +223,8 @@ void setupServer() {
     // ----------------------------
     // Root UI with SAFE fallback
     // ----------------------------
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    setupFileManagerRoutes(); // Shared flash-backed UI and recovery status.
 
-        if (sdAvailable && SD.exists("/data/index.html")) {
-            request->send(SD, "/data/index.html", "text/html");
-            return;
-        }
-
-        // Fallback (never 500)
-        request->send(200, "text/plain",
-                      "Hi! This is The Car Counter. UI not found in /data.");
-    });
 
     // ----------------------------
     // Enable Reboot via HTTP
@@ -394,7 +332,7 @@ void setupServer() {
     // ----------------------------
     // File manager / SD routes
     // ----------------------------
-    server.on("/listFiles", HTTP_GET, listSDFiles);
+    // /listFiles is registered by the common file manager.
     server.on("/download", HTTP_GET, downloadSDFile);
     // Simple upload page for /uploadToData (so browser GET doesn't 500)
     server.on("/uploadToData", HTTP_GET, [](AsyncWebServerRequest *request) {

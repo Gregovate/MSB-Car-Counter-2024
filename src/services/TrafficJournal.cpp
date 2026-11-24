@@ -106,3 +106,6 @@ bool appendTrafficCorrection(const traffic::CountRecord& counts,uint32_t nonce) 
 }
 
 void activateTrafficVehicleEvent(){vehicle.beforeDaily=totalDailyCars;vehicle.beforeShow=totalShowCars;vehiclePending=true;}
+
+const char* trafficJournalArchiveHealth(){return archiveHealth;}
+uint32_t trafficJournalFreeRecords(){return opened?journal.availableSlots():0;}

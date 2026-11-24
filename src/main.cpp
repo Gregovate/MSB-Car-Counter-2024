@@ -8,6 +8,10 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.26 — 2026-11-23
+ *   - Serve shared file manager from firmware even when SD is offline.
+ *   - Open active season by default; expose read-only journal/capture status.
+ *   - Show archive folders and separate routine downloads from maintenance.
  * 25.12.03.2-modular-test.25 — 2026-11-23
  *   - Standardize primary environment topics to Env/temp and hourly/HH.
  *   - Mirror legacy Gate temperature topics for existing HA subscriptions.
@@ -119,7 +123,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.25";
+const char FWVersion[] = "25.12.03.2-modular-test.26";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"

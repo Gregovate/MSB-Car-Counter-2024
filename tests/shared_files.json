@@ -5,7 +5,7 @@
   "include/traffic/Platform.h": "96d6086f744299a115de84585fea0053a413b36fbc364d85a920c808f8e45fa2",
   "include/traffic/MqttTransport.h": "8a50dc34c41142894fca07731ddb7676713bad5c98caf377dbe25713ab6b2e47",
   "include/traffic/DisplayService.h": "cf667652b42f6688d5e61481083da83e4a0c99184810d7838fbcede3a633e8bd",
-  "include/traffic/WebService.h": "cefcd3d3c30f614690c61459808d5d9b680601fbb29b27d18f4dcbacfad3f0a7",
+  "include/traffic/WebService.h": "de42a8db44697b171811a9b11b055f01463c5b6afecfdba27b3d46fd74e2e07d",
   "include/traffic/FirmwareVersion.h": "8b64e7c90e2b684620e842aba9590d887915e08023c9a02083d260f3ad3eccbe",
   "include/traffic/RecordingPolicy.h": "81e23497c33b78c6ec4d0865dc4718b542b56d93ab7c5f1abbde5579bce24c4a",
   "include/traffic/RecordingCalendar.h": "1d47b90fe282f4a6cc61949b98dbe2436fda49a13c80ca252d8baedc03b50179",
@@ -31,9 +31,9 @@
   "include/traffic/JournalStore.h": "5ddc6819c92f5d1e5bd9b710fa5e50c9cdcded21ef2d99ef12f16cb5b20c80eb",
   "include/traffic/PartitionGuard.h": "ba2b1945310df548f77b3c23117cf8eeac30ed9c61174a537c97ad06e46ea562",
   "include/traffic/SdJournalArchive.h": "ca7db7955e16ee2595ebcf4c9397404b02b092a93a4e0616877c82c99ccf1608",
-  "include/traffic/TrafficJournal.h": "ea37a68e260b729f6dde394b54f8a5b7eb9e65c443e56c2f10e9a50d60b3950f",
+  "include/traffic/TrafficJournal.h": "a1cbacbf01b40570c4cd0c33ae94c230d3310a070c4eb226ff91adb194d6d0c6",
   "src/services/BeamCapture.cpp": "afaa9256be7674e24edf05a0740a526be08d7fe6f09a36942de696efa78397a7",
-  "src/services/TrafficJournal.cpp": "5fe5268462057c98b4cf03c96984dcc97db6769eb0d75c0e007555649e9cecfa",
+  "src/services/TrafficJournal.cpp": "d0b90ecea67e627dec9e5bac6a36de32485ddf52549a0cdfa2626a2690461518",
   "tools/check_capture_iram.py": "0f70fdb8425825a7bb993d6ec3d1cc4ef8ad2ac4cfbfbd47b4b88f2087978e07",
   "tools/export_traffic_journal.py": "f3ab35ec508e9b28e4eb57c5843391408674c8f5c9a6a58c5e7961b1f3c3997b",
   "tests/beam_native.h": "621cb09a16a7e7de593c0fbdade055ea47b86c7fd35fa972c61b186de5462472",
@@ -57,5 +57,10 @@
   "tests/environment_test.cpp": "eabe85afaa3dda4ee52d4191e307be9e029d00df4944f117482d0d6834bf6faa",
   "tests/test_environment.py": "fdce6ed9cf5834c49cef29b75da4932dfebe16196a8e773afdebe3cc6e9f2594",
   "docs/Environment_Module_Parity_20261123.md": "4528a2537a33a8b68bf60bf9341f2e84c0e258c64bbafeb20539aaa1d2c3d92f",
-  "docs/Environment_MQTT_Layout_20261123.md": "a97f4e6d66f985198f50c2391679db0a94495d5d0cd2b0da0b201988039c3415"
+  "docs/Environment_MQTT_Layout_20261123.md": "a97f4e6d66f985198f50c2391679db0a94495d5d0cd2b0da0b201988039c3415",
+  "src/services/FileManagerService.cpp": "0052391c114142ca255dee44e36d92d8d7adb1ea9c902d9e911ecf85eca16278",
+  "include/traffic/FileManagerPage.h": "c8a2ff54e813b741f33a75778872b717980170a049fef4ec1d4aa49af60aacf6",
+  "data/index.html": "1b13e1f949b130f5eb9aa1d7321a7625edd03298164e86e8fbd78b8c39697156",
+  "tests/test_file_manager.py": "7bf7818942358df61f5662f94ca4f008e4a767c3fa122322937990c49eeb37cf",
+  "docs/Storage_UI_and_PreShow_Cleanup_20261123.md": "8e969624bcf6e7eb01d096b2e02849013676040308b576fc3fd571ac89643b77"
 }

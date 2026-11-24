@@ -19,3 +19,7 @@ uint32_t journalCorrectionNonce();
 void carryJournalPending(uint32_t pending);
 
 void activateTrafficVehicleEvent();
+
+// Read-only status accessors; never open, erase or archive from HTTP callbacks.
+const char* trafficJournalArchiveHealth();
+uint32_t trafficJournalFreeRecords();
