@@ -28,12 +28,12 @@
   "include/traffic/BeamCapture.h": "7474cfd69153d1101bd6855549572b2fe8df3b000aec180f9f470e7d74d0864e",
   "include/traffic/BeamTimeline.h": "807324a763063cbca3198b55edd601888937d399d6c15911e6c781aa5fd035e9",
   "include/traffic/Esp32JournalPartition.h": "d5b8acb62066cced3b4e3d9a807e49b73116e20abd6b623530a99a0a2743ea3a",
-  "include/traffic/JournalStore.h": "273b672d1299df92631537392fd7c432f35889176af686f62533cf8642c18f6a",
+  "include/traffic/JournalStore.h": "5ddc6819c92f5d1e5bd9b710fa5e50c9cdcded21ef2d99ef12f16cb5b20c80eb",
   "include/traffic/PartitionGuard.h": "ba2b1945310df548f77b3c23117cf8eeac30ed9c61174a537c97ad06e46ea562",
   "include/traffic/SdJournalArchive.h": "ca7db7955e16ee2595ebcf4c9397404b02b092a93a4e0616877c82c99ccf1608",
   "include/traffic/TrafficJournal.h": "ea37a68e260b729f6dde394b54f8a5b7eb9e65c443e56c2f10e9a50d60b3950f",
   "src/services/BeamCapture.cpp": "afaa9256be7674e24edf05a0740a526be08d7fe6f09a36942de696efa78397a7",
-  "src/services/TrafficJournal.cpp": "e6870959b03bef5619b7074a5d3fc25c1949fdff167bf1a436bdefe9273b5239",
+  "src/services/TrafficJournal.cpp": "5fe5268462057c98b4cf03c96984dcc97db6769eb0d75c0e007555649e9cecfa",
   "tools/check_capture_iram.py": "0f70fdb8425825a7bb993d6ec3d1cc4ef8ad2ac4cfbfbd47b4b88f2087978e07",
   "tools/export_traffic_journal.py": "f3ab35ec508e9b28e4eb57c5843391408674c8f5c9a6a58c5e7961b1f3c3997b",
   "tests/beam_native.h": "621cb09a16a7e7de593c0fbdade055ea47b86c7fd35fa972c61b186de5462472",
@@ -45,5 +45,5 @@
   "tests/test_journal_integration.py": "589e7538c459ec4a8993b2e03c85de88e6efe1af92a02ecea12b734d8d531c7f",
   "tests/test_sd_display.py": "96441d5f99301070d1fae74da0e31a8cd1091adaa4e8350b302a557409122f84",
   "tests/test_sd_health_recovery.py": "452e003d720e8ee04a8f64a007ec83189df619eebf62faf3a69ae8a9049e2519",
-  "docs/Traffic_Journal_Release_20261123.md": "0ff71f2600c2ed9f221e4987bcfc9218b7ede8b9265f4d05f57c64254a444620"
+  "docs/Traffic_Journal_Release_20261123.md": "ee85dbac8d109e547fb72bdc6df223335d7373b41353051ed197fa5cf662d0ef"
 }

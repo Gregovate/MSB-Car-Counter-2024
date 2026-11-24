@@ -158,6 +158,7 @@ public:
     explicit JournalStore(Store& s):store(s){}
     JournalHealth health()const{return status;}
     uint32_t sequence()const{return latestSequence;}
+    uint32_t bankLastSequence(unsigned bank)const{return bank<2?lastSequence[bank]:0;}
     const JournalRecord* latest()const{return latestSequence?&latestRecord:nullptr;}
     const CountRecord* snapshot()const{return latestCounts.date?&latestCounts:nullptr;}
     uint32_t pendingCount()const{return pending;}

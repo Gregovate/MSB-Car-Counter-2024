@@ -85,7 +85,12 @@ void serviceTrafficJournal() {
     archivedThrough=record.sequence;archiveHealth="OK";
     // Reserve bank reuse for verified archives only. Retain the newest snapshot.
     if(journal.availableSlots()<traffic::journalSlots/2) {
-        journal.reclaim(0,archive);journal.reclaim(1,archive);health=storeHealth();
+        // Do not rescan hundreds of SD files after EACH backlog record. The
+        // cursor is only a scheduling gate; reclaim still independently verifies
+        // every record before committing an erase receipt.
+        for(unsigned bank=0;bank<2;++bank)
+            if(journal.bankLastSequence(bank) && archivedThrough>=journal.bankLastSequence(bank))journal.reclaim(bank,archive);
+        health=storeHealth();
     }
 }
 

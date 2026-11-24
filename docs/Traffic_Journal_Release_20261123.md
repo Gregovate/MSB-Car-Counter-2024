@@ -22,6 +22,8 @@ The operator's Fritzing commits are retained. GPIO assignments are unchanged.
    copy to `/CC/YYYY/TrafficJournal/0000000001.bin` or `/GC/YYYY/TrafficJournal/…`.
    Replay copies records; it never increments totals. It advances at most one
    record per foreground service pass and resumes after failure/reboot.
+   Bank-wide SD verification waits until that bank has finished archival, avoiding
+   repeated large scans while catching up an outage backlog.
 5. Show resets and date rollover commit full snapshots, including the reset marker.
    A deadline armed before it occurs is applied in captured-event order, even if
    the foreground skips the whole reset minute. Booting after a deadline does
@@ -145,7 +147,7 @@ Do not format internal flash to clear a warning or reset counts to reconcile it.
 | ESP32 compile/link contract | PASS | PASS |
 | ISR, GPIO dispatcher, timer and queue placement | PASS | PASS |
 | Contract RAM | 68,368 B | 69,304 B |
-| Contract app flash | 1,062,901 / 1,310,720 B | 1,052,941 / 1,310,720 B |
+| Contract app flash | 1,062,925 / 1,310,720 B | 1,052,965 / 1,310,720 B |
 | Licensed OTA operation / physical deployment here | Not performed | Not performed |
 
 Compile/link used real Arduino-ESP32 2.0.17, AsyncTCP 3.3.1 and
