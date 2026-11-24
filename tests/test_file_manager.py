@@ -25,7 +25,12 @@ struct AsyncWebServerRequest {
 };
 struct Server{std::map<std::string,std::function<void(AsyncWebServerRequest*)>> routes;
  template<class F>void on(const char*p,int,F f){routes[p]=f;}}server;
-String currentDirectory="/";char seasonFolder[32]="/GC/2026";
+String currentDirectory="/";
+#ifdef TEST_STRING_SEASON
+String seasonFolder="/GC/2026";
+#else
+char seasonFolder[32]="/GC/2026";
+#endif
 const char* THIS_MQTT_CLIENT="espGateCounter";const char* FWVersion="test";
 bool sdAvailable=false,ready=true;int totalDailyCars=19,totalShowCars=21;
 bool countsReady(){return ready;}const char* trafficJournalHealth(){return "OK";}
@@ -62,6 +67,8 @@ int main(){setupFileManagerRoutes();AsyncWebServerRequest req;
    p=Path(tmp);(p/'traffic').mkdir();(p/'traffic/Firmware.h').write_text(header)
    (p/'test.cpp').write_text('#include "'+str(ROOT/'src/services/FileManagerService.cpp')+'"\n'+harness)
    subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror','-I'+str(p),'-I'+str(ROOT/'include'),str(p/'test.cpp'),'-o',str(p/'test')],check=True)
+   subprocess.run([str(p/'test')],check=True)
+   subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror','-DTEST_STRING_SEASON','-I'+str(p),'-I'+str(ROOT/'include'),str(p/'test.cpp'),'-o',str(p/'test')],check=True)
    subprocess.run([str(p/'test')],check=True)
  def test_embedded_page_matches_shared_html_and_script_runs(self):
   html=(ROOT/'data/index.html').read_text();header=(ROOT/'include/traffic/FileManagerPage.h').read_text()

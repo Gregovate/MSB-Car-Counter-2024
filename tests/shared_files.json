@@ -58,10 +58,10 @@
   "tests/test_environment.py": "fdce6ed9cf5834c49cef29b75da4932dfebe16196a8e773afdebe3cc6e9f2594",
   "docs/Environment_Module_Parity_20261123.md": "4528a2537a33a8b68bf60bf9341f2e84c0e258c64bbafeb20539aaa1d2c3d92f",
   "docs/Environment_MQTT_Layout_20261123.md": "a97f4e6d66f985198f50c2391679db0a94495d5d0cd2b0da0b201988039c3415",
-  "src/services/FileManagerService.cpp": "bf34f35fbd895bc5545a691952ef097580f8a3bc9e4ec238b22ca225c02a59f0",
+  "src/services/FileManagerService.cpp": "f45b429ff589315655b43f89e5a2f4d1e899cd58f5aee74fc6b003a8891bbc57",
   "include/traffic/FileManagerPage.h": "96ab35e590e918e01f0a1e75b1d2c7f72a44965555cb198e088aec66b92f660b",
   "data/index.html": "ca07617eb068143c7df7e405d1a05e9492812c1a6f504f268b95ed8618a45acf",
-  "tests/test_file_manager.py": "74573b8e2c371d5ce126d1e5367a7554a80ad12add88794deab69fdb54935878",
+  "tests/test_file_manager.py": "3d5cd26f22bfdb094bbfc4935bf452fee9263d30191df085e45a4ef7a6355978",
   "docs/Storage_UI_and_PreShow_Cleanup_20261123.md": "8bcc624362030560a23ca2345d415892db418d6f69e2d58d78c5a2a8f94396fc",
   "include/traffic/DailyReportPage.h": "8e73960f5c7932bc0b8b8ef50b18ba043f6b3b2a8faf097384a3d90a33b2fd6e",
   "data/showSummary.html": "2d7877bbfabec710b45d23ffdcaa1d9d5b64fef0caaa733caf8743b998287a4b",
@@ -77,5 +77,12 @@
   "docs/Official_Outdoor_Temperature_20261124.md": "6cdddf97bc7223ed845c7abe72613d0bcfdd17763d5c3e9ef329cd18f53f0488",
   "tests/rolling_environment_test.cpp": "d117ac1dbb084e2a6f27ffc26ec5bd4f0aeaf15f5f2d30da08f8ebf7acb68161",
   "tests/test_rolling_environment.py": "725268d0fd8c4492608ef31c8061d335fb560495fd05cbfd6a6043e591e89622",
-  "docs/Rolling_Hourly_Temperatures_20261124.md": "8ac35f49b025df682a4755e2c3e4212fea564c5a1808b5a33fb6de97ed0c85a1"
+  "docs/Rolling_Hourly_Temperatures_20261124.md": "8ac35f49b025df682a4755e2c3e4212fea564c5a1808b5a33fb6de97ed0c85a1",
+  "src/services/RecordingCalendar.cpp": "c46ca4072eeba483b0d8c3a86f72af18d95d44723af7593e0ac47a99684528a1",
+  "include/traffic/SeasonFolder.h": "7732bd777487d53fa0c2907c03628d12d05fbc82fcc4bbe937b41f8635ac2bb2",
+  "tests/test_season_folder.py": "6abc4271e40abd52a2e8386442840bbad82c3a72b9fa5a6a67bcea5c2922f515",
+  "platformio.ini": "57e99c83c90c4c3e269fafa863610c7a8c592949ec635388b88fee1871382f7e",
+  "docs/Shared_Season_Path_and_Gate_Warnings_20261124.md": "ff77ce87c2a3e34e9c88fffb8b3f50de89e6c4092eddd61a10651baa596cfde1",
+  "tools/verify_modular.py": "7fc6fa8aa699b08819d7d964454ac695a7b60cde77a850ba62bdad706da3cbfb",
+  "tests/test_verify_modular_portability.py": "0874c49c6bf942d784d3e705b61a2c976799e2aa32b160006654919d1167b029"
 }

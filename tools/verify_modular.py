@@ -68,6 +68,12 @@ def main():
         definitions.update({m[1]: ' '.join(m[2].split()) for m in re.finditer(r'^#define\s+(\w+)\s+(.+)$', source, re.M)})
     # Version is release metadata controlled by the operator, not detector logic.
     expected_definitions = {k: v for k, v in config['defines'].items() if k != 'FWVersion'}
+    # Apply the documented Gate .11 pin-name migration only to its baseline;
+    # both repositories run this identical verifier against their own evidence.
+    if expected_definitions.get('THIS_MQTT_CLIENT') == '"espGateCounter"':
+        expected_definitions['beamAPin'] = expected_definitions.pop('magSensorPin')
+        expected_definitions['beamBPin'] = expected_definitions.pop('beamSensorPin')
+        expected_definitions['magneticSensorPin'] = '25'
     if definitions != expected_definitions:
         raise SystemExit('FAIL: GPIO, identity, topic or constant macro changed')
     version_source = mask_comments((root / 'src/main.cpp').read_text(encoding="utf-8"))
@@ -75,7 +81,14 @@ def main():
     if len(versions) != 1 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', versions[0]):
         raise SystemExit('FAIL: expected one valid manual FWVersion at the top of main.cpp')
     state = re.sub(r'^\s*#.*$', '', (root / 'src/services/RuntimeState.cpp').read_text(encoding="utf-8"), flags=re.M)
-    if tokens(state) != tokens(config['state_tokens']):
+    # Explicit storage-type migration only; preserve every original initializer,
+    # including each device's initial folder value and all detector state.
+    expected_state, migrated = re.subn(r'(?:String\s+seasonFolder|char\s+seasonFolder\s*\[\s*32\s*\])\s*=',
+                                      'SeasonFolder seasonFolder =',config['state_tokens'])
+    if migrated!=1 or not re.search(r'extern\s+SeasonFolder\s+seasonFolder\s*;',
+                                    (root/'include/traffic/RuntimeState.h').read_text(encoding="utf-8")):
+        raise SystemExit('FAIL: expected shared bounded season-folder declaration')
+    if tokens(state) != tokens(expected_state):
         raise SystemExit('FAIL: state initialization values or ordering changed')
     state_header = mask_comments((root / 'include/traffic/RuntimeState.h').read_text(encoding="utf-8"))
     enums = ' '.join(re.findall(r'enum\s+\w+\s*\{[^}]*\}\s*;', state_header))

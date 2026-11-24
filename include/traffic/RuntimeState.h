@@ -1,5 +1,6 @@
 #pragma once
 #include "Platform.h"
+#include "SeasonFolder.h"
 #include "DeviceConfig.h"
 #include "MqttTopics.h"
 
@@ -122,7 +123,7 @@ extern bool flagHourlyReset;
 extern bool showTime;
 extern bool resetFlagsOnce;
 extern bool sdAvailable;
-extern char seasonFolder[32];
+extern SeasonFolder seasonFolder;
 extern File myFile;
 extern const String fileName1;
 extern const String fileName2;

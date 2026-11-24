@@ -101,7 +101,7 @@ bool flagHourlyReset = false;
 bool showTime = false;
 bool resetFlagsOnce = false;
 bool sdAvailable = false;
-char seasonFolder[32] = "/CC/0000"; // default, updated at boot
+SeasonFolder seasonFolder = "/CC/0000"; // default, updated at boot
 File myFile; // used to write files to SD Card
 const String fileName1 = "/EnterTotal.txt"; // DailyTot.txt file to store daily counts in the event of a Failure
 const String fileName2 = "/ShowTotal.txt"; // ShowTot.txt file to store season total counts

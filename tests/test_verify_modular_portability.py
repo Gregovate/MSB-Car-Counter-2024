@@ -19,6 +19,7 @@ class VerifierPortabilityTests(unittest.TestCase):
         self.root = Path(self.workspace.name) / 'project'
         for folder in ['src', 'include/traffic', 'tests', 'tools', 'docs', 'data']:
             shutil.copytree(ROOT / folder, self.root / folder)
+        shutil.copyfile(ROOT / 'platformio.ini', self.root / 'platformio.ini')
 
     def run_windows_verifier(self):
         # Simulate a non-UTF8 Windows default even on a UTF8 Linux test host.

@@ -14,13 +14,15 @@ void setupFileManagerRoutes() {
     server.on("/storageStatus", HTTP_GET, [](AsyncWebServerRequest* request) {
         // Read RAM only: status is available with SD offline and cannot initiate
         // flash writes, journal initialization, bank reclamation or SD recovery.
+        // Car uses a char array; Gate uses Arduino String. Normalize before varargs.
+        const String activeSeason(seasonFolder);
         char payload[640];
         snprintf(payload,sizeof(payload),
             "{\"device\":\"%s\",\"firmware\":\"%s\",\"seasonFolder\":\"%s\","
             "\"sdAvailable\":%s,\"countsReady\":%s,\"journalHealth\":\"%s\","
             "\"journalArchive\":\"%s\",\"journalFreeRecords\":%lu,"
             "\"beamCaptureHealth\":\"%s\",\"beamCaptureDropped\":%lu,\"daily\":%d,\"show\":%d}",
-            THIS_MQTT_CLIENT,FWVersion,seasonFolder,sdAvailable?"true":"false",
+            THIS_MQTT_CLIENT,FWVersion,activeSeason.c_str(),sdAvailable?"true":"false",
             countsReady()?"true":"false",trafficJournalHealth(),trafficJournalArchiveHealth(),
             static_cast<unsigned long>(trafficJournalFreeRecords()),beamCaptureHealth(),
             static_cast<unsigned long>(beamCaptureDropped()),totalDailyCars,totalShowCars);
