@@ -1,4 +1,5 @@
 #include "traffic/Firmware.h"
+#include "traffic/JournalInspection.h"
 
 // Extracted from the production baseline; behavior fixes are separate changes.
 
@@ -489,6 +490,7 @@ void setupServer() {
     ElegantOTA.onProgress(onOTAProgress);
     ElegantOTA.onEnd(onOTAEnd);
 
+    setupJournalInspection(); // Read-only metadata and verified DATA-region backup.
     server.begin();
     Serial.println("HTTP server started");
 }

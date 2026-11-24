@@ -6,5 +6,10 @@
   "include/traffic/OperatingPolicy.h": "93fed668dae7b14191837e36770d58dea51b198b43ae7ce6554ab18801d0e6b5",
   "src/services/OperatingSettings.cpp": "37743250e23ae89892e58a0a471f3378b549d082bb5ce5d479fac41fed473c3e",
   "src/services/ShowSummary.cpp": "35da6187914f91eca9fe257cb1f2514333fd4fef9f8c816a141a80c67d47c757",
-  "tests/operating_release_test.cpp": "fbf017e86fa152ddf33e25da23db333958e64ba3e6d1381c26f5809c3bb9a026"
+  "tests/operating_release_test.cpp": "fbf017e86fa152ddf33e25da23db333958e64ba3e6d1381c26f5809c3bb9a026",
+  "include/traffic/JournalInspection.h": "d67ce65a83f8f0092f28c5991407021a082081559e898dde21554ab0fcc7be15",
+  "src/services/JournalInspection.cpp": "53ea30f446d0a9b81de5745f0225645362ae0111d1680fc291c62283c7cf8acd",
+  "tools/Collect-CarJournalInspection.ps1": "a608f0d35e3d3a7d04f2b4424aebcb6da6569573307ae7f1789e84232d526590",
+  "tests/test_journal_inspection.py": "958243901907d700d58be9099ab973f875ebc02b4d05b570dea1d2547031c4b0",
+  "docs/Journal_Inspection_20261123.md": "ac8d5111650f59efcb30f845755843a5c67433a8f392567fa522c030487cf154"
 }
