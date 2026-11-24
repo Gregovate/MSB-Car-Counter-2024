@@ -8,6 +8,9 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.24 — 2026-11-23
+ *   - Share identical DHT, environment averaging and show-summary modules.
+ *   - Unify health schema, unavailable samples and reconnect/periodic publication.
  * 25.12.03.2-modular-test.23 — 2026-11-23
  *   - Decode bounded DHT22 two's-complement negative-temperature variants.
  *   - Preserve raw diagnostics, standard encoding, counting and journal paths.
@@ -113,7 +116,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.23";
+const char FWVersion[] = "25.12.03.2-modular-test.24";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"
@@ -299,12 +302,6 @@ void loop() {
     if (millis() - lastKeepAliveMillis >= (unsigned long)mqttKeepAlive * 1000UL) {
         lastKeepAliveMillis = millis();
         KeepMqttAlive();
-    }
-
-    // GAL 25-11-22.4: publish temp/RH JSON every 10 minutes (retained)
-    if (millis() - lastTempPubMillis >= TEMP_PUB_INTERVAL_MS) {
-        lastTempPubMillis = millis();
-        publishEnvironmentState();
     }
 
     // Run SD health check every 60 seconds GAL 25-11-23.2

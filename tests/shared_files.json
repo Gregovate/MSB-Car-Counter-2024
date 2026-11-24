@@ -48,5 +48,13 @@
   "docs/Traffic_Journal_Release_20261123.md": "ee85dbac8d109e547fb72bdc6df223335d7373b41353051ed197fa5cf662d0ef",
   "include/traffic/DhtCompatibility.h": "768f6b0fec520c0cadf582eede5f3bd4f09d276c4f948db593ffe30102c442c7",
   "tests/dht_compatibility_test.cpp": "347632364c49821c9e29ea1689e119d1afab5a513044f13c964f6c0e232e3d69",
-  "tests/test_dht_compatibility.py": "52fc016ff72023c93f9883b9b6900a8bf49baad7c893b091e24969d5cec6102f"
+  "tests/test_dht_compatibility.py": "52fc016ff72023c93f9883b9b6900a8bf49baad7c893b091e24969d5cec6102f",
+  "src/services/TemperatureSensor.cpp": "86040cdbe6590ae34f1757504727c6ca97605e2db43ca3d28b872e69efd2b3a7",
+  "src/services/EnvironmentService.cpp": "5438454b2db242e76b97df99fe28fce3d8fb5e1e0a7ee3246784602397a13e5b",
+  "include/traffic/EnvironmentService.h": "5d338af59667c32f3cf5df40bdd5ff1dafe32608b8f6e5edbf04c4f8c0483edd",
+  "include/traffic/EnvironmentPolicy.h": "f2e6349063b4c35e57c779d8bf8d52c092e9cb78bf3dff26536d12094d1cf594",
+  "src/services/ShowSummary.cpp": "35da6187914f91eca9fe257cb1f2514333fd4fef9f8c816a141a80c67d47c757",
+  "tests/environment_test.cpp": "bcd62792b7f00200fa4ac6cc5a8bf129feb373a2a1fbb4b792a7d304d412483f",
+  "tests/test_environment.py": "92ab027887b76d57782f60dea987acb745a914d9e00ccf1e6d5b8943ddcabefe",
+  "docs/Environment_Module_Parity_20261123.md": "4528a2537a33a8b68bf60bf9341f2e84c0e258c64bbafeb20539aaa1d2c3d92f"
 }

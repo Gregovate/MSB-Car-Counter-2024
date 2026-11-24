@@ -4,7 +4,7 @@
 
 namespace {
 bool dhtAttempted=false,dhtHasValidReading=false,dhtCurrentValid=false;
-unsigned long lastDhtAttempt=0,lastDhtSuccess=0;
+unsigned long lastDhtAttempt=0,lastDhtSuccess=0,lastEnvironmentPublish=0;
 unsigned long dhtFailures=0,dhtConsecutiveFailures=0;
 const char* dhtHealth="WARMING_UP";
 float lastRawTemperature=NAN,lastRawHumidity=NAN;
@@ -23,6 +23,7 @@ void publishEnvironmentState() {
     if(fresh) snprintf(payload,sizeof(payload),"{\"tempF\": %.1f, \"humidity\": %.1f}",tempF,humidity);
     else snprintf(payload,sizeof(payload),"{\"tempF\": null, \"humidity\": null}");
     publishMQTT(MQTT_PUB_TEMP,String(payload),true);
+    lastEnvironmentPublish=millis();
     char rawTemperature[24],rawHumidity[24];
     formatDhtNumber(lastRawTemperature,rawTemperature);formatDhtNumber(lastRawHumidity,rawHumidity);
     char diagnostic[512];
@@ -38,6 +39,7 @@ void readTempandRH() {
     // Hour closure is independent of sensor success and never blocks counting.
     serviceEnvironmentHour();
     unsigned long now=millis();
+    if(now-lastEnvironmentPublish>=600000UL) publishEnvironmentState();
     if(now<60000UL && !dhtAttempted) return; // First read after one minute of uptime.
     if(dhtAttempted && now-lastDhtAttempt<60000UL) return;
     dhtAttempted=true;lastDhtAttempt=now;
@@ -68,7 +70,7 @@ void readTempandRH() {
     averageHourlyTemp(); // Exactly once per new valid sensor sample.
     if(recovered) {
         publishDebugLog("DHT valid reading available.");
-        publishEnvironmentState();lastTempPubMillis=now;
+        publishEnvironmentState();
         Serial.printf("DHT valid: %.1f F, %.1f %% RH\n",tempF,humidity);
     }
 }

@@ -40,14 +40,7 @@ void KeepMqttAlive() {
         true
     );
 
-    // ---- Retained Temp/RH JSON ----
-    char jsonPayload[100];
-    snprintf(jsonPayload, sizeof(jsonPayload),
-            "{\"tempF\": %.1f, \"humidity\": %.1f}", tempF, humidity);
-// GAL 25-11-22.4: temp/RH publish removed from KeepMqttAlive; now on 10-min timer
-// publishMQTT(MQTT_PUB_TEMP, String(jsonPayload), true);
-
-
+    // Shared environment service owns periodic publication and validity.
 
     // ---- WiFi Diagnostics (retained) ----
     publishMQTT(MQTT_PUB_RSSI, String(WiFi.RSSI()), true);
