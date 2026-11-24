@@ -10,6 +10,7 @@ struct Flash {
     std::vector<uint8_t> bytes=std::vector<uint8_t>(2*journalBankBytes,0xff);
     int budget=-1;bool failRead=false;unsigned writes=0;
     bool read(uint32_t off,void* dst,size_t n){if(failRead || uint64_t(off)+n>bytes.size())return false;memcpy(dst,bytes.data()+off,n);return true;}
+    bool erase(uint32_t off,size_t n){if(uint64_t(off)+n>bytes.size())return false;std::fill(bytes.begin()+off,bytes.begin()+off+n,0xff);return true;}
     bool write(uint32_t off,const void* src,size_t n){
         ++writes;if(uint64_t(off)+n>bytes.size())return false;
         const auto* p=static_cast<const uint8_t*>(src);
@@ -19,6 +20,7 @@ struct Flash {
 };
 struct Archive {
  std::map<uint32_t,JournalRecord> files;int budget=-1;unsigned writes=0;
+ bool isVerified(const JournalRecord& r){auto it=files.find(r.sequence);return it!=files.end() && memcmp(&it->second,&r,sizeof(r))==0;}
  bool storeVerified(const JournalRecord& r){
   auto it=files.find(r.sequence);
   if(it!=files.end())return memcmp(&it->second,&r,sizeof(r))==0;
@@ -49,6 +51,16 @@ int main(){
  archive.files[700].event.passageMs^=1;assert(!reboot.replay(archive)); // never overwrite a conflicting identity
  for(unsigned i=1301;i<=2*journalSlots;++i)assert(reboot.append(e,counts(i))==JournalAppend::Durable);
  auto before=f.bytes;assert(reboot.append(e,counts(9999))==JournalAppend::Full);assert(before==f.bytes);
+ // A full bank cannot be erased until each record is independently verified.
+ Archive complete;assert(reboot.replay(complete));
+ assert(!reboot.reclaim(1,complete)); // never erase the newest snapshot
+ complete.files[500].event.flags^=1;before=f.bytes;
+ assert(!reboot.reclaim(0,complete) && before==f.bytes);
+ complete.files[500].event.flags^=1;assert(reboot.reclaim(0,complete));
+ assert(reboot.append(e,counts(3251))==JournalAppend::Durable);
+ JournalStore<Flash> rotated(f);assert(rotated.open(true));assert(rotated.sequence()==3251);
+ assert(rotated.latest()->counts.daily==3251);
+ Archive rebuilt;assert(rotated.replay(rebuilt));assert(rebuilt.files.size()==journalSlots+1);
  // Unknown filesystem bytes, even deep in a blank-looking bank, are protected.
  Flash foreign;foreign.bytes[700000]=0;JournalStore<Flash> protect(foreign);before=foreign.bytes;assert(!protect.open(true));assert(before==foreign.bytes && foreign.writes==0);
  Flash layout;JournalStore<Flash> reject(layout);assert(!reject.open(false) && layout.writes==0);

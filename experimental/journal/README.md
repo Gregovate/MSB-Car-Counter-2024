@@ -31,10 +31,13 @@ The other 384 KiB of the default data partition is outside this adapter's range.
 Both OTA slots, OTA selection data, NVS and coredump remain untouched.
 
 The runtime adapter rejects absent OTA slots, overlaps, too-small/non-DATA/
-non-SPIFFS/encrypted partitions and out-of-range writes. The store never erases
-or formats flash, refuses unrecognized existing data in its reserved banks,
+non-SPIFFS/encrypted partitions and out-of-range writes. The store never formats flash and refuses unrecognized existing data in its reserved banks.
+It
 never overwrites consumed/torn slots and explicitly reports full capacity.
-This retains a finite history; reclamation is intentionally NOT implemented yet.
+Reclamation requires byte-exact SD verification of every committed record in the
+older bank and a newer durable snapshot in the other bank. No erase is allowed
+for the bank holding the newest snapshot. Interrupted erase/header recovery is
+still an integration gate; this is not ready for unattended deployment.
 
 ## Executable evidence
 Run from either repository root:
@@ -47,6 +50,8 @@ Run from either repository root:
 Tests cover 1,300 records, cold reboot, 313 record-write power-cut positions,
 consuming torn slots without overwriting them, filling both banks, explicit full
 refusal, unknown-data/read-failure/corruption protection and OTA layout guards.
+Tests also cover refusing reclamation with a conflicting archive or newest
+snapshot, then reclaiming the verified older bank, appending and cold reopening.
 Replay is checked after a 600-record SD outage and on repeated replay. Conflicting
 archive identities are preserved, never overwritten. The filesystem archive
 adapter is separately tested at all 320 short-write positions plus failed
@@ -71,7 +76,7 @@ compiled against the operator's licensed complete firmware environment here.
    to fabricate calendar dates. It does not replace the deployed NVS pending count.
 5. Safe bank reclamation only after independently verified SD archival and a
    preserved newer recovery snapshot; full-device power-cut tests at bank-header
-   initialization/rotation are required. The current no-erase prototype fails
+   initialization/rotation are required. The current prototype fails
    closed on interrupted headers, preserving bytes for inspection.
 6. Prevent filesystem OTA uploads from overwriting the journal while retaining
    firmware OTA. Verify the licensed ElegantOTAPro interface; do not guess an API.

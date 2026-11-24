@@ -21,6 +21,14 @@ template<class Filesystem> class SdJournalArchive {
 public:
     SdJournalArchive(Filesystem& filesystem,uint32_t recordingYear,const char* counterRoot)
         :fs(filesystem),year(recordingYear),root(counterRoot){}
+    bool isVerified(const JournalRecord& r) {
+        if(!validJournalRecord(r) || r.counts.date/10000!=year ||
+           (strcmp(root,"CC") && strcmp(root,"GC")))return false;
+        char path[96];
+        snprintf(path,sizeof(path),"/%s/%lu/TrafficJournal/%010lu.bin",root,
+            static_cast<unsigned long>(year),static_cast<unsigned long>(r.sequence));
+        return verified(path,r);
+    }
     bool storeVerified(const JournalRecord& r) {
         if(!validJournalRecord(r) || r.counts.date/10000!=year ||
            (strcmp(root,"CC") && strcmp(root,"GC")))return false;

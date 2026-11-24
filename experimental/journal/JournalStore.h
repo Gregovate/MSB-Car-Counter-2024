@@ -8,7 +8,7 @@
 namespace traffic {
 // Experimental storage engine. NOT connected to deployed counting yet.
 // All offsets are relative to an existing DATA partition; no absolute flash writes.
-// Two 512 KiB banks hold 3,250 full event+count snapshots. Never overwrite a bank.
+// Two 512 KiB banks hold 3,250 full event+count snapshots. Never overwrite records.
 // SD-verified reclamation/replay and detector integration are separate gates.
 constexpr uint32_t journalBankBytes=512U*1024U;
 constexpr uint32_t journalHeaderBytes=4096;
@@ -54,10 +54,12 @@ inline bool journalErased(const void* data,size_t bytes) {
 enum class JournalHealth {NotOpened,Ready,ForeignData,ReadFailed,WriteFailed,Corrupt,Full,LayoutRejected};
 enum class JournalAppend {Durable,Failed,Full,NotReady};
 // Store implements read(offset,buffer,size) and write(offset,buffer,size).
-// No erase method is available to this engine. A failed append requires reopen.
+// Reclamation also requires erase(offset,size), gated by verified archive records.
+// A failed append or erase requires reopen; partial bank headers fail closed.
 template<class Store> class JournalStore {
     Store& store;
     bool bankReady[2]{false,false};
+    uint32_t firstSequence[2]{0,0},lastSequence[2]{0,0};
     uint32_t nextSlot[2]{0,0};
     uint32_t latestSequence=0;
     JournalRecord latestRecord{};
@@ -98,6 +100,7 @@ public:
     bool open(bool approvedLayout) {
         ready=false;status=JournalHealth::NotOpened;latestSequence=0;latestRecord={};
         bankReady[0]=bankReady[1]=false;nextSlot[0]=nextSlot[1]=0;
+        firstSequence[0]=firstSequence[1]=lastSequence[0]=lastSequence[1]=0;
         if(!approvedLayout){status=JournalHealth::LayoutRejected;return false;}
         // Read/validate both banks before initializing either. Unknown bytes are
         // preserved. Partial headers fail closed rather than formatting evidence.
@@ -118,11 +121,17 @@ public:
                 if(journalErased(&r,sizeof(r)))continue;
                 nextSlot[b]=i+1; // Torn slots are consumed forever, never overwritten.
                 if(r.commit!=journalCommit)continue; // Interrupted append, not durable.
-                if(!validJournalRecord(r) || r.sequence<=latestSequence) {
+                if(!validJournalRecord(r) || r.sequence<=lastSequence[b]) {
                     status=JournalHealth::Corrupt;return false;
                 }
-                latestSequence=r.sequence;latestRecord=r;
+                if(!firstSequence[b])firstSequence[b]=r.sequence;
+                lastSequence[b]=r.sequence;
+                if(r.sequence>latestSequence){latestSequence=r.sequence;latestRecord=r;}
             }
+        }
+        if(firstSequence[0] && firstSequence[1] &&
+           !(lastSequence[0]<firstSequence[1] || lastSequence[1]<firstSequence[0])) {
+            status=JournalHealth::Corrupt;return false;
         }
         ready=true;status=JournalHealth::Ready;return true;
     }
@@ -131,7 +140,9 @@ public:
     // Replaying after reboot is then idempotent; this engine never edits totals.
     template<class Archive> bool replay(Archive& archive) {
         if(!ready)return false;
-        for(unsigned b=0;b<2;++b) {
+        unsigned oldest=firstSequence[1] && (!firstSequence[0] || firstSequence[1]<firstSequence[0])?1:0;
+        for(unsigned step=0;step<2;++step) {
+            unsigned b=(oldest+step)%2;
             if(!bankReady[b])continue;
             for(uint32_t i=0;i<nextSlot[b];++i) {
                 JournalRecord r{};
@@ -146,6 +157,25 @@ public:
             }
         }
         return true;
+    }
+    // Reclamation is allowed only when the OTHER bank retains the newest
+    // durable snapshot, and every committed record in this bank has a byte-exact
+    // independently readable archive. A caller-supplied sequence alone is NOT proof.
+    template<class Archive> bool reclaim(unsigned b,Archive& archive) {
+        if(!ready || b>1 || !bankReady[b] || !lastSequence[b] ||
+           lastSequence[b]>=latestSequence || lastSequence[1-b]!=latestSequence)return false;
+        for(uint32_t i=0;i<nextSlot[b];++i) {
+            JournalRecord r{};
+            if(!store.read(b*journalBankBytes+journalHeaderBytes+i*sizeof(r),&r,sizeof(r)))return false;
+            if(journalErased(&r,sizeof(r)) || r.commit!=journalCommit)continue;
+            if(!validJournalRecord(r) || !archive.isVerified(r))return false;
+        }
+        if(!store.erase(b*journalBankBytes,journalBankBytes)) {
+            status=JournalHealth::WriteFailed;ready=false;return false;
+        }
+        if(!readBankErased(b,0)){ready=false;return false;}
+        bankReady[b]=false;nextSlot[b]=firstSequence[b]=lastSequence[b]=0;
+        status=JournalHealth::Ready;return true;
     }
     JournalAppend append(const JournalEvent& event,const CountRecord& counts) {
         if(!ready)return JournalAppend::NotReady;
@@ -169,6 +199,8 @@ public:
            memcmp(&check,&r,offsetof(JournalRecord,commit)+sizeof(r.commit))) {
             status=JournalHealth::WriteFailed;ready=false;return JournalAppend::Failed;
         }
+        if(!firstSequence[b])firstSequence[b]=r.sequence;
+        lastSequence[b]=r.sequence;
         latestSequence=r.sequence;latestRecord=check;return JournalAppend::Durable;
     }
 };

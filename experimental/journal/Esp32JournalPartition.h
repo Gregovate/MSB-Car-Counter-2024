@@ -23,6 +23,10 @@ public:
         return approved && offset<=1024U*1024U && bytes<=1024U*1024U-offset &&
             esp_partition_read(partition,offset,out,bytes)==ESP_OK;
     }
+    bool erase(uint32_t offset,size_t bytes) {
+        return approved && offset%4096==0 && bytes%4096==0 && offset<=1024U*1024U &&
+            bytes<=1024U*1024U-offset && esp_partition_erase_range(partition,offset,bytes)==ESP_OK;
+    }
     bool write(uint32_t offset,const void* data,size_t bytes) {
         return approved && offset<=1024U*1024U && bytes<=1024U*1024U-offset &&
             esp_partition_write(partition,offset,data,bytes)==ESP_OK;
