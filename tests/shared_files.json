@@ -84,5 +84,6 @@
   "platformio.ini": "57e99c83c90c4c3e269fafa863610c7a8c592949ec635388b88fee1871382f7e",
   "docs/Shared_Season_Path_and_Gate_Warnings_20261124.md": "ff77ce87c2a3e34e9c88fffb8b3f50de89e6c4092eddd61a10651baa596cfde1",
   "tools/verify_modular.py": "7fc6fa8aa699b08819d7d964454ac695a7b60cde77a850ba62bdad706da3cbfb",
-  "tests/test_verify_modular_portability.py": "0874c49c6bf942d784d3e705b61a2c976799e2aa32b160006654919d1167b029"
+  "tests/test_verify_modular_portability.py": "0874c49c6bf942d784d3e705b61a2c976799e2aa32b160006654919d1167b029",
+  "docs/OPERATING_CONTRACT.md": "f4ab05c4d9dba4569450ef47f6e8ae85dd7878d18f3caecfa2f87f2f478ae68d"
 }

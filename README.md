@@ -1,5 +1,7 @@
 # MSB Car Counter 2024 Documentation
 
+**Start here:** [Authoritative Car/Gate operating contract](docs/OPERATING_CONTRACT.md) — HA schedule, show-only logging, November 27 test-to-production cutover, Gate's 13-minute travel-time rationale, and implementation status. This overrides historical 24/7 logging notes.
+
 ## Overview
 The MSB Car Counter 2024 is a sophisticated vehicle traffic monitoring system designed to manage park capacity and traffic flow. It uses an ESP32 microcontroller paired with sensors and advanced software to detect, log, and publish real-time vehicle data.
 
