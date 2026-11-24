@@ -105,7 +105,21 @@ void testDelayedClockRecovery() {
     stringPrefs.clear();legacy();
 }
 
+void testTransientMissingSdRecovery() {
+    legacy();assert(restoreCountState());
+    reboot();sdAvailable=false;
+    assert(!restoreCountState() && !countsReady());
+    assert(retryClockRestore);
+    auto before=disk;ticks+=2000;serviceCountState();assert(!countsReady() && disk==before);
+    sdAvailable=true;ticks+=2000;serviceCountState();
+    assert(countsReady() && totalDailyCars==40 && totalShowCars==400);
+    totalDailyCars=41;hourlyCount[16]=41;assert(persistCountState());
+    ticks+=2000;serviceCountState();assert(totalDailyCars==41);
+    // The existing corrupt-checkpoint scenario still requires manual inspection.
+}
+
 int main() {
+    testTransientMissingSdRecovery();
     testDelayedClockRecovery();
     { // Real .5 checkpoint migration, including its durable reset marker.
     legacy();traffic::LegacyCountRecord old{};

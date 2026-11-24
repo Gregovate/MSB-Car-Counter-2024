@@ -8,6 +8,9 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.18 — 2026-11-23
+ *   - Retry startup count restoration after a missing SD becomes available.
+ *   - Preserve corrupt checkpoints and live totals; show persistent SD faults.
  * 25.12.03.2-modular-test.17 — 2026-11-22
  *   - Preserve occupied/long passages; publish counts before SD verification.
  *   - Poll beams before and between foreground maintenance operations.
@@ -93,7 +96,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.17";
+const char FWVersion[] = "25.12.03.2-modular-test.18";
 
 #include "traffic/Firmware.h"
 

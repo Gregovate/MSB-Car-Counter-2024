@@ -200,10 +200,13 @@ bool restoreCountState() {
         retryClockRestore=true;
         reportCountFault("WAITING_FOR_VALID_CLOCK"); return false;
     }
-    // Only the clock dependency is automatically retried. Corrupt/unreadable
-    // checkpoints remain protected and require inspection.
+    // Retry a missing-card dependency as well as the clock. Never retry
+    // damaged/unreadable checkpoints or replace totals after restoration.
     retryClockRestore=false;
-    if (SD.cardType()==CARD_NONE) { reportCountFault("RESTORE_FAILED_CLOCK_OR_SD"); return false; }
+    if (SD.cardType()==CARD_NONE) {
+        retryClockRestore=true; // Dependency retry; no files can be inspected yet.
+        reportCountFault("RESTORE_FAILED_CLOCK_OR_SD"); return false;
+    }
     traffic::CountRecord a{},b{};
     bool va=readCountRecord(0,a), vb=readCountRecord(1,b);
     if (va || vb) {
