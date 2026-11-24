@@ -24,6 +24,8 @@ int main() {
     float average=-1;assert(showTemperatureAverage(average) && average==30);
     ticks=180000;dht.temperature=NAN;readTempandRH();
     assert(dhtFailures==1 && dhtConsecutiveFailures==1 && environmentSamples.count[17]==2);
+    assert(std::string(dhtRejection)=="TEMPERATURE_READ_FAILED");
+    assert(messages.back().second.find("\"lastReadTempF\":null")!=std::string::npos);
     assert(messages[messages.size()-2].second.find("null")!=std::string::npos);
     // Failed sensor must still close the hour. Missing hour never becomes 0 F.
     rtc.current=DateTime(2026,11,27,18,0);ticks=240000;readTempandRH();
@@ -38,6 +40,10 @@ int main() {
     assert(showTemperatureAverage(average) && average==40);
     // Pair validation: bad humidity cannot add an otherwise valid temperature.
     ticks=360000;dht.rh=101;readTempandRH();assert(environmentSamples.count[18]==1);
+    assert(std::string(dhtRejection)=="HUMIDITY_RANGE");
+    assert(messages.back().second.find("\"lastReadHumidity\":101")!=std::string::npos);
+    assert(messages.back().second.find("\"lastReadTempF\":60")!=std::string::npos);
+    assert(messages.back().second.find("\"pin\":4")!=std::string::npos);
     // Show cutoff excludes later samples from show average, not hourly average.
     rtc.current=DateTime(2026,11,27,22,0);ticks=420000;dht.rh=50;dht.temperature=100;readTempandRH();
     assert(showTemperatureAverage(average) && average==40 && environmentSamples.count[22]==1);
@@ -48,6 +54,7 @@ int main() {
     // Clock rollback must not mix samples into a later bucket.
     assert(!environmentSamples.add(20261127,22,40,50,true));
     assert(!environmentSamples.add(20261128,21,40,50,true));
+    assert(traffic::validEnvironment(32,50) && traffic::validEnvironment(31.8f,50));
     assert(!traffic::validEnvironment(INFINITY,50));
     assert(!traffic::validEnvironment(-998,50));
     assert(!traffic::validEnvironment(-999,50));

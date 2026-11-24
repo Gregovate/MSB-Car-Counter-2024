@@ -40,6 +40,8 @@ inline unsigned long millis(){return ticks;}
 inline void SetLocalTime(){}
 inline struct SerialMock { template<class T>void print(T){} template<class T>void println(T){} template<class... T>void printf(const char*,T...){} } Serial;
 #define F(s) s
+#define DHTPIN 4
+#define DHTTYPE 22
 #define FILE_APPEND "a"
 #define FILE_READ "r"
 #define FILE_WRITE "w"

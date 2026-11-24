@@ -1,8 +1,8 @@
 {
-  "src/services/TemperatureSensor.cpp": "af6e01465318aee957af9c90c3a62a1302aed2501261ddad6e3353e600474bf5",
+  "src/services/TemperatureSensor.cpp": "d910c23bc9e3a572ab5125678eda0f88e58817092925a69cde58cbd9b34df507",
   "include/traffic/EnvironmentService.h": "5d338af59667c32f3cf5df40bdd5ff1dafe32608b8f6e5edbf04c4f8c0483edd",
   "src/services/RecordingCalendar.cpp": "c46ca4072eeba483b0d8c3a86f72af18d95d44723af7593e0ac47a99684528a1",
-  "tests/count_stubs/traffic/Firmware.h": "ebe98c1b0c25b2db0750b2d7404b5d471e1742ef0d3fbba07758b99cdc248bb0",
+  "tests/count_stubs/traffic/Firmware.h": "f314b983a96bef2d7dda2e8ed6ab60a7bb2252d08e12ef27b8f43f79d3094392",
   "include/traffic/OperatingPolicy.h": "93fed668dae7b14191837e36770d58dea51b198b43ae7ce6554ab18801d0e6b5",
   "src/services/OperatingSettings.cpp": "37743250e23ae89892e58a0a471f3378b549d082bb5ce5d479fac41fed473c3e",
   "src/services/ShowSummary.cpp": "35da6187914f91eca9fe257cb1f2514333fd4fef9f8c816a141a80c67d47c757",
@@ -20,5 +20,7 @@
   "tests/provision_stubs/esp_partition.h": "d9717102e569756225296a42da5f8dabb26c564ddc97ddb72202f5443fc23771",
   "tests/provision_stubs/Preferences.h": "d05ff4644bf55f8fbd026fdfe585acd8327bddd7102aff2733ee557d1d3a63f4",
   "tests/provision_stubs/esp_ota_ops.h": "2e4d90cc3d2452507d8eea54a55f77b8f9080db1c9dda1180624e172bfa40967",
-  "tests/provision_stubs/mbedtls/sha256.h": "7175eb8f596083a16da023adda9f02a4dfb2749773ebe45bd7f6a0003f9c2c6d"
+  "tests/provision_stubs/mbedtls/sha256.h": "7175eb8f596083a16da023adda9f02a4dfb2749773ebe45bd7f6a0003f9c2c6d",
+  "docs/DHT_Investigation_20261123.md": "034d46e305b3445f33d0d7d93ad2eaaf1da9a2740814aca01d5634e8a3796658",
+  "tests/environment_test.cpp": "520c8e3d96f8712c1a1852f66bc82f2b50d6b1ea12ac92b72f1372bc0f4b994b"
 }
