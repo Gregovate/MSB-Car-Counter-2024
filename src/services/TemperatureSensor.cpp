@@ -22,7 +22,11 @@ void publishEnvironmentState() {
     char payload[100];
     if(fresh) snprintf(payload,sizeof(payload),"{\"tempF\": %.1f, \"humidity\": %.1f}",tempF,humidity);
     else snprintf(payload,sizeof(payload),"{\"tempF\": null, \"humidity\": null}");
-    publishMQTT(MQTT_PUB_TEMP,String(payload),true);
+    // Canonical suffix is identical on both counters. The configured old topic
+    // remains an alias until deployed HA subscribers have been migrated.
+    const String canonical=String(topic_base_path)+"/Env/temp";
+    publishMQTT(canonical.c_str(),String(payload),true);
+    if(canonical!=String(MQTT_PUB_TEMP)) publishMQTT(MQTT_PUB_TEMP,String(payload),true);
     lastEnvironmentPublish=millis();
     char rawTemperature[24],rawHumidity[24];
     formatDhtNumber(lastRawTemperature,rawTemperature);formatDhtNumber(lastRawHumidity,rawHumidity);

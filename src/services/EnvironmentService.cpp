@@ -6,8 +6,11 @@ traffic::EnvironmentSamples environmentSamples;
 void publishCompletedEnvironmentHour(int hour,double sum,unsigned count) {
     if (!count || hour<0) return;
     char topic[96];
-    snprintf(topic,sizeof(topic),"%s/hourly/%02d",MQTT_PUB_TEMP,hour);
+    snprintf(topic,sizeof(topic),"%s/Env/temp/hourly/%02d",topic_base_path,hour);
     publishMQTT(topic,String(sum/count,1),false);
+    // Keep existing Gate hourly subscribers alive during topic migration.
+    char legacy[120];snprintf(legacy,sizeof(legacy),"%s/hourly/%02d",MQTT_PUB_TEMP,hour);
+    if(String(topic)!=String(legacy)) publishMQTT(legacy,String(sum/count,1),false);
 }
 }
 

@@ -68,5 +68,19 @@ int main() {
     legacy();rtc.current=DateTime(2026,11,29,22);configure(false);assert(restoreCountState());officialCountsComplete=true;
     environmentSamples={};assert(writeOfficialSummaries());
     assert(disk["/CC/2026/ShowSummary.csv"].find(",,,\n")!=std::string::npos);
+    // Canonical measurement/health layout is independent of legacy topic config.
+    bool canonical=false,health=false,legacyMeasurement=false,legacyHour=false;
+    for(const auto& m:messages) {
+        if(m.first=="msb/traffic/TestCounter/Env/temp") canonical=true;
+        if(m.first=="msb/traffic/TestCounter/System/dhtHealth") health=true;
+        if(m.first=="msb/traffic/TestCounter/Env/tempHumidity") legacyMeasurement=true;
+        if(m.first=="msb/traffic/TestCounter/Env/tempHumidity/hourly/17") legacyHour=true;
+    }
+    assert(canonical && health);
+#ifdef TRAFFIC_TEST_LEGACY_ENV
+    assert(legacyMeasurement && legacyHour);
+#else
+    assert(!legacyMeasurement && !legacyHour);
+#endif
     std::cout<<"PASS: real DHT/averaging services, warmup, null reporting, failure/recovery, zero F, weighted means, boundaries and missing summaries\n";
 }

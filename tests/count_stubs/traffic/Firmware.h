@@ -163,7 +163,11 @@ inline struct DhtMock {
     float readHumidity(){++calls;return rh;}
     float readTemperature(bool){return temperature;}
 } dht;
+#ifdef TRAFFIC_TEST_LEGACY_ENV
+#define MQTT_PUB_TEMP "msb/traffic/TestCounter/Env/tempHumidity"
+#else
 #define MQTT_PUB_TEMP "msb/traffic/TestCounter/Env/temp"
+#endif
 inline void publishDebugLog(const String&){}
 void serviceEnvironmentHour();
 void averageHourlyTemp();
