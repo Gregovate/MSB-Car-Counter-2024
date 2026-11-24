@@ -1,5 +1,7 @@
 # MSB Car / Gate Counter operating contract
 
+**Part 2 source update, November 24.** Car .31 and Gate .24 implement the cutover and paired occupancy report. See [production build, cutover and acceptance instructions](Production_Cutover_20261124.md). The installed-version and unfinished-work descriptions below record the .30/.23 checkpoint. Local compilation, flashing and field acceptance of .31/.24 are pending.
+
 **Owner decisions confirmed by Greg on November 24, 2026. This is the authoritative
 operating requirement for BOTH repositories. Read this before modifying firmware,
 Home Assistant settings, counts, resets, reports or analytics.** Historical notes
@@ -9,7 +11,7 @@ that describe 24/7 production vehicle logging are superseded by this contract.
 
 Everything being collected before the November 27 production cutover is TEST DATA.
 The public show opens Friday, November 27, 2026 at **5:00 PM America/Chicago**.
-Greg will change the HA show start date to **2026-11-27 on Friday**. That transition
+HA currently uses **2026-11-22** for nightly testing. Greg may set the HA date to **2026-11-27** in advance or on Friday. Only equality of the accepted HA date and the valid local RTC date starts the one-time season transaction. That transition
 must start a clean production dataset on both counters:
 
 - Zero all active daily/hourly/show count baselines, including accumulated test
@@ -53,7 +55,7 @@ a hard-coded firmware clock rule or a new manual occupancy-baseline workflow.
 
 | Item | Required behavior |
 | --- | --- |
-| Car nightly baseline | Daily entrance baseline zero at opening / 5:00 PM |
+| Car nightly baseline | HA resets daily entries at 4:59 PM (opening minus one minute). Official entrance recording begins at 5:00 PM |
 | Gate nightly baseline | Zero later, at its HA-controlled opening delay |
 | Gate opening delay | Keep HA's existing delay; most recently observed +10 minutes |
 | Gate closing grace | Keep HA's existing closing delay; most recently observed +25 minutes |
@@ -85,10 +87,9 @@ The last supplied Car .29 telemetry (November 24, 09:54 local) reported:
     countStartMinute = 1020
     countEndMinute = 1090     # 6:10 PM for the temporary 6:00 PM test close
 
-Thus the official entry window starts at 5:00, but that observed daily reset was
-one minute earlier. Exact 5:00 reset requires the existing HA helper
-`input_number.carcounter_start_offset_min` to be **0**, not -1. Its automation sends
-that helper as field 3 (zero-based) of Config/operatingSettings.
+Greg confirmed the 4:59 PM daily reset is intentional. Keep
+`input_number.carcounter_start_offset_min` at **-1**. It prepares the zero
+baseline one minute before HA opens official entrance recording at 5:00 PM.
 
 The last observed Car end/grace helper was +10 minutes. If the requirement is to
 stop entrance logging exactly when HA closes the show plus approved extension,
@@ -97,6 +98,14 @@ separate and must be preserved. Do not silently change a helper or claim the
 applied timing matches the requirement without verifying State/resetMinute and
 State/countStartMinute/countEndMinute on the device. This documentation does not
 apply a live HA setting or reset any counts.
+
+## Days actually open
+
+HA's manual Reset Days Running action sets the actual count on the local date.
+The stored adjustment carries forward over subsequent scheduled open days and
+survives reboot. November 27 is day 1. If November 28 closes for weather,
+set November 29 to day 2 and November 30 becomes day 3. Car also sends the
+season-qualified adjustment to Gate. This operation leaves vehicle totals alone.
 
 ## Occupancy and capacity analysis
 
@@ -132,20 +141,8 @@ a rated/safe capacity limit or a waiting-time model.
 - Keep the existing OTA update capability. Greg builds locally with licensed
   ElegantOTAPro and flashes each ESP32 himself.
 
-## Implementation status — do not mistake requirements for released behavior
+## Implementation and installation status
 
-Latest operator-confirmed builds: **Car .30 / Gate .23**, both compiled with zero
-warnings and flashed on November 24. Their shared season-folder type and build
-warning fixes are released.
+Car .31 and Gate .24 implement the date-matched cutover, show-only production recording, dated occupancy and weather-closure day adjustment. The release notes describe storage recovery, report evidence and field acceptance.
 
-**The newly requested production-start transactional reset/archive and strict
-show-only suppression of raw vehicle counts/logs are NOT implemented in those
-builds.** Their countTheCar path still increments raw totals/logs outside official
-show windows; only the separate official series is window-qualified. Changing
-showStartDate currently saves the calendar, not an all-storage production reset.
-Do NOT change the date on Friday expecting the requested clean cutover until the
-new transition has been implemented, fault-tested and explicitly released.
-
-The occupancy report addition is work in progress; it must obey the show-only
-scope above. No production reset, live HA helper change, or deletion of device
-data has been performed by this documentation update.
+The last operator-confirmed installations are Car .30 and Gate .23. Greg compiled and flashed both with zero warnings on November 24. Those earlier versions still record raw traffic outside the windows and only save the calendar on a date change. Build and flash the paired Part 2 source before using the production start date on the equipment. Live HA settings remain operator-owned.

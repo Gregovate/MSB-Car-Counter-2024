@@ -1,4 +1,5 @@
 #include "traffic/Firmware.h"
+#include "traffic/DatedOccupancy.h"
 
 // Extracted from the production baseline; behavior fixes are separate changes.
 
@@ -6,6 +7,11 @@
 void publishMQTT(const char *topic, const String &message, bool retainFlag) {
     if (!countTopicPublishable(topic) || !mqttOnline()) return;
     mqtt_client.publish(topic,message.c_str(),retainFlag);
+    if(productionActive() && strcmp(topic,MQTT_PUB_ENTER_CARS)==0 && officialCountDate()) {
+        traffic::EntranceReading reading;
+        reading.date=officialCountDate();reading.passages=officialDailyPassages();reading.stamp=rtc.now().unixtime();
+        char payload[48];reading.encode(payload);mqtt_client.publish(traffic::datedEntryTopic,payload,true);
+    }
     start_MqttMillis=millis();
 }
 
@@ -95,6 +101,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
     if (handlePassageDebugCommand(topic,message)) return;
     if (handleOperatingCommand(topic,message)) return;
     String command(topic);
+    if(command==String(topic_base_path)+"/Config/resetDaysRunning") {
+        if(acceptDaysRunning(message))flagDailyShowSummarySaved=false;
+        return;
+    }
     if (command==String(topic_base_path)+"/Config/showStartDate") {
         acceptShowStartDate(String(message));return;
     }

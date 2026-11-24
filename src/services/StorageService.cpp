@@ -10,8 +10,10 @@ void checkSdHealth() {
             publishMQTT(MQTT_PUB_SD_HEALTH, "OFFLINE", true);
             return;
         }
+        if(!productionCardMatches()){sdAvailable=false;return;}
         ensureSeasonFolderExists(); // Never replaces already restored live totals.
     }
+    if(!productionCardMatches()){sdAvailable=false;return;}
     File test=recordingOpen("/_sd_test.tmp",FILE_WRITE);
     size_t written=test ? test.print("1") : 0;
     test.flush(); test.close();
@@ -750,6 +752,7 @@ void initSDCard() {
     uint64_t cardSizeMB = SD.totalBytes() / (1024ULL * 1024ULL);
     Serial.printf("SD Card Size: %lluMB\n", cardSizeMB);
 
+    if(!productionCardMatches()){sdAvailable=false;return;}
     loadRecordingCalendarFromSD();
 
     // ---- Validate critical folders/files ----

@@ -226,7 +226,8 @@ void setupServer() {
     // ----------------------------
     // Root UI with SAFE fallback
     // ----------------------------
-    setupFileManagerRoutes(); // Shared flash-backed UI and recovery status.
+    setupFileManagerRoutes();
+    setupOccupancyRoutes(); // Shared flash-backed UI and recovery status.
 
 
     // ----------------------------

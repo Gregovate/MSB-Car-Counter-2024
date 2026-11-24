@@ -25,6 +25,7 @@ std::string contents,status;
 struct SDMock{int cardType(){return mounted?1:0;}bool begin(int,int,int){++mounts;mounted=mountWorks;return mounted;}uint64_t totalBytes(){return 32ULL*1024*1024*1024;}}SD;
 struct File{bool valid=true;operator bool(){return valid;}size_t print(const char*s){contents=writesWork?s:"";return contents.size();}void flush(){}void close(){}size_t size(){return contents.size();}int read(){return contents.empty()?-1:contents[0];}};
 File recordingOpen(const char*,const char*mode){return {mounted && (strcmp(mode,"r") || readsWork)};}
+bool productionCardMatches(){return true;}
 int recordingYear(){return 2026;}
 void ensureSeasonFolderExists(){++folders;}void ensureSeasonFolderExists(int){++folders;}
 void recordingRemove(const char*){contents="";}

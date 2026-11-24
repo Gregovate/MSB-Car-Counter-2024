@@ -20,3 +20,11 @@ bool recordingRename(const String &from, const String &to);
 void noteNetworkClock(int year);
 
 bool recordingWebWritable(const String &path);
+
+bool archiveProductionTestFolder(const String& active);
+bool makeProductionFolder(const String& active);
+File openProductionBaseline(const String& active,const char* mode);
+File readProductionCardMarker(const char* path);
+bool productionDateMatches();
+bool acceptDaysRunning(const char* payload);
+bool applyDaysAnchor(uint32_t season,uint32_t anchor);

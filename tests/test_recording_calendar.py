@@ -16,6 +16,7 @@ class RecordingCalendarTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):cls.temp.cleanup()
     def test_calendar_paths_and_rollover(self):subprocess.run([self.exe,'normal'],check=True)
+    def test_weather_days_anchor(self):subprocess.run([self.exe,"weather"],check=True)
     def test_backward_rtc_after_reboot(self):subprocess.run([self.exe,'backward'],check=True)
     def test_missing_clock_uses_saved_year(self):subprocess.run([self.exe,'offline'],check=True)
     def test_sd_override_recovery_with_missing_nvs(self):subprocess.run([self.exe,'sd-recovery'],check=True)

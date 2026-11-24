@@ -46,6 +46,9 @@ inline struct SerialMock { template<class T>void print(T){} template<class T>voi
 #define FILE_READ "r"
 #define FILE_WRITE "w"
 inline std::map<std::string,std::string> disk;
+// A simulated power cut occurs immediately after a durable mutation.
+inline int nativeCutAfter=-1,nativeMutations=0;
+inline void nativeMutation(){++nativeMutations;if(nativeMutations==nativeCutAfter)throw nativeMutations;}
 inline std::string failWrite, failRead, failRename;
 inline int nativeBackupReadMutateOn=-1,nativeBackupReadCount=0;
 struct File {
@@ -65,7 +68,7 @@ struct File {
     size_t size() const {return valid ? disk[path].size() : 0;}
     size_t write(const uint8_t* p,size_t n) {
         size_t written=path==failWrite ? n/2 : n;
-        disk[path].append(reinterpret_cast<const char*>(p),written);return written;
+        disk[path].append(reinterpret_cast<const char*>(p),written);nativeMutation();return written;
     }
     size_t read(uint8_t* p,size_t n) {
         if(path==failRead)return 0;
@@ -88,8 +91,17 @@ inline struct Sd {
     int cardType(){return sdAvailable ? 1 : CARD_NONE;}
     File open(const String&p,const char* mode){
         if(strcmp(mode,"r")==0)return {p,disk.count(p)>0 && p!=failRead};
-        if(strcmp(mode,"a"))disk[p]="";
+        if(strcmp(mode,"a")){disk[p]="";nativeMutation();}
         return {p,true};
+    }
+    bool mkdir(const String&p){disk[p]="";nativeMutation();return true;}
+    bool rename(const String& a,const String& b){
+        if(!disk.count(a)||disk.count(b)||a==failRename)return false;
+        auto old=disk;
+        for(const auto& item:old)if(item.first==a||item.first.find(a+"/")==0){
+            disk[b+item.first.substr(a.size())]=item.second;disk.erase(item.first);
+        }
+        nativeMutation();return true;
     }
     bool exists(const String&p){return disk.count(p)>0;}
 } SD;
@@ -184,7 +196,7 @@ inline bool nativeJournalEnabled=false;
 struct NativeFlash {
  std::vector<uint8_t> bytes=std::vector<uint8_t>(2*traffic::journalBankBytes,0xff);
  bool read(uint32_t off,void* out,size_t n){if(uint64_t(off)+n>bytes.size())return false;memcpy(out,bytes.data()+off,n);return true;}
- bool write(uint32_t off,const void* data,size_t n){if(uint64_t(off)+n>bytes.size())return false;const auto* p=static_cast<const uint8_t*>(data);for(size_t i=0;i<n;++i)bytes[off+i]&=p[i];return true;}
+ bool write(uint32_t off,const void* data,size_t n){if(uint64_t(off)+n>bytes.size())return false;const auto* p=static_cast<const uint8_t*>(data);for(size_t i=0;i<n;++i)bytes[off+i]&=p[i];nativeMutation();return true;}
  bool erase(uint32_t off,size_t n){if(uint64_t(off)+n>bytes.size())return false;std::fill(bytes.begin()+off,bytes.begin()+off+n,0xff);return true;}
 };
 inline NativeFlash nativeFlash;
@@ -209,4 +221,21 @@ inline const char* trafficJournalHealth(){return nativeJournalHealthOverride?nat
 inline void activateTrafficVehicleEvent(){}
 #ifndef TRAFFIC_OPERATING_TEST
 inline void serviceEventReset(){}
+#endif
+
+#ifndef TRAFFIC_SESSION_TEST
+inline bool productionBlocked(){return false;}
+inline bool nativeProduction=false;
+inline bool productionActive(){return nativeProduction;}
+inline bool productionRequested(){return false;}
+inline bool requestProductionSession(){return true;}
+inline bool productionCardMatches(){return true;}
+#endif
+inline bool commitClosingCheckpoint(){return true;}
+inline String occupancyText(){return String(carCounterCars-totalDailyCars);}
+inline uint32_t beamCaptureDropped(){return 0;}
+inline DateTime recordingShowStart(){return DateTime(recordingYear(),11,27);}
+inline void noteUnqualifiedClock(){}
+#ifndef TRAFFIC_SESSION_TEST
+inline bool productionDateMatches(){return false;}
 #endif

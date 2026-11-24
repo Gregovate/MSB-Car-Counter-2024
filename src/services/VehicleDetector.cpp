@@ -5,6 +5,12 @@
 void countTheCar() {
     serviceCountState(); // Captured event date owns rollover, even after a stall.
     serviceEventReset(); // Apply an armed logical reset before this event increments.
+    // Leave beam timing and stuck-beam detection running through closed periods.
+    if (productionBlocked() || (!productionActive() && productionDateMatches()))return;
+    if (productionActive()) {
+        if (!countEventClockValid()){noteUnqualifiedClock();return;}
+        if (!officialShowNow())return;
+    }
     activateTrafficVehicleEvent();
     if (!countEventCanApply()) {
         // Preserve events during recovery without writing zero/fictitious dates.
@@ -82,7 +88,7 @@ void countTheCar() {
         myFile.print(", ");
         myFile.print(abFollow_ms);         // A->B follow time (Beam 2 first high)
         myFile.print(", ");
-        myFile.println(timeBetweenCars_ms); // raw millis between cars
+        myFile.println(timeBetweenCars_ms);
 
         myFile.close();
 
@@ -194,7 +200,7 @@ void processBeamSample(uint32_t now,bool rawA,bool rawB) {
             publishMQTT(MQTT_PUB_BEAM_B_BROKEN_MS,String(passage.bMs));
             publishMQTT(MQTT_PUB_TTP,String(timeToPassMS));
             publishMQTT(MQTT_PUB_BETWEENCARS_MS,String(timeBetweenCars_ms),true);
-            publishMQTT(MQTT_COUNTER_LOG,"Car Counted Successfully!!");
+            if (totalDailyCars!=passageCountBefore) publishMQTT(MQTT_COUNTER_LOG,"Car Counted Successfully!!");
         }
         reportPassage("COMPLETE",totalDailyCars);
     }

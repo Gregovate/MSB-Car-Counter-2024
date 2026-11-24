@@ -24,3 +24,5 @@ bool commitCountJournal();
 
 // Explicit post-backup cleanup; rejects every active/recovery-required record.
 bool removeObsoleteClosedCount(const String& path);
+uint32_t officialCountDate();
+int officialDailyPassages();

@@ -78,8 +78,9 @@ void initializeOperatingSettings() {
 int effectiveExtension() { return traffic::extensionForDate(settings,settingsToday()); }
 int effectiveShowEnd() { return traffic::officialEnd(settings,settingsToday()); }
 bool officialShowNow() {
-    if (!recordingShowSeasonActive()) return false;
+    if (!countEventClockValid()) return false;
     DateTime now=countEventTime();
+    if(now.unixtime()<recordingShowStart().unixtime())return false;
     int date=now.year()*10000+now.month()*100+now.day();
     return traffic::insideOfficialWindow(settings,gateDevice(),date,now.hour()*60+now.minute());
 }

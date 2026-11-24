@@ -25,8 +25,9 @@ uint32_t pendingVehicles=0;
 bool pendingDurable=true;
 void loadPendingVehicles() {
     if (pendingLoaded) return;
+    if (productionBlocked()) return;
     pendingLoaded=true;
-    pendingDurable=pendingPrefs.begin("traffic-pending",false);
+    pendingDurable=pendingPrefs.begin(productionActive() ? "traffic-prodpend" : "traffic-pending",false);
     if (pendingDurable) pendingVehicles=pendingPrefs.getUInt("vehicles",0);
     uint32_t journalPending=journalPendingVehicles();
     if(journalPending>pendingVehicles)pendingVehicles=journalPending;
@@ -190,11 +191,11 @@ void publishCountHealth() {
     publishMQTT((String(topic_base_path)+"/System/unrestoredDailyCount").c_str(),String(countReady ? 0 : totalDailyCars),true);
 }
 
-bool countsReady() { return countReady; }
-bool countEventCanApply(){return countReady && countEventClockValid() && countToday()==countDate;}
+bool countsReady() { return countReady && !productionBlocked(); }
+bool countEventCanApply(){return countsReady() && countEventClockValid() && countToday()==countDate;}
 
 bool countTopicPublishable(const char* topic) {
-    if (countReady) return true;
+    if (countsReady()) return true;
     String t(topic), base(topic_base_path);
     // Never replace retained counts/heartbeat with startup defaults after a
     // recovery failure. Health/config/alarms continue to publish normally.
@@ -202,6 +203,7 @@ bool countTopicPublishable(const char* topic) {
 }
 
 bool restoreCountState() {
+    if (productionBlocked()) return false;
     if (countReady) return true; // A retry must never replace live totals.
     loadPendingVehicles();
     uint32_t today=countToday();
@@ -215,7 +217,8 @@ bool restoreCountState() {
     traffic::CountRecord a{},b{};
     bool va=false,vb=false;
     const traffic::CountRecord* flash=latestTrafficSnapshot();
-    if(SD.cardType()!=CARD_NONE){va=readCountRecord(0,a);vb=readCountRecord(1,b);}
+    if(flash && flash->date/10000<today/10000)flash=nullptr; // Restore only the active recording year.
+    if(SD.cardType()!=CARD_NONE && productionCardMatches()){va=readCountRecord(0,a);vb=readCountRecord(1,b);}
     sdCheckpointKnown=va || vb;
     if(flash) {
         traffic::CountRecord sd{};
@@ -225,7 +228,7 @@ bool restoreCountState() {
         }
         if(flash->sequence>=sd.sequence){sdCheckpointKnown=sd.sequence==flash->sequence;a=*flash;va=true;vb=false;}
     }
-    if(!va && !vb && SD.cardType()==CARD_NONE) {
+    if(!va && !vb && (SD.cardType()==CARD_NONE || productionActive())) {
         retryClockRestore=true;reportCountFault("RESTORE_FAILED_CLOCK_OR_SD");return false;
     }
     if (va || vb) {
@@ -276,6 +279,7 @@ bool restoreCountState() {
 }
 
 bool checkpointCountState(bool exportSD) {
+    if (productionBlocked()) return false;
     if (!countReady) return false;
     if (!countToday() || countToday()!=countDate) {
         reportCountFault("SAVE_FAILED_CLOCK_OR_SD"); return false;
@@ -321,6 +325,7 @@ bool persistCountState(){return checkpointCountState(true);}
 bool commitCountJournal(){return checkpointCountState(false);}
 
 void serviceCountState() {
+    if (productionBlocked()) return;
     if (!countReady) {
         if (!retryClockRestore || !countToday()) return;
         if (millis()-lastRestoreAttempt<1000UL) return;
@@ -461,4 +466,24 @@ bool removeObsoleteClosedCount(const String& path) {
     // Recheck rollover/pending state after I/O. A failed delete leaves data intact.
     if(countToday()!=countDate || closedCounts.date==date || !sdAvailable) return false;
     return recordingRemove(path);
+}
+
+void resetSessionRam() {
+    // Restore exclusively from the committed zero marker and the new directory.
+    // The old Preferences namespace remains intact as test evidence.
+    pendingPrefs.end();
+    pendingLoaded=false; pendingVehicles=0;
+    countReady=false; retryClockRestore=true; sdCheckpointKnown=false;
+    countSlot=-1; savedCounts={}; closedCounts={}; countDate=0; showResetDate=0;
+    totalDailyCars=totalShowCars=0;
+    memset(hourlyCount,0,sizeof(unsigned int)*24);
+    memset(officialHourly,0,sizeof(officialHourly));
+    flagDailyShowSummarySaved=false; flagDailySummarySaved=false;
+}
+
+uint32_t officialCountDate() {return countsReady() && countToday()==countDate ? countDate : 0;}
+int officialDailyPassages() {
+    unsigned int total=0;
+    for(auto hour:officialHourly)total+=hour;
+    return total;
 }

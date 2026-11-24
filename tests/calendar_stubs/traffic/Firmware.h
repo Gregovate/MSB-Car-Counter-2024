@@ -72,3 +72,12 @@ bool recordingPathWritable(const String &, bool mkdirOnly=false);
 
 inline int operatingSeasonEndDate(){return recordingYear()*10000+1231;}
 inline int operatingDownDate(){return recordingYear()*10000+1224;}
+
+inline bool productionBlocked(){return false;}
+inline bool testProductionActive=false;
+inline bool productionActive(){return testProductionActive;}
+inline bool productionRequested(){return false;}
+inline bool requestProductionSession(){return true;}
+inline bool productionCardRejected(){return false;}
+inline uint32_t productionStartDate(){return 0;}
+bool applyDaysAnchor(uint32_t season,uint32_t anchor);

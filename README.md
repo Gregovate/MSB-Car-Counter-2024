@@ -1,5 +1,7 @@
 # MSB Car Counter 2024 Documentation
 
+[Part 2 firmware release and Friday cutover](docs/Production_Cutover_20261124.md)
+
 **Start here:** [Authoritative Car/Gate operating contract](docs/OPERATING_CONTRACT.md) — HA schedule, show-only logging, November 27 test-to-production cutover, Gate's 13-minute travel-time rationale, and implementation status. This overrides historical 24/7 logging notes.
 
 ## Overview

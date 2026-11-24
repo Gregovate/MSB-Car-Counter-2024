@@ -233,6 +233,7 @@ public:
            !(lastSequence[0]<firstSequence[1] || lastSequence[1]<firstSequence[0])) {
             status=JournalHealth::Corrupt;return false;
         }
+        if(latestRecord.schema==2)pending=latestRecord.reserved;
         ready=true;status=JournalHealth::Ready;return true;
     }
     // Walk durable records in their sequence order. The archive adapter MUST
@@ -294,7 +295,7 @@ public:
         if(nextSlot[b]>=journalSlots){status=JournalHealth::Full;return JournalAppend::Full;}
         if(!bankReady[b] && !initializeBank(b)){ready=false;return JournalAppend::Failed;}
         JournalRecord r{};r.magic=0x4d53424aU;r.schema=2;r.sequence=latestSequence+1;
-        r.reserved=event.kind==2 && event.beforeDaily>pending?event.beforeDaily:pending;
+        r.reserved=event.kind==7 ? 0 : event.kind==2 && event.beforeDaily>pending?event.beforeDaily:pending;
         r.event=event;r.counts=counts;
         r.event.correctionEpoch=event.kind==6 && event.correctionEpoch>correctionEpoch?event.correctionEpoch:correctionEpoch;
         r.checksum=journalHash(&r,offsetof(JournalRecord,checksum));r.commit=journalCommit;
@@ -315,7 +316,7 @@ public:
         lastSequence[b]=r.sequence;
         latestSequence=r.sequence;latestRecord=check;correctionEpoch=r.event.correctionEpoch;
         if(validCountRecord(counts))latestCounts=counts;
-        if(event.kind==2 && event.beforeDaily>pending)pending=event.beforeDaily;
+        pending=r.reserved;
         return JournalAppend::Durable;
     }
 };

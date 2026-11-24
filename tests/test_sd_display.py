@@ -8,6 +8,7 @@ class SdDisplay(unittest.TestCase):
 #include <cstring>
 #include <string>
 #include <vector>
+inline std::string occupancyText(){return "3";}
 #define WHITE 1
 #define BLACK 0
 bool sdAvailable=false,ready=true;

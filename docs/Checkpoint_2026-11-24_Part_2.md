@@ -1,6 +1,8 @@
 # Firmware Refactoring Analysis — Part 2 checkpoint
+
+**Part 2 source update, November 24.** Car .31 and Gate .24 implement the cutover and paired occupancy report. See [production build, cutover and acceptance instructions](Production_Cutover_20261124.md). The installed-version and unfinished-work descriptions below record the .30/.23 checkpoint. Local compilation, flashing and field acceptance of .31/.24 are pending.
 Date: 2026-11-24 (America/Chicago).
-Status: documentation checkpoint; production cutover implementation is NOT released.
+Current source status: paired .31/.24 release on the working branch. Operator compile, flash and equipment acceptance are pending.
 
 ## Start here
 Read this document, docs/OPERATING_CONTRACT.md, repository AGENTS.md if present, README.md, and the shared-module verification documentation before changing code. Use BOTH repositories as permanent memory:
@@ -27,9 +29,9 @@ Operating-contract commits:
 The authoritative details are in OPERATING_CONTRACT.md.
 Everything currently collected is TEST data. Public opening is Friday November 27, 2026, 5 PM local. Greg will set the HA show start date to November 27. The requested transition must archive tests separately and begin with zero production counts, event traffic logs, recovery state, and report rows. Never wipe on ordinary reboot, duplicate HA publication, or reconnect.
 Production traffic counts/logs belong ONLY to approved show windows. Pre-show counts are informational and excluded from production occupancy.
-HA owns times, offsets, dates, and extensions. Start is always 5 PM. Car baseline must zero at 5 PM; Gate zeros later according to its accepted HA offset. Preserve Gate opening +10 minutes and closing +25 minutes unless HA changes them, including authorized extension (normally zero).
+HA owns times, offsets, dates, and extensions. Start is always 5 PM. Car resets at 4:59 PM under the HA -1 offset and admits official entries starting at 5 PM; Gate zeros later according to its accepted HA offset. Preserve Gate opening +10 minutes and closing +25 minutes unless HA changes them, including authorized extension (normally zero).
 Minimum traverse time is 13 minutes at 5 mph. This explains delayed Gate handling; it does NOT authorize hard-coding a 13-minute offset. Closing grace permits draining; never invent exits or force a remaining occupancy to zero.
-Latest observed Car reset offset was -1 minute and closing grace +10. Exact 5 PM reset and exact entrance close require review of HA's existing Car helpers (0 offsets); do not silently override HA in firmware.
+Greg confirmed the -1 minute Car reset offset. Keep it. Review the separate end helper for exact entrance close. November 22 is the test calendar. A confirmed HA start date equal to the local date starts the one-time production cutover.
 Friday/Saturday, especially Saturday, and December 23 are largest nights. Current light tests do not establish capacity.
 Car exterior temperature is official. Gate enclosure temperature is an unofficial backup.
 Preserve HA unique IDs; shared environment topic is Env/temp. One supplied Gate humidity YAML had an accidental mmsb/ prefix; correct to msb/ when editing that configuration.
@@ -42,9 +44,9 @@ File manager defaults to the active season, exposes storage/recovery status and 
 Common SeasonFolder char[32], warning fixes, and removal of unused Arduino-DS3231 dependency were verified in .30/.23; actual RTC driver remains RTClib.
 Last recorded native suite: Car 43 tests / Gate 40 tests; portability 3 each. Shared manifest reached 87 entries after operating-contract documentation. Re-run current tests rather than assume these counts remain unchanged.
 
-## Immediate unfinished work — engineering blocker
+## Original .30/.23 handoff — work implemented in .31/.24
 Installed .30/.23 still increment raw counts and write passage logs outside the official window. acceptShowStartDate only changes the calendar; it DOES NOT perform the requested all-storage test-to-production transition.
-Finish and fault-test:
+Original acceptance scope:
 1. Idempotent, recoverable production-session transition across flash journal, pending recovery NVS, SD snapshots, CSV/event logs, and report exports.
 2. Strict show-window count/log qualification while preserving beam sensing, alarms, and protection during flash operations. Keep Gate HA delays/extensions.
 3. Preserve existing verified test journal evidence separately; do not re-import it into a fresh production folder on reboot.
@@ -77,5 +79,5 @@ Do not modify live HA schedules or delete live data as part of source work. Do n
 - docs/Configuration_Ownership.md
 - docs/Firmware_History.md
 
-## Suggested first message in the new thread
+## Original Part 2 kickoff message
 Continue MSB Firmware Refactoring Analysis Part 2. Read docs/Checkpoint_2026-11-24_Part_2.md and docs/OPERATING_CONTRACT.md in BOTH Gregovate counter repositories on fix/traffic-reliability-20261122. Finish the documented production-session cutover, show-only recording, and occupancy work. You implement and push; I compile and flash locally. Do not treat unfinished work as released.

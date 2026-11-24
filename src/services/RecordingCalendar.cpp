@@ -6,6 +6,11 @@ namespace {
 Preferences calendarPrefs;
 int activeYear = traffic::kRecordingYearFloor;
 int networkYear = 0;
+uint32_t confirmedStart=0;
+uint32_t daysAnchor=0;
+void daysAnchorKey(char (&key)[16]) {
+    snprintf(key,sizeof(key),"days%08lu",(unsigned long)confirmedStart);
+}
 int startMonth = 11;
 int startDay = traffic::blackFridayDay(traffic::kRecordingYearFloor);
 bool initialized = false;
@@ -66,6 +71,8 @@ void initializeRecordingCalendar() {
     // not a battery voltage/charge measurement.
     rtcTimeLossObserved=rtcReady && rtc.lostPower();
     if (!calendarPrefs.begin("traffic-cal", false)) calendarFault = "CALENDAR_NVS_UNAVAILABLE";
+    confirmedStart=calendarPrefs.getUInt("ha-start",0);
+    char key[16];daysAnchorKey(key);daysAnchor=calendarPrefs.getUInt(key,0);
     int saved = calendarPrefs.getInt("year", traffic::kRecordingYearFloor);
     activeYear = traffic::validYear(saved) ? saved : traffic::kRecordingYearFloor;
     int clockYear = usableRtc() ? rtc.now().year() : 0;
@@ -75,6 +82,10 @@ void initializeRecordingCalendar() {
     int y = date / 10000, m = date / 100 % 100, d = date % 100;
     if (y == activeYear && traffic::validDate(y,m,d)) {
         startMonth=m; startDay=d; nvsDateValid=true;
+    }
+    if(confirmedStart/10000==static_cast<uint32_t>(activeYear) &&
+       traffic::validDate(activeYear,confirmedStart/100%100,confirmedStart%100)) {
+        startMonth=confirmedStart/100%100; startDay=confirmedStart%100;
     }
     persistCalendar();
     applyRecordingCalendar();
@@ -98,6 +109,10 @@ void loadRecordingCalendarFromSD() {
         }
     }
     sdCalendarReady = true;
+    if(confirmedStart/10000==static_cast<uint32_t>(activeYear) &&
+       traffic::validDate(activeYear,confirmedStart/100%100,confirmedStart%100)) {
+        startMonth=confirmedStart/100%100; startDay=confirmedStart%100;
+    }
     persistCalendar();
     applyRecordingCalendar();
     publishRecordingCalendar();
@@ -112,6 +127,15 @@ bool acceptShowStartDate(const String &date) {
         publishMQTT(MQTT_DEBUG_LOG, "Rejected stale/invalid show start date: " + date);
         return false;
     }
+    const uint32_t requested=y*10000UL+m*100UL+d;
+    if(productionRequested() && requested!=productionStartDate())return false;
+    // An explicitly received HA calendar is distinct from the computed fallback.
+    // Save it even if the local fallback already happens to have the same date.
+    if(confirmedStart!=requested) {
+        if(calendarPrefs.putUInt("ha-start",requested)!=sizeof(requested) ||
+           calendarPrefs.getUInt("ha-start",0)!=requested){calendarFault="HA_DATE_SAVE_FAILED";return false;}
+        confirmedStart=requested;char key[16];daysAnchorKey(key);daysAnchor=calendarPrefs.getUInt(key,0);
+    }
     if (m!=startMonth || d!=startDay) {
         startMonth=m; startDay=d;
         persistCalendar();
@@ -123,7 +147,13 @@ bool acceptShowStartDate(const String &date) {
     return true;
 }
 
-int recordingDaysRunning() {
+bool productionDateMatches() {
+    if(!confirmedStart || !usableRtc())return false;
+    DateTime now=rtc.now();
+    return confirmedStart==now.year()*10000UL+now.month()*100UL+now.day();
+}
+
+int scheduledDaysRunning() {
     if (!usableRtc()) return 0;
     DateTime now=rtc.now(), start=recordingShowStart();
     if (now.year()!=activeYear || now.unixtime()<start.unixtime()) return 0;
@@ -135,6 +165,38 @@ int recordingDaysRunning() {
     int days=(last-start.unixtime())/86400UL+1;
     if (downDay.unixtime()>=start.unixtime() && downDay.unixtime()<=last) --days;
     return days;
+}
+
+int recordingDaysRunning() {
+    int scheduled=scheduledDaysRunning();
+    if(!daysAnchor || confirmedStart/10000!=static_cast<uint32_t>(activeYear))return scheduled;
+    int anchorScheduled=daysAnchor>>16,actual=daysAnchor&0xffff;
+    if(anchorScheduled<1 || anchorScheduled>366 || actual>anchorScheduled || scheduled<anchorScheduled)return scheduled;
+    return actual+scheduled-anchorScheduled;
+}
+
+bool acceptDaysRunning(const char* payload) {
+    if(!productionActive() || !confirmedStart || !usableRtc() || !payload || !*payload)return false;
+    unsigned value=0;
+    for(const char* p=payload;*p;++p) {
+        if(*p<'0' || *p>'9' || value>36)return false;
+        value=value*10+(*p-'0');
+    }
+    int scheduled=scheduledDaysRunning();
+    if(scheduled<1 || value>static_cast<unsigned>(scheduled))return false;
+    uint32_t anchor=(static_cast<uint32_t>(scheduled)<<16)|value;
+    return applyDaysAnchor(confirmedStart,anchor);
+}
+
+bool applyDaysAnchor(uint32_t season,uint32_t anchor) {
+    const uint32_t scheduled=anchor>>16,actual=anchor&0xffff;
+    if(!productionActive() || season!=confirmedStart || !scheduled || actual>scheduled ||
+       scheduled>static_cast<uint32_t>(scheduledDaysRunning()) || scheduled<(daysAnchor>>16))return false;
+    if(anchor==daysAnchor)return false;
+    char key[16];daysAnchorKey(key);
+    if(calendarPrefs.putUInt(key,anchor)!=sizeof(anchor) ||
+       calendarPrefs.getUInt(key,0)!=anchor){calendarFault="DAYS_RUNNING_SAVE_FAILED";return false;}
+    daysAnchor=anchor;daysRunning=recordingDaysRunning();publishRecordingCalendar();return true;
 }
 
 bool recordingShowSeasonActive() {
@@ -185,6 +247,11 @@ void publishRecordingCalendar() {
     publishMQTT(MQTT_PUB_SEASON_FOLDER,String(seasonFolder),true);
     DateTime start=recordingShowStart();
     /* Allow full RTC component ranges; format widths are minimums. */ char date[24]; snprintf(date,sizeof(date),"%04d-%02d-%02d",start.year(),start.month(),start.day());
+    if(daysAnchor && productionActive()) {
+        char adjusted[48];
+        snprintf(adjusted,sizeof(adjusted),"%lu,%lu",(unsigned long)confirmedStart,(unsigned long)daysAnchor);
+        publishMQTT((base+"/Calendar/daysRunningAnchor").c_str(),adjusted,true);
+    }
     // Report on State, never back onto the HA command topic.
     publishMQTT((base+"/State/showStartDate").c_str(),date,true);
     publishMQTT((base+"/System/calendarHealth").c_str(),calendarFault,true);
@@ -194,12 +261,14 @@ void publishRecordingCalendar() {
 bool recordingPathWritable(const String &path, bool mkdirOnly) {
     // A write arriving at the year boundary must not use the old open path even
     // before the main loop has rotated the filename variables.
+    if (productionBlocked() || productionCardRejected()) return false;
     int guardYear=activeYear;
     if (usableRtc()) guardYear=traffic::selectRecordingYear(activeYear,rtc.now().year(),networkYear==rtc.now().year());
     return traffic::writablePath(path.c_str(),guardYear,mkdirOnly);
 }
 
 File recordingOpen(const String &path, const char* mode) {
+    if (productionBlocked() || productionCardRejected()) return File();
     if (strcmp(mode,FILE_READ)!=0 && !recordingPathWritable(path)) {
         Serial.printf("Blocked protected SD write: %s\n",path.c_str());
         return File();
@@ -224,4 +293,26 @@ bool recordingWebWritable(const String &path) {
     String lower=path; lower.toLowerCase();
     return !lower.startsWith("/recording-calendar.") && lower.indexOf("/countstate.")<0 && lower.indexOf("/closedcounts-")<0 &&
            lower.indexOf("hourlydata.csv.")<0 && lower.indexOf("/trafficjournal")<0 && recordingPathWritable(path);
+}
+
+namespace {
+bool transitionFolderAllowed(const String& active) {
+    return productionRequested() && productionBlocked() &&
+        (active==String("/CC/")+String(recordingYear()) || active==String("/GC/")+String(recordingYear()));
+}
+}
+bool archiveProductionTestFolder(const String& active) {
+    return transitionFolderAllowed(active) && SD.rename(active,active+"-TEST");
+}
+bool makeProductionFolder(const String& active) {
+    return transitionFolderAllowed(active) && SD.mkdir(active);
+}
+File openProductionBaseline(const String& active,const char* mode) {
+    if(!transitionFolderAllowed(active))return File();
+    return SD.open(active+"/CountState.a",mode);
+}
+
+File readProductionCardMarker(const char* path) {
+    // Mount validation must be able to read the marker on a newly replaced card.
+    return SD.open(path,FILE_READ);
 }

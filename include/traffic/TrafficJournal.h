@@ -26,3 +26,18 @@ uint32_t trafficJournalFreeRecords();
 
 // Explicit post-backup removal of dated SD records already retired from flash.
 bool removeRetiredJournalArchive(const String& path);
+
+// The receipt is loaded before calendar/SD initialization on every boot.
+void initializeProductionSession();
+bool requestProductionSession();
+bool productionBlocked();
+bool productionActive();
+bool productionRequested();
+void serviceProductionSession();
+void resetSessionRam();
+bool productionCardMatches();
+bool commitClosingCheckpoint();
+void setupOccupancyRoutes();
+void noteUnqualifiedClock();
+bool productionCardRejected();
+uint32_t productionStartDate();

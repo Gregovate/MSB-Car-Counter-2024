@@ -24,6 +24,20 @@ int main(int argc,char** argv) {
     loadRecordingCalendarFromSD();
     assert(recordingYear()==2026);
     if(mode=="sd-recovery") {assert(recordingShowStart().day()==28);return 0;}
+    if(mode=="weather") {
+        rtc.current=DateTime(2026,11,24);
+        assert(acceptShowStartDate("2026-11-22") && !productionDateMatches());
+        assert(acceptShowStartDate("2026-11-27") && !productionDateMatches());
+        rtc.current=DateTime(2026,11,27);assert(productionDateMatches());
+        rtc.current=DateTime(2026,11,29);testProductionActive=true;
+        assert(recordingDaysRunning()==3 && acceptDaysRunning("2") && recordingDaysRunning()==2);
+        assert(!acceptDaysRunning("4") && !acceptDaysRunning("-1"));
+        rtc.current=DateTime(2026,11,30);initialized=false;daysAnchor=0;initializeRecordingCalendar();
+        assert(recordingDaysRunning()==3 && totalShowCars==42 && totalDailyCars==7);
+        rtc.current=DateTime(2026,12,23);int before=recordingDaysRunning();
+        rtc.current=DateTime(2026,12,24);assert(recordingDaysRunning()==before);
+        rtc.current=DateTime(2026,12,25);assert(recordingDaysRunning()==before+1);return 0;
+    }
     if(mode=="offline") {
         assert(recordingDaysRunning()==0);assert(recordingPathWritable("/GC/2026/log.csv"));
         assert(rtcTimeLossObserved);rtc.lost=false;publishRecordingCalendar();

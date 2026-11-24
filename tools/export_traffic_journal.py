@@ -28,7 +28,7 @@ def decode(path):
         if not u[21] or u[25] not in (0,u[22]) or u[74]>1 or any(n>0x7fffffff for n in [u[23],u[24],*u[26:74]]):
             raise ValueError(f'{path}: invalid count values')
     if path.stem.isdigit() and int(path.stem)!=u[1]:raise ValueError(f'{path}: filename/sequence conflict')
-    kind={1:'VEHICLE',2:'UNASSIGNED',3:'SNAPSHOT',6:'CORRECTION'}.get(u[16],str(u[16]))
+    kind={1:'VEHICLE',2:'UNASSIGNED',3:'SNAPSHOT',6:'CORRECTION',7:'SESSION_START',8:'SHOW_CLOSED'}.get(u[16],str(u[16]))
     counter='GC' if 'GC' in path.parts else 'CC' if 'CC' in path.parts else path.parent.as_posix()
     row=dict(counter=counter,sequence=u[1],kind=kind,
              localTime=datetime.fromtimestamp(u[5],timezone.utc).strftime('%Y-%m-%d %H:%M:%S') if u[5] else '',
@@ -43,10 +43,11 @@ def decode(path):
     row.update({f'official{h:02d}':u[50+h] if not undated else '' for h in range(24)})
     return row,raw
 
-def export(source,destination):
+def export(source,destination,tests=False):
     records={}
     for path in sorted(source.rglob('*.bin')):
         if path.parent.name!='TrafficJournal':continue
+        if any(part.endswith('-TEST') for part in path.parts)!=tests:continue
         row,raw=decode(path);key=(row['counter'],row['sequence'])
         if key in records and records[key][1]!=raw:raise ValueError(f'{path}: conflicting duplicate identity')
         records[key]=(row,raw)
@@ -62,4 +63,5 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source',type=Path,help='SD backup root or TrafficJournal folder')
     parser.add_argument('destination',type=Path,help='CSV output')
-    args=parser.parse_args();print(f'Exported {export(args.source,args.destination)} verified records to {args.destination}')
+    parser.add_argument('--tests',action='store_true',help='Export only preserved -TEST folders')
+    args=parser.parse_args();print(f'Exported {export(args.source,args.destination,args.tests)} verified records to {args.destination}')

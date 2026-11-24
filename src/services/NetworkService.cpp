@@ -128,7 +128,7 @@ void MQTTreconnect() {
         mqtt_client.subscribe(MQTT_SUB_TOPIC1); // Reset Daily Count
         mqtt_client.subscribe(MQTT_SUB_TOPIC2); // Reset Show Count
         mqtt_client.subscribe(MQTT_SUB_TOPIC3); // Reset Day of Month
-        mqtt_client.subscribe(MQTT_SUB_TOPIC4); // Reset Days Running
+        if(mqtt_client.publish(MQTT_SUB_TOPIC4,"",true))mqtt_client.subscribe(MQTT_SUB_TOPIC4); // Reset Days Running
         mqtt_client.subscribe(MQTT_SUB_TOPIC5); // Update Car Counter Timeout
         mqtt_client.subscribe(MQTT_SUB_TOPIC6); // Update Sensor Wait Duration
         mqtt_client.subscribe(MQTT_SUB_SHOWSTART); // Set Show Start Time

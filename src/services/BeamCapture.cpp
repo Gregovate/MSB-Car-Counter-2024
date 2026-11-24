@@ -16,6 +16,7 @@ DRAM_ATTR uint32_t maskA=0,maskB=0;
 DRAM_ATTR bool highA=false,highB=false;
 DRAM_ATTR portMUX_TYPE captureMux=portMUX_INITIALIZER_UNLOCKED;
 traffic::BeamTimeline timeline;
+uint32_t capturedEpoch=0;bool capturedTimeKnown=false;
 bool initialized=false,captureOk=false,draining=false,eventActive=false;
 uint32_t seenDropped=0,eventMillis=0,lastService=0,maxGap=0;
 void IRAM_ATTR captureEdge(void*) {
@@ -86,12 +87,14 @@ void publishBeamCaptureHealth() {
     publishMQTT((base+"beamCaptureDropped").c_str(),String(uint32_t(dropped)),true);
     publishMQTT((base+"beamDrainMaxGapMs").c_str(),String(maxGap),true);
 }
-void setCountEventMillis(uint32_t ms){eventMillis=ms;eventActive=true;}
+void setCountEventMillis(uint32_t ms){eventMillis=ms;eventActive=true;capturedTimeKnown=false;}
 void clearCountEventTime(){eventActive=false;}
 DateTime countEventTime() {
+    if(!eventActive)return rtc.now();
+    if(capturedTimeKnown)return DateTime(capturedEpoch);
     DateTime now=rtc.now();
-    if(!eventActive)return now;
     uint32_t age=(millis()-eventMillis)/1000U;
-    return DateTime(now.unixtime()>=age?now.unixtime()-age:0);
+    capturedEpoch=now.unixtime()>=age?now.unixtime()-age:0;capturedTimeKnown=true;
+    return DateTime(capturedEpoch);
 }
 bool countEventClockValid(){return rtcReady && !rtc.lostPower() && countEventTime().isValid() && countEventTime().year()==recordingYear();}

@@ -69,7 +69,7 @@ const char* summaryExportStatus() { return summaryHealth; }
 
 void recordOfficialVehicle() {
     // Determine eligibility using the event's current RTC, never stale showTime.
-    if (officialShowNow()) { ++totalShowCars;++officialHourly[countEventTime().hour()]; }
+    if (productionActive() || officialShowNow()) { ++totalShowCars;++officialHourly[countEventTime().hour()]; }
 }
 
 bool writeOfficialSummaries() {
@@ -116,5 +116,5 @@ bool writeOfficialSummaries() {
         "Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp",date,buckets);
     summaryHealth=a && b ? "OK":"WRITE_FAILED_RETRY";
     if (a && b) publishMQTT(MQTT_PUB_SUMMARY,cumulative);
-    return a && b;
+    return a && b && commitClosingCheckpoint();
 }
