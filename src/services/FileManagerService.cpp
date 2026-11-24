@@ -1,12 +1,13 @@
 #include "traffic/Firmware.h"
 #include "traffic/FileManagerPage.h"
+#include "traffic/DailyReportPage.h"
 
 // A page visit opens the active recording season, not the machine's date/year.
 // Browsing afterward remains explicit; no count/settings file is moved or reset.
 void setupFileManagerRoutes() {
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
         if(seasonFolder[0]=='/') currentDirectory=String(seasonFolder);
-        auto* response=request->beginResponse_P(200,"text/html",fileManagerPage);
+        auto* response=request->beginResponse(200,"text/html",fileManagerPage);
         response->addHeader("Cache-Control","no-store");
         request->send(response);
     });
@@ -25,6 +26,13 @@ void setupFileManagerRoutes() {
             static_cast<unsigned long>(beamCaptureDropped()),totalDailyCars,totalShowCars);
         auto* response=request->beginResponse(200,"application/json",payload);
         response->addHeader("Cache-Control","no-store");request->send(response);
+    });
+    // Register before legacy SD viewers: reports remain reachable without UI assets.
+    server.on("/showSummary.html",HTTP_GET,[](AsyncWebServerRequest* request) {
+        request->send(request->beginResponse(200,"text/html",dailyReportPage));
+    });
+    server.on("/showSummaryBuckets.html",HTTP_GET,[](AsyncWebServerRequest* request) {
+        request->send(request->beginResponse(200,"text/html",dailyReportPage));
     });
     server.on("/listFiles",HTTP_GET,listSDFiles);
 }

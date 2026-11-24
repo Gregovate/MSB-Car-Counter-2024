@@ -158,6 +158,14 @@ public:
     explicit JournalStore(Store& s):store(s){}
     JournalHealth health()const{return status;}
     uint32_t sequence()const{return latestSequence;}
+    // Zero means no safe retirement boundary is available. Only sequences
+    // strictly below this boundary are absent from BOTH live flash banks.
+    uint32_t oldestRetainedSequence()const {
+        if(!ready)return 0;
+        if(!firstSequence[0])return firstSequence[1];
+        if(!firstSequence[1])return firstSequence[0];
+        return firstSequence[0]<firstSequence[1]?firstSequence[0]:firstSequence[1];
+    }
     uint32_t bankLastSequence(unsigned bank)const{return bank<2?lastSequence[bank]:0;}
     const JournalRecord* latest()const{return latestSequence?&latestRecord:nullptr;}
     const CountRecord* snapshot()const{return latestCounts.date?&latestCounts:nullptr;}

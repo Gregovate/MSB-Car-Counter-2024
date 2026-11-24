@@ -18,8 +18,8 @@ struct String:std::string {using std::string::string;String()=default;String(con
 struct AsyncWebServerResponse {int status;std::string type,body;void addHeader(const char*,const char*){} };
 struct AsyncWebServerRequest {
  AsyncWebServerResponse result{};
- AsyncWebServerResponse* beginResponse_P(int n,const char*t,const char*b){result={n,t,b};return &result;}
- AsyncWebServerResponse* beginResponse(int n,const char*t,const char*b){return beginResponse_P(n,t,b);}
+ AsyncWebServerResponse* legacyBeginResponse(int n,const char*t,const char*b){result={n,t,b};return &result;}
+ AsyncWebServerResponse* beginResponse(int n,const char*t,const char*b){return legacyBeginResponse(n,t,b);}
  void send(AsyncWebServerResponse*){}
  void send(int n,const char*t,const String&b){result={n,t,b};}
 };
@@ -43,6 +43,8 @@ void listSDFiles(AsyncWebServerRequest*);
 int main(){setupFileManagerRoutes();AsyncWebServerRequest req;
  server.routes.at("/")(&req);assert(currentDirectory=="/GC/2026" && req.result.status==200);
  assert(req.result.body.find("Storage and recovery")!=std::string::npos);
+ server.routes.at("/showSummary.html")(&req);assert(req.result.body.find("Copy report for email")!=std::string::npos);
+ server.routes.at("/showSummaryBuckets.html")(&req);assert(req.result.body.find("Print / Save PDF")!=std::string::npos);
  server.routes.at("/storageStatus")(&req);assert(req.result.status==200);
  assert(req.result.body.find("\"sdAvailable\":false")!=std::string::npos);
  assert(req.result.body.find("\"journalFreeRecords\":3249")!=std::string::npos);

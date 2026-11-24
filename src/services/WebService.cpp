@@ -152,7 +152,10 @@ void deleteSDFile(AsyncWebServerRequest *request) {
         fullPath = fullPath.substring(1);
     }
     if (!recordingWebWritable(fullPath)) {
-        request->send(403, "text/plain", "Protected recording folder or recovery file");
+        if(request->hasParam("backup") && request->getParam("backup")->value()=="confirmed" &&
+           (removeObsoleteClosedCount(fullPath) || removeRetiredJournalArchive(fullPath))) {
+            request->send(200,"text/plain","Obsolete backed-up binary archive deleted: "+fullPath);
+        } else request->send(403,"text/plain","Protected or still needed for recovery. Binary cleanup requires backup confirmation and an obsolete, verified record. Live flash archive dependencies, undated events and current checkpoints are protected.");
         return;
     }
     if (SD.exists(fullPath)) {
@@ -254,15 +257,7 @@ void setupServer() {
     // Serve Show Summary webpage
     // Put showSummary.html in /data/
     // ----------------------------
-    server.on("/showSummary.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-
-        if (sdAvailable && SD.exists("/data/showSummary.html")) {
-            request->send(SD, "/data/showSummary.html", "text/html");
-            return;
-        }
-
-        request->send(404, "text/plain", "showSummary.html not found in /data");
-    });
+    // Shared embedded report viewer registered by setupFileManagerRoutes().
 
     // ----------------------------
     // Seasonal ShowSummary.csv
@@ -293,16 +288,7 @@ void setupServer() {
     // Serve Show Summary Buckets webpage
     // Put showSummaryBuckets.html in /data/
     // ----------------------------
-    server.on("/showSummaryBuckets.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-
-        if (sdAvailable && SD.exists("/data/showSummaryBuckets.html")) {
-            request->send(SD, "/data/showSummaryBuckets.html", "text/html");
-            return;
-        }
-
-        request->send(404, "text/plain",
-                      "showSummaryBuckets.html not found in /data");
-    });
+    // Shared embedded report viewer registered by setupFileManagerRoutes().
 
     // ----------------------------
     // Seasonal ShowSummaryBuckets.csv

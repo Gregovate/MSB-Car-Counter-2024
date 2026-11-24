@@ -8,6 +8,9 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.27 — 2026-11-24
+ *   - Restore shared daily report views, date selection and copy/print for email.
+ *   - Replace deprecated response API; guard post-backup closed-snapshot deletion.
  * 25.12.03.2-modular-test.26 — 2026-11-23
  *   - Serve shared file manager from firmware even when SD is offline.
  *   - Open active season by default; expose read-only journal/capture status.
@@ -123,7 +126,7 @@
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.26";
+const char FWVersion[] = "25.12.03.2-modular-test.27";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"

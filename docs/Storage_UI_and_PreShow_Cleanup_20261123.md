@@ -50,9 +50,9 @@ active season. Shared source/embedded-page parity is enforced by verification.
 | /operating-settings.a and .b | Redundant accepted HA schedule/tuning | Keep in root |
 | /CC/2026 or /GC/2026 | Counts, traffic CSVs and official summaries | Keep active |
 | CountState.a/.b | Redundant count checkpoints | Keep; web-protected |
-| ClosedCounts-YYYYMMDD.bin (224 bytes) | Closed daily count snapshots | Keep; web-protected |
+| ClosedCounts-YYYYMMDD.bin (224 bytes) | Closed daily count snapshots | May delete after backup and a verified newer current-day checkpoint |
 | *.previous / *.pending | Verified export fallback or interrupted work | Preserve; web-protected |
-| TrafficJournal/*.bin (320 bytes) | Verified immutable event archive | Keep; system-managed |
+| TrafficJournal/*.bin (320 bytes) | Verified immutable event archive | May delete after backup only when dated before today and retired from both live flash banks |
 | /data | Supporting web pages/assets | Keep |
 | /CC261123.zip, /CC2025.zip, /CC22025b4show.zip, /GC2024.zip, /GC2025.zip | Operator backup archives | Download and verify off-device before considering removal |
 | /EnterLog.csv dated 2025 in the screenshot | Historical root log | Archive separately; do not merge into current-year log |

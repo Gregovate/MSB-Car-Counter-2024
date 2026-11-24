@@ -23,3 +23,6 @@ void activateTrafficVehicleEvent();
 // Read-only status accessors; never open, erase or archive from HTTP callbacks.
 const char* trafficJournalArchiveHealth();
 uint32_t trafficJournalFreeRecords();
+
+// Explicit post-backup removal of dated SD records already retired from flash.
+bool removeRetiredJournalArchive(const String& path);

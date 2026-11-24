@@ -21,3 +21,6 @@ bool countEventCanApply();
 bool correctCountState(bool daily,uint32_t value,uint32_t nonce);
 
 bool commitCountJournal();
+
+// Explicit post-backup cleanup; rejects every active/recovery-required record.
+bool removeObsoleteClosedCount(const String& path);

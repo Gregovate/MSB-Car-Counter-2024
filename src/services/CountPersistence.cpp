@@ -437,3 +437,28 @@ bool writeHourlyExport(const String& path, const String& content) {
     reportHourlyExportStatus("OK");
     return true;
 }
+
+// ClosedCounts is a one-time closed-day archive, never a restore input. Permit
+// explicit housekeeping only after a current-day SD checkpoint is verified.
+// No wildcard, nested path, journal record or active checkpoint can enter here.
+bool removeObsoleteClosedCount(const String& path) {
+    if(!countReady || !sdAvailable || !sdCheckpointKnown || strcmp(countFault,"OK") ||
+       !countDate || countToday()!=countDate || savedCounts.date!=countDate) return false;
+    const String prefix=String(seasonFolder)+"/ClosedCounts-";
+    if(!path.startsWith(prefix) || path.length()!=prefix.length()+12 || !path.endsWith(".bin")) return false;
+    uint32_t date=0;
+    for(unsigned i=0;i<8;++i){char c=path[prefix.length()+i];if(c<'0'||c>'9')return false;date=date*10+c-'0';}
+    if(!traffic::countDateValid(date) || date/10000!=countDate/10000 || date>=countDate || closedCounts.date==date) return false;
+    traffic::CountRecord checkpoint{},old{};
+    bool newer=false;
+    for(int slot=0;slot<2;++slot) if(readCountRecord(slot,checkpoint) && checkpoint.date==countDate &&
+        checkpoint.sequence>=savedCounts.sequence) newer=true;
+    if(!newer) return false;
+    File f=recordingOpen(path,FILE_READ);
+    bool valid=f && f.size()==sizeof(old) && f.read(reinterpret_cast<uint8_t*>(&old),sizeof(old))==sizeof(old);
+    f.close();
+    if(!valid || !traffic::validCountRecord(old) || old.date!=date || old.sequence>=savedCounts.sequence) return false;
+    // Recheck rollover/pending state after I/O. A failed delete leaves data intact.
+    if(countToday()!=countDate || closedCounts.date==date || !sdAvailable) return false;
+    return recordingRemove(path);
+}

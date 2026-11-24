@@ -109,3 +109,30 @@ void activateTrafficVehicleEvent(){vehicle.beforeDaily=totalDailyCars;vehicle.be
 
 const char* trafficJournalArchiveHealth(){return archiveHealth;}
 uint32_t trafficJournalFreeRecords(){return opened?journal.availableSlots():0;}
+
+// Archive records still present in either flash bank are required by the
+// independent bank-reclamation verification. Never remove them, even if old.
+bool removeRetiredJournalArchive(const String& path) {
+    if(!opened || !durable || !sdAvailable || !countsReady() || strcmp(health,"OK") ||
+       strcmp(archiveHealth,"OK") || !rtcReady || rtc.lostPower())return false;
+    const String prefix=String(seasonFolder)+"/TrafficJournal/";
+    if(!path.startsWith(prefix) || path.length()!=prefix.length()+14 || !path.endsWith(".bin"))return false;
+    uint64_t parsed=0;
+    for(unsigned i=0;i<10;++i){char c=path[prefix.length()+i];if(c<'0'||c>'9')return false;parsed=parsed*10+c-'0';}
+    uint32_t oldest=journal.oldestRetainedSequence();
+    if(!parsed || parsed>UINT32_MAX || !oldest || parsed>=oldest)return false;
+    DateTime now=rtc.now();if(!now.isValid() || now.year()!=recordingYear())return false;
+    uint32_t today=now.year()*10000UL+now.month()*100UL+now.day();
+    const auto* snapshot=journal.snapshot();
+    if(!snapshot || snapshot->date!=today)return false;
+    traffic::JournalRecord old{};File f=recordingOpen(path,FILE_READ);
+    bool valid=f && f.size()==sizeof(old) && f.read(reinterpret_cast<uint8_t*>(&old),sizeof(old))==sizeof(old);
+    f.close();
+    if(!valid || !traffic::validJournalRecord(old) || old.sequence!=parsed ||
+       old.event.kind==2 || !old.counts.date || old.counts.date/10000!=static_cast<uint32_t>(recordingYear()) ||
+       old.counts.date>=today)return false;
+    // No journal append/erase occurs here. Retirement boundary only advances.
+    if(!sdAvailable || journal.health()!=traffic::JournalHealth::Ready ||
+       parsed>=journal.oldestRetainedSequence())return false;
+    return recordingRemove(path);
+}

@@ -76,7 +76,9 @@ int main(){
   assert(restored.latest()->counts.daily==3250);
   assert(restored.append(e,counts(3251))==JournalAppend::Durable);
  }
+ assert(reboot.oldestRetainedSequence()==1);
  assert(reboot.reclaim(0,complete));
+ assert(reboot.oldestRetainedSequence()==journalSlots+1);
  assert(reboot.append(e,counts(3251))==JournalAppend::Durable);
  JournalStore<Flash> rotated(f);assert(rotated.open(true));assert(rotated.sequence()==3251);
  assert(rotated.latest()->counts.daily==3251);
