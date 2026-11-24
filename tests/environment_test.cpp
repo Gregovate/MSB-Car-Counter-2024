@@ -13,7 +13,7 @@ void configure(bool) {
 int main() {
     rtc.current=DateTime(2026,11,27,17,0);configure(false);
     ticks=0;messages.clear();publishEnvironmentState();
-    assert(messages[0].second=="{\"tempF\": null, \"humidity\": null}");
+    assert(messages[messages.size()-2].second=="{\"tempF\": null, \"humidity\": null}");
     readTempandRH();assert(dht.calls==0);
     ticks=59999;readTempandRH();assert(dht.calls==0);
     ticks=60000;dht.temperature=0;readTempandRH();
@@ -34,6 +34,13 @@ int main() {
     bool closed=false;for(auto& m:messages)
         if(m.first=="msb/traffic/TestCounter/Env/temp/hourly/17" && m.second=="30.0")closed=true;
     assert(closed);
+    bool retainedHour=false,dateMarker=false,unknownCleared=false;
+    for(size_t i=0;i<messages.size();++i) {
+        if(messages[i].first=="msb/traffic/TestCounter/Env/temp/hourly/17" && messages[i].second=="30.0" && messageRetained[i])retainedHour=true;
+        if(messages[i].first=="msb/traffic/TestCounter/Env/temp/hourlyDate/17" && messages[i].second=="20261127" && messageRetained[i])dateMarker=true;
+        if(messages[i].first=="msb/traffic/TestCounter/Env/temp/hourly/18" && messages[i].second.empty() && messageRetained[i])unknownCleared=true;
+    }
+    assert(retainedHour && dateMarker && unknownCleared);
     // Recovery publishes immediately, weighted average is 40 rather than 45.
     ticks=300000;dht.temperature=60;dht.rh=50;readTempandRH();
     assert(dhtConsecutiveFailures==0 && dhtFailures==2);

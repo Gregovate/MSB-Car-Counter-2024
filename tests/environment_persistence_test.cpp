@@ -5,7 +5,7 @@
 #include "../src/services/OperatingSettings.cpp"
 #include "../src/services/EnvironmentService.cpp"
 #include "../src/services/ShowSummary.cpp"
-void coldEnvironment(){environmentSamples={};environmentLoaded=false;environmentPrefsReady=false;environmentClockBlocked=false;environmentSequence=0;environmentSlot=-1;environmentPersistence="NOT_LOADED";for(auto& v:hourlyTemp)v=NAN;}
+void coldEnvironment(){environmentSamples={};for(auto& v:rollingEnvironment)v={};environmentLoaded=false;environmentPrefsReady=false;environmentClockBlocked=false;environmentSequence=0;environmentSlot=-1;environmentPersistence="NOT_LOADED";for(auto& v:hourlyTemp)v=NAN;}
 int main(){
  legacy();stringPrefs.clear();rtc.current=DateTime(2026,11,27,17);assert(restoreCountState());
  settings=traffic::OperatingSettings{};settings.issuedDate=20261127;settings.endDate=20261231;settings.downDate=20261224;
@@ -15,7 +15,9 @@ int main(){
  float average=0;assert(showTemperatureAverage(average)&&average==50);
  coldEnvironment();assert(showTemperatureAverage(average)&&average==50 && environmentSamples.showCount==2);
  assert(environmentSamples.count[17]==2 && hourlyTemp[17]==50);
- rtc.current=DateTime(2026,11,27,22);assert(writeOfficialSummaries());
+ rtc.current=DateTime(2026,11,27,22);coldEnvironment();messages.clear();messageRetained.clear();publishEnvironmentHourlyState();
+ bool replayed=false;for(size_t i=0;i<messages.size();++i)if(messages[i].first=="msb/traffic/TestCounter/Env/temp/hourly/17" && messages[i].second=="50.0" && messageRetained[i])replayed=true;
+ assert(replayed);assert(writeOfficialSummaries());
  assert(disk["/CC/2026/ShowSummary.csv"].find(",50.0,,")!=std::string::npos);
  // Lose both NVS slots: an already saved report average survives rewrite.
  stringPrefs.clear();coldEnvironment();assert(!showTemperatureAverage(average));

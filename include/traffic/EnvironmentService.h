@@ -11,3 +11,5 @@ void serviceEnvironmentHour();
 bool showTemperatureAverage(float& average);
 
 const char* environmentPersistenceStatus();
+
+void publishEnvironmentHourlyState();

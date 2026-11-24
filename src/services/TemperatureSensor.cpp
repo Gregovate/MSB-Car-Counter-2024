@@ -17,6 +17,7 @@ void formatDhtNumber(float value,char (&out)[24]) {
 }
 
 void publishEnvironmentState() {
+    publishEnvironmentHourlyState(); // Reconnect and periodic history replay use the same service.
     // Null means unavailable. Never publish internal sentinel temperatures to HA.
     bool fresh=dhtHasValidReading && dhtCurrentValid && millis()-lastDhtSuccess<=120000UL;
     char payload[100];
