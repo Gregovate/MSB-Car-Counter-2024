@@ -1,14 +1,18 @@
 # Firmware Refactoring Analysis — Part 2 checkpoint
 
+**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The paired source baseline is Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. Verify installed versions from live telemetry and record observed results before declaring field acceptance.
+
+[Show Controls integration and Friday checks](https://github.com/Gregovate/MSB-Show-Controls/blob/main/docs/friday-system-check.md) · [Peer firmware operating contract](https://github.com/Gregovate/MSB-Gate-Counter-2025/blob/main/docs/OPERATING_CONTRACT.md)
+
 **Part 2 source update, November 24.** Car .31 and Gate .24 implement the cutover and paired occupancy report. See [production build, cutover and acceptance instructions](Production_Cutover_20261124.md). The installed-version and unfinished-work descriptions below record the .30/.23 checkpoint. Local compilation, flashing and field acceptance of .31/.24 are pending.
 Date: 2026-11-24 (America/Chicago).
-Current source status: paired .31/.24 release on the working branch. Operator compile, flash and equipment acceptance are pending.
+Current source status: paired .31/.24 release on main. Operator compile, flash and equipment acceptance are pending.
 
 ## Start here
 Read this document, docs/OPERATING_CONTRACT.md, repository AGENTS.md if present, README.md, and the shared-module verification documentation before changing code. Use BOTH repositories as permanent memory:
 - Gregovate/MSB-Car-Counter-2024
 - Gregovate/MSB-Gate-Counter-2025
-Working branch in both: fix/traffic-reliability-20261122.
+Current integration branch in both counter repositories: main.
 
 Workflow: assistant implements, verifies, and pushes code; Greg pulls, compiles locally, and flashes each ESP32. Preserve licensed local OTA dependencies, OTA firmware slots, Fritzing files, and historical data. Do not ask Greg to perform engineering investigation that can be done from source. Do not claim a build or hardware test that was not performed. Keep common modules identical where behavior is shared; document legitimate device differences. Document every release and unfinished item in BOTH repositories.
 
@@ -80,4 +84,4 @@ Do not modify live HA schedules or delete live data as part of source work. Do n
 - docs/Firmware_History.md
 
 ## Original Part 2 kickoff message
-Continue MSB Firmware Refactoring Analysis Part 2. Read docs/Checkpoint_2026-11-24_Part_2.md and docs/OPERATING_CONTRACT.md in BOTH Gregovate counter repositories on fix/traffic-reliability-20261122. Finish the documented production-session cutover, show-only recording, and occupancy work. You implement and push; I compile and flash locally. Do not treat unfinished work as released.
+Continue MSB Firmware Refactoring Analysis Part 2. Read docs/Checkpoint_2026-11-24_Part_2.md and docs/OPERATING_CONTRACT.md in BOTH Gregovate counter repositories on main. Finish the documented production-session cutover, show-only recording, and occupancy work. You implement and push; I compile and flash locally. Do not treat unfinished work as released.
