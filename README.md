@@ -1,6 +1,6 @@
 # MSB Car Counter 2024 Documentation
 
-**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The paired source baseline is Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. Verify installed versions from live telemetry and record observed results before declaring field acceptance.
+**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The paired source baseline is Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. November 24 telemetry confirmed both installed versions in TEST. Record Friday’s production observations in the linked system check.
 
 [Show Controls integration and Friday checks](https://github.com/Gregovate/MSB-Show-Controls/blob/main/docs/friday-system-check.md) · [Peer firmware operating contract](https://github.com/Gregovate/MSB-Gate-Counter-2025/blob/main/docs/OPERATING_CONTRACT.md)
 

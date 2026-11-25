@@ -1,8 +1,8 @@
-> **Current release .9:** [Coordinated_Release_9.md](Coordinated_Release_9.md) supersedes older pending-work notes below. HA controls reset offsets; .9 commands and checkpoints require the coordinated HA companion. Installed devices were last confirmed on .5.
-
 # Traffic MQTT contract — HA, Car Counter and Gate Counter
 
-Status: implemented reporting corrections in modular-test.8; operational configuration completion pending. User's HA configuration is private and is not copied into either public firmware repository. This document contains only device interface names and implementation status.
+Car .31 and Gate .24 use the [Show Controls publishers and topic map](https://github.com/Gregovate/MSB-Show-Controls/blob/main/firmware-interface/expected_topics.md). HA sends each counter its settings and local season start date. Verify the four returned State values for reset, opening, closing and dated extension. [Friday system check](https://github.com/Gregovate/MSB-Show-Controls/blob/main/docs/friday-system-check.md)
+
+In TEST, hourly counts include test traffic. In READY, each counter records eligible passages only during its own HA window. Car sends `Cars/officialEntriesDated` to Gate. Gate publishes the signed same-date balance on `Cars/InParkCars` and reports `unknown` when its entrance reading expires. See the [operating contract](OPERATING_CONTRACT.md) for the season boundary and [production cutover](Production_Cutover_20261124.md) for acceptance evidence.
 
 ## Naming rules
 
@@ -21,7 +21,7 @@ A topic defined in a header is not an implemented interface until a publisher or
 
 | Relative topic | Direction | Payload / meaning |
 | --- | --- | --- |
-| Cars/hour/json | Firmware to HA | Retained JSON array of 24 all-day hourly counts, indices 00 through 23 |
+| Cars/hour/json | Firmware to HA | Retained JSON array of 24 hourly counts in the current recording session, indices 00 through 23 |
 | Cars/hour/00 through Cars/hour/23 | Firmware to HA | Retained integer for the named hour |
 | System/hourlyExport | Firmware to HA | Last SD export result; not a guarantee of MQTT delivery |
 | System/countPersistence | Firmware to HA | Count checkpoint/recovery health |
@@ -32,7 +32,7 @@ Both devices use one snapshot publisher on heartbeat. Gate per-event, load and s
 
 The packet buffer is grown to 512 bytes only if needed; allocation failure skips the snapshot and emits a diagnostic. The full 24-element payload is never deliberately truncated. API reference: https://pubsubclient.knolleary.net/api . Delivery still depends on the MQTT connection; status publication is not an acknowledgement from HA.
 
-## Tuning contract (.7, retained in .8)
+## Historical .7/.8 tuning contract
 
 Under each device prefix, Config commands and State reports use these established suffixes:
 
@@ -45,7 +45,7 @@ Under each device prefix, Config commands and State reports use these establishe
 
 Do not rename the last two detector thresholds as though they measure the same event: Car checks duration with both beams high, while Gate checks a beam broken-duration condition. Consistent naming must retain that semantic distinction. A common threshold interface requires a documented adapter and tests for each detector, not merely renamed variables.
 
-## Configuration completion requirements
+## Historical .8 configuration gaps
 
 Operational show dates, start/end times, reset offsets, stop-recording offsets and tuning must have a complete HA helper → command → validation → persisted record → applied State chain. Retained broker commands are not an offline SD backup. Explicit count reset commands must remain separate from setting changes.
 
@@ -53,7 +53,7 @@ Outstanding inputs: the private HA helper definitions and configuration include 
 
 The delayed gate reset excludes volunteers leaving after gate opening and before first visitors arrive. All-day park hourly data must remain intact. Existing 2025 traffic indicators and official show summaries are not redesigned or reconstructed here. MSB-Show-Controls remains the governing design repository; publication of its separate draft is still blocked by repository write access.
 
-## HA candidate changes and installation boundary
+## Historical .8 HA candidate and installation boundary
 
 The private candidate sensor files correct the Car log duplicate/device/topic, show accepted start dates via State, change Gate raw hourly input to Cars/hour/json, and expose health/applied-tuning diagnostics. All existing distinct unique IDs are preserved. The two online sensors per device retain their IDs and timeout values, with labels clarifying 90-second versus five-minute checks; deciding which dashboards should keep requires an entity reference audit.
 

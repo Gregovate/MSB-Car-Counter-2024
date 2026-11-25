@@ -1,10 +1,10 @@
 # MSB Car / Gate Counter operating contract
 
-**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The paired source baseline is Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. Verify installed versions from live telemetry and record observed results before declaring field acceptance.
+**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The paired source baseline is Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. November 24 telemetry confirmed both installed versions in TEST. Record Friday’s production observations in the linked system check.
 
-[Show Controls integration and Friday checks](https://github.com/Gregovate/MSB-Show-Controls/blob/main/docs/friday-system-check.md) · [Peer firmware operating contract](https://github.com/Gregovate/MSB-Gate-Counter-2025/blob/main/docs/OPERATING_CONTRACT.md)
+[Show Controls integration and Friday checks](https://github.com/Gregovate/MSB-Show-Controls/blob/main/docs/friday-system-check.md) · [Car Counter main](https://github.com/Gregovate/MSB-Car-Counter-2024/tree/main) · [Gate Counter main](https://github.com/Gregovate/MSB-Gate-Counter-2025/tree/main)
 
-**Part 2 source update, November 24.** Car .31 and Gate .24 implement the cutover and paired occupancy report. See [production build, cutover and acceptance instructions](Production_Cutover_20261124.md). The installed-version and unfinished-work descriptions below record the .30/.23 checkpoint. Local compilation, flashing and field acceptance of .31/.24 are pending.
+**Part 2 source update, November 24.** Car .31 and Gate .24 implement the cutover and paired occupancy report. See [production build, cutover and acceptance instructions](Production_Cutover_20261124.md). The installed-version and unfinished-work descriptions below record the .30/.23 checkpoint. The November 24 telemetry below confirms installation.
 
 **Owner decisions confirmed by Greg on November 24, 2026. This is the authoritative
 operating requirement for BOTH repositories. Read this before modifying firmware,
@@ -149,4 +149,4 @@ a rated/safe capacity limit or a waiting-time model.
 
 Car .31 and Gate .24 implement the date-matched cutover, show-only production recording, dated occupancy and weather-closure day adjustment. The release notes describe storage recovery, report evidence and field acceptance.
 
-The last operator-confirmed installations are Car .30 and Gate .23. Greg compiled and flashed both with zero warnings on November 24. Those earlier versions still record raw traffic outside the windows and only save the calendar on a date change. Build and flash the paired Part 2 source before using the production start date on the equipment. Live HA settings remain operator-owned.
+At 11:26 AM Central on November 24, the devices reported Car `25.12.03.2-modular-test.31` and Gate `25.12.28.0-modular-test.24`. Both reported `productionSession=TEST`, the November 22 test calendar, journal and archive health OK, and zero dropped beam edges. Car reported one unassigned recovery event, Gate zero. This establishes the installed test baseline. Friday production acceptance is pending.

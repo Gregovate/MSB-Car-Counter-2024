@@ -1,6 +1,6 @@
 # Production cutover and occupancy | November 24, 2026
 
-Car source version `25.12.03.2-modular-test.31` and Gate source version `25.12.28.0-modular-test.24` are paired on `main`. Last operator-confirmed installations are Car .30 and Gate .23. Greg builds with his existing licensed ElegantOTAPro installation and flashes each ESP32. Local compile output, installed identities and field acceptance are pending.
+Car source version `25.12.03.2-modular-test.31` and Gate source version `25.12.28.0-modular-test.24` are paired on `main`. At 11:26 AM Central on November 24, the devices reported Car `25.12.03.2-modular-test.31` and Gate `25.12.28.0-modular-test.24`. Both reported `productionSession=TEST`, the November 22 test calendar, journal and archive health OK, and zero dropped beam edges. Car reported one unassigned recovery event, Gate zero. This establishes the installed test baseline. Friday production acceptance is pending.
 
 ## Local build and Friday cutover
 

@@ -1,12 +1,12 @@
 # Firmware Refactoring Analysis — Part 2 checkpoint
 
-**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The paired source baseline is Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. Verify installed versions from live telemetry and record observed results before declaring field acceptance.
+**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The paired source baseline is Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. November 24 telemetry confirmed both installed versions in TEST. Record Friday’s production observations in the linked system check.
 
 [Show Controls integration and Friday checks](https://github.com/Gregovate/MSB-Show-Controls/blob/main/docs/friday-system-check.md) · [Peer firmware operating contract](https://github.com/Gregovate/MSB-Gate-Counter-2025/blob/main/docs/OPERATING_CONTRACT.md)
 
-**Part 2 source update, November 24.** Car .31 and Gate .24 implement the cutover and paired occupancy report. See [production build, cutover and acceptance instructions](Production_Cutover_20261124.md). The installed-version and unfinished-work descriptions below record the .30/.23 checkpoint. Local compilation, flashing and field acceptance of .31/.24 are pending.
+**Part 2 source update, November 24.** Car .31 and Gate .24 implement the cutover and paired occupancy report. See [production build, cutover and acceptance instructions](Production_Cutover_20261124.md). The installed-version and unfinished-work descriptions below record the .30/.23 checkpoint. The November 24 telemetry below confirms installation.
 Date: 2026-11-24 (America/Chicago).
-Current source status: paired .31/.24 release on main. Operator compile, flash and equipment acceptance are pending.
+Current source status: paired .31/.24 release on main. Both versions are installed. Opening-night acceptance is pending.
 
 ## Start here
 Read this document, docs/OPERATING_CONTRACT.md, repository AGENTS.md if present, README.md, and the shared-module verification documentation before changing code. Use BOTH repositories as permanent memory:
@@ -16,11 +16,11 @@ Current integration branch in both counter repositories: main.
 
 Workflow: assistant implements, verifies, and pushes code; Greg pulls, compiles locally, and flashes each ESP32. Preserve licensed local OTA dependencies, OTA firmware slots, Fritzing files, and historical data. Do not ask Greg to perform engineering investigation that can be done from source. Do not claim a build or hardware test that was not performed. Keep common modules identical where behavior is shared; document legitimate device differences. Document every release and unfinished item in BOTH repositories.
 
-## Last confirmed installed firmware
-- Car: 25.12.03.2-modular-test.30.
-- Gate: 25.12.28.0-modular-test.23.
-Greg confirmed both compiled with ZERO warnings and both were flashed.
-These installed versions are NOT the requested production cutover release.
+## Installed test baseline
+
+At 11:26 AM Central on November 24, the devices reported Car `25.12.03.2-modular-test.31` and Gate `25.12.28.0-modular-test.24`. Both reported `productionSession=TEST`, the November 22 test calendar, journal and archive health OK, and zero dropped beam edges. Car reported one unassigned recovery event, Gate zero. This establishes the installed test baseline. Friday production acceptance is pending.
+
+For the earlier .30/.23 builds, Greg reported zero compiler warnings. The compiler logs for the current pair were not supplied.
 
 Code release commits before the operating-contract documentation:
 - Car: 0b4fc5a2413dba1879572b97c83f1487262aaafa.

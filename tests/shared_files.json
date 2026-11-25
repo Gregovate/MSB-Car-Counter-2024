@@ -85,10 +85,10 @@
   "docs/Shared_Season_Path_and_Gate_Warnings_20261124.md": "ff77ce87c2a3e34e9c88fffb8b3f50de89e6c4092eddd61a10651baa596cfde1",
   "tools/verify_modular.py": "7fc6fa8aa699b08819d7d964454ac695a7b60cde77a850ba62bdad706da3cbfb",
   "tests/test_verify_modular_portability.py": "0874c49c6bf942d784d3e705b61a2c976799e2aa32b160006654919d1167b029",
-  "docs/OPERATING_CONTRACT.md": "c98906cb4709336ff53debc9a87bebee167ec2f6853a69081cfc65aa54683295",
+  "docs/OPERATING_CONTRACT.md": "5d742303ce827ac60ade8bf11ff4d844df762cb6674924342df78cca24fe1dc8",
   "include/traffic/OccupancyPage.h": "d081ac33620773ac76018617acbf53496febe8a5094b29abd49b05dd47251089",
   "tests/test_production_session.py": "5878ed663804e5d58faaea35720d895511a9642a30ced6d278d417047d74e2f2",
   "tests/test_occupancy.py": "36c5e50380e590e55ea62a80ade2f940881789a79c9a0d5b78a563561129232a",
   "include/traffic/DatedOccupancy.h": "cc2c0f1bc4bd5096b425d68858c1fde64d7635da9bdbfb0976428f4c770a3a0f",
-  "docs/Production_Cutover_20261124.md": "b60c751dab2ea61e436bc72d5562a8ff44e05721902a72223fe5f2ea6ab2f78a"
+  "docs/Production_Cutover_20261124.md": "cb7dd265ac5dafb7bfd89710bad9e6d8459245a77a34bc5a8be049268cad1366"
 }
