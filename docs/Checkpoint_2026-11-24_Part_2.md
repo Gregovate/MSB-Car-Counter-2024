@@ -1,14 +1,16 @@
 # Firmware Refactoring Analysis — Part 2 checkpoint
 
-November 25 update: .32 introduces the [nightly report contract](Nightly_Reports.md). Local build, flash and field acceptance are pending.
+Paired firmware release on `main`: **26.11.25.0** (November 25, Central). Both devices reported the preceding Car .32 and Gate .25 builds installed. This release changes the embedded version only. Opening-night field acceptance remains pending.
 
-**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The paired source baseline is Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. November 24 telemetry confirmed both installed versions in TEST. Record Friday’s production observations in the linked system check.
+November 25 update: .32 introduces the [nightly report contract](Nightly_Reports.md). Installation confirmed by device identity.
+
+**November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The November 24 source baseline was Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. November 24 telemetry confirmed both installed versions in TEST. Record Friday’s production observations in the linked system check.
 
 [Show Controls integration and Friday checks](https://github.com/Gregovate/MSB-Show-Controls/blob/main/docs/friday-system-check.md) · [Peer firmware operating contract](https://github.com/Gregovate/MSB-Gate-Counter-2025/blob/main/docs/OPERATING_CONTRACT.md)
 
 **Part 2 source update, November 24.** Car .31 and Gate .24 implement the cutover and paired occupancy report. See [production build, cutover and acceptance instructions](Production_Cutover_20261124.md). The installed-version and unfinished-work descriptions below record the .30/.23 checkpoint. The November 24 telemetry below confirms installation.
 Date: 2026-11-24 (America/Chicago).
-Current source status: paired .31/.24 release on main. Both versions are installed. Opening-night acceptance is pending.
+November 24 source status: paired .31/.24 release on main. Both versions are installed. Opening-night acceptance is pending.
 
 ## Start here
 Read this document, docs/OPERATING_CONTRACT.md, repository AGENTS.md if present, README.md, and the shared-module verification documentation before changing code. Use BOTH repositories as permanent memory:
