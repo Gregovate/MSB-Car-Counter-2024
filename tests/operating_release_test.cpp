@@ -83,10 +83,10 @@ int main() {
         assert(hourlyCount[23]==1); // volunteers remain in raw traffic
         assert(writeOfficialSummaries());
         auto csv=disk["/CC/2026/ShowSummaryBuckets.csv"];
-        assert(csv.find("10PM,ExtensionMin")!=std::string::npos);
+        assert(csv.find("After9PM,DailyTotal,ShowTotal,DailyAvgTemp,ExtensionMin")!=std::string::npos);
         // No 21:00 vehicle is misreported in the 20:00-20:59 bucket.
         assert(csv.find(gate ? "2026-11-27,0,1,0,0,0," : "2026-11-27,0,2,0,0,0,")!=std::string::npos);
-        assert(csv.find(extension ? ",1,"+std::to_string(extension)+"\n" : ",,\n")!=std::string::npos);
+        assert(csv.find(",1,"+std::to_string(show)+","+std::to_string(show)+",,"+std::to_string(extension)+"\n")!=std::string::npos);
         assert(writeOfficialSummaries());assert(disk["/CC/2026/ShowSummaryBuckets.csv"]==csv);
         reboot();assert(restoreCountState());assert(totalShowCars==int(show));
         assert(officialHourly[21]==1);assert(writeOfficialSummaries());
@@ -108,11 +108,37 @@ int main() {
     handleOperatingCommand(command,"1,1020,1260,14,25,30,20261127,45000,200,20261231,20261224,2026");
     assert(settings.resetOffset==12);failWrite="";
     rtc.current=DateTime(2026,11,28,18);assert(effectiveExtension()==0);
-    // Legacy summary rows are preserved exactly, with appended blank cells.
+    // Upgrade a legacy sheet, including a blank closing-minute cell and an orphan cumulative row.
     rtc.current=DateTime(2026,11,27,22);configure(false);officialCountsComplete=true;
     const std::string oldHeader="Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp";
     disk["/CC/2026/ShowSummaryBuckets.csv"]=oldHeader+"\n2026-11-26,0,1,2,3,4,10,10,35.0\n";
-    assert(writeOfficialSummaries());assert(disk["/CC/2026/ShowSummaryBuckets.csv"].find("2026-11-26,0,1,2,3,4,10,10,35.0,,\n")!=std::string::npos);
+    assert(writeOfficialSummaries());assert(disk["/CC/2026/ShowSummaryBuckets.csv"].find("2026-11-26,0,1,2,3,4,0,10,10,35.0,\n")!=std::string::npos);
+    const std::string root="/CC/2026/";
+    const std::string legacyBuckets=oldHeader+",10PM,ExtensionMin\n2026-11-25,1,8,3,0,0,13,15,31.0,,\n";
+    const std::string legacySummary="Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp,10PM,ExtensionMin\n"
+       "2026-11-25,1,0,8,11,11,11,15,31.0,,\n2026-11-24,1,0,4,4,4,4,4,32.0,,\n";
+    disk.erase(root+"ShowSummaryBuckets.csv.legacy");
+    disk[root+"ShowSummaryBuckets.csv"]=legacyBuckets;
+    disk[root+"ShowSummary.csv"]=legacySummary;
+    for(int extra:{0,2}) for(int minutes:{0,30}) {
+        configure(false,minutes);
+        for(auto& hour:officialHourly)hour=0;
+        officialHourly[17]=8;officialHourly[18]=3;officialHourly[21]=extra;
+        totalShowCars=25;
+        assert(writeOfficialSummaries());
+        auto sheet=disk[root+"ShowSummaryBuckets.csv"],cumulative=disk[root+"ShowSummary.csv"];
+        auto total=std::to_string(11+extra);
+        assert(sheet.find(",8,3,0,0,"+std::to_string(extra)+","+total+",25,")!=std::string::npos);
+        assert(cumulative.find(",8,11,11,11,"+total+","+total+",25,")!=std::string::npos);
+        assert(sheet.find("2026-11-25,1,8,3,0,0,2,13,15,31.0,")!=std::string::npos);
+        assert(cumulative.find("2026-11-25,1,0,8,11,11,11,13,13,15,31.0,")!=std::string::npos);
+        assert(cumulative.find("2026-11-24,1,0,4,4,4,4,,,4,32.0,")!=std::string::npos);
+        assert(disk[root+"ShowSummary.csv.legacy"]==legacySummary);
+        assert(disk[root+"ShowSummaryBuckets.csv.legacy"]==legacyBuckets);
+        assert(messages.back().first==MQTT_PUB_SUMMARY);
+        assert(summaryCell(messages.back().second,7)=="25");
+        assert(summaryCell(messages.back().second,9)==(minutes?total:""));
+    }
     auto previous=disk["/CC/2026/ShowSummaryBuckets.csv"];
     failWrite="/CC/2026/ShowSummaryBuckets.csv.pending";assert(!writeOfficialSummaries());
     assert(disk["/CC/2026/ShowSummaryBuckets.csv"]==previous);failWrite="";

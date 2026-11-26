@@ -18,15 +18,15 @@ int main(){
  rtc.current=DateTime(2026,11,27,22);coldEnvironment();messages.clear();messageRetained.clear();publishEnvironmentHourlyState();
  bool replayed=false;for(size_t i=0;i<messages.size();++i)if(messages[i].first=="msb/traffic/TestCounter/Env/temp/hourly/17" && messages[i].second=="50.0" && messageRetained[i])replayed=true;
  assert(replayed);assert(writeOfficialSummaries());
- assert(disk["/CC/2026/ShowSummary.csv"].find(",50.0,,")!=std::string::npos);
+ assert(disk["/CC/2026/ShowSummary.csv"].find(",50.0,0")!=std::string::npos);
  // Lose both NVS slots: an already saved report average survives rewrite.
  stringPrefs.clear();coldEnvironment();assert(!showTemperatureAverage(average));
- assert(writeOfficialSummaries());assert(disk["/CC/2026/ShowSummary.csv"].find(",50.0,,")!=std::string::npos);
+ assert(writeOfficialSummaries());assert(disk["/CC/2026/ShowSummary.csv"].find(",50.0,0")!=std::string::npos);
  // Recovery from a valid previous export fills a blank only for the same date.
  disk["/CC/2026/ShowSummary.csv.previous"]=disk["/CC/2026/ShowSummary.csv"];
- disk["/CC/2026/ShowSummary.csv"].replace(disk["/CC/2026/ShowSummary.csv"].find(",50.0,,"),7,",,,");
- disk["/CC/2026/ShowSummaryBuckets.csv"].replace(disk["/CC/2026/ShowSummaryBuckets.csv"].find(",50.0,,"),7,",,,");
- assert(writeOfficialSummaries());assert(disk["/CC/2026/ShowSummary.csv"].find(",50.0,,")!=std::string::npos);
+ disk["/CC/2026/ShowSummary.csv"].replace(disk["/CC/2026/ShowSummary.csv"].find(",50.0,0"),7,",,0");
+ disk["/CC/2026/ShowSummaryBuckets.csv"].replace(disk["/CC/2026/ShowSummaryBuckets.csv"].find(",50.0,0"),7,",,0");
+ assert(writeOfficialSummaries());assert(disk["/CC/2026/ShowSummary.csv"].find(",50.0,0")!=std::string::npos);
  // Torn newest slot selects the older complete snapshot, never corrupt sums.
  stringPrefs.clear();coldEnvironment();rtc.current=DateTime(2026,11,28,17);
  tempF=0;averageHourlyTemp();tempF=20;averageHourlyTemp();

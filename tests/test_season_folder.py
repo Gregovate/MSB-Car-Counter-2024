@@ -22,6 +22,7 @@ class SeasonFolderContract(unittest.TestCase):
 #include <cassert>
 #include <type_traits>
 #include "traffic/SeasonFolder.h"
+#include "traffic/NightlyCsv.h"
 struct String:std::string{using std::string::string;String()=default;String(const std::string&s):std::string(s){}String(int n):std::string(std::to_string(n)){} };
 DEFINITION
 static_assert(std::is_array<SeasonFolder>::value && std::extent<SeasonFolder>::value==32,"Fixed shared path ABI");

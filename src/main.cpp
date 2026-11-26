@@ -8,6 +8,8 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 25.12.03.2-modular-test.32 — 2026-11-25
+ *   - Group nightly hours through After9PM, preserve legacy reports and MQTT order.
  * 25.12.03.2-modular-test.31 — 2026-11-24
  *   - Archive the test season on the accepted date change, qualify passages by HA window,
  *     report dated occupancy and carry forward HA weather-closure day adjustments.
@@ -139,8 +141,9 @@
  *   - Add preservation/shared-file checks and Windows UTF-8/CRLF fixes.
  *   - Record local builds with licensed ElegantOTAPro 3.1.4; no device upload.
  */
+#include "traffic/NightlyCsv.h"
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "25.12.03.2-modular-test.31";
+const char FWVersion[] = "25.12.03.2-modular-test.32";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"
@@ -276,11 +279,11 @@ void setup() {
         checkAndCreateFile(fileName3);
         checkAndCreateFile(fileName4);
         checkAndCreateFile(fileName6, "DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms");
-        checkAndCreateFile(fileName7, "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
+        checkAndCreateFile(fileName7, NightlyCsv::cumulative);
         checkAndCreateFile(fileName8);
         checkAndCreateFile(fileName9);
         // NEW: bucketed summary file (per-hour buckets + daily total + running show total)
-        checkAndCreateFile(fileName10, "Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp");
+        checkAndCreateFile(fileName10, NightlyCsv::buckets);
 
         // Required Hourly Data Files
         createAndInitializeHourlyFile(fileName5);

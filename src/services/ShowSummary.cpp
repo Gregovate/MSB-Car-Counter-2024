@@ -1,9 +1,11 @@
 #include "traffic/Firmware.h"
 #include <stdlib.h>
+#include <limits.h>
+#include "traffic/NightlyCsv.h"
 
 namespace {
 const char* summaryHealth="NOT_DUE";
-// New columns are appended, preserving all existing column positions and rows.
+// CSV headers and legacy MQTT payloads are independent contracts.
 // Prior-year files never pass recordingOpen's write guard.
 String summaryPath(const char* name) { return String(seasonFolder)+"/"+name; }
 bool summaryReplace(const String& path,const String& text) {
@@ -26,37 +28,116 @@ String summaryCell(const String& line,unsigned column) {
     for(unsigned i=0;i<column;++i){int end=line.indexOf(',',start);if(end<0)return "";start=end+1;}
     int end=line.indexOf(',',start);return end<0?line.substring(start):line.substring(start,end);
 }
-String savedSummaryTemperature(const String& path,const String& date) {
-    File f=recordingOpen(path,FILE_READ);if(!f || f.size()>65536){f.close();return "";}
+int summaryColumn(const String& header,const char* name) {
+    for(int i=0;;++i) {
+        String cell=summaryCell(header,i);
+        if(cell==name)return i;
+        if(!cell.length())return -1;
+    }
+}
+// Resolve historical cells by name. A missing column or date stays blank.
+String savedSummaryCell(const String& path,const String& date,const char* name) {
+    File f=recordingOpen(path,FILE_READ);
+    if(!f || f.size()>65536){f.close();return "";}
     String header=f.readStringUntil('\n');header.trim();
-    if(summaryCell(header,8)!="DailyAvgTemp"){f.close();return "";}
-    while(f.available()) {
+    int column=summaryColumn(header,name);
+    while(column>=0 && f.available()) {
         String line=f.readStringUntil('\n');line.trim();
-        if(!line.startsWith(date+","))continue;
-        String text=summaryCell(line,8);text.trim();char* end=nullptr;
-        const float value=strtof(text.c_str(),&end);
-        if(text.length() && end && !*end && isfinite(value) && value>=-40 && value<=120){f.close();return text;}
+        if(line.startsWith(date+",")){f.close();return summaryCell(line,column);}
     }
     f.close();return "";
 }
-bool upsertSummary(const String& path,const String& header,const String& date,const String& row) {
+String savedSummaryTemperature(const String& path,const String& date) {
+    String text=savedSummaryCell(path,date,"DailyAvgTemp");text.trim();
+    char* end=nullptr;
+    float value=strtof(text.c_str(),&end);
+    if(text.length() && end && !*end && isfinite(value) && value>=-40 && value<=120)return text;
+    return "";
+}
+bool parseHistoricalCount(const String& cell,long& value) {
+    value=0;
+    if(!cell.length())return false;
+    for(unsigned i=0;i<cell.length();++i) {
+        int digit=cell[i]-'0';
+        if(digit<0 || digit>9 || value>(LONG_MAX-digit)/10)return false;
+        value=value*10+digit;
+    }
+    return true;
+}
+String migratedRow(const String& line,bool buckets) {
+    // Both legacy formats have nine common-position cells and optional 10PM/extension.
+    const int firstHour=buckets?2:3;
+    String result=summaryCell(line,0);
+    for(int i=1;i<firstHour+4;++i)result+=","+summaryCell(line,i);
+    String daily,late;
+    long total=0;
+    if(buckets) {
+        daily=summaryCell(line,6);
+        bool valid=parseHistoricalCount(daily,total);
+        for(int i=2;valid && i<6;++i) {
+            long count;
+            valid=parseHistoricalCount(summaryCell(line,i),count) && count<=total;
+            if(valid)total-=count;
+        }
+        if(valid){char count[24];snprintf(count,sizeof(count),"%ld",total);late=count;}
+    } else {
+        // Old cumulative files lacked DailyTotal. Match the sibling sheet by date.
+        String path=summaryPath("ShowSummaryBuckets.csv");
+        if(!SD.exists(path))path+=".previous";
+        daily=savedSummaryCell(path,summaryCell(line,0),"DailyTotal");
+        long atNine;
+        if(parseHistoricalCount(daily,total) && parseHistoricalCount(summaryCell(line,6),atNine) && total>=atNine)late=daily;
+        else daily="";
+    }
+    return result+","+late+","+daily+","+summaryCell(line,7)+","+summaryCell(line,8)+","+summaryCell(line,10);
+}
+bool preserveLegacy(File& f,const String& path) {
+    // Keep the original bytes independently of the rotating .previous backup.
+    const String backup=path+".legacy";
+    const bool create=!SD.exists(backup);
+    const String candidate=create ? String(backup+".pending") : backup;
+    uint8_t source[256],copy[256];
+    if(create) {
+        if(!f.seek(0))return false;
+        File out=recordingOpen(candidate,FILE_WRITE);
+        if(!out)return false;
+        while(f.position()<f.size()) {
+            size_t n=f.read(source,sizeof(source));
+            if(!n || out.write(source,n)!=n){out.close();return false;}
+        }
+        out.flush();out.close();
+    }
+    File check=recordingOpen(candidate,FILE_READ);
+    if(!check || check.size()!=f.size() || !f.seek(0)){check.close();return false;}
+    while(f.position()<f.size()) {
+        size_t n=f.read(source,sizeof(source));
+        if(!n || check.read(copy,n)!=n || memcmp(source,copy,n)){check.close();return false;}
+    }
+    check.close();
+    return !create || recordingRename(candidate,backup);
+}
+bool upsertSummary(const String& path,bool buckets,const String& date,const String& row) {
+    String header=buckets?NightlyCsv::buckets:NightlyCsv::cumulative;
     // Recovery precedes any initialization. The prior complete CSV survives
     // power loss during replacement; retries update a date rather than duplicate it.
     if (!SD.exists(path) && SD.exists(path+".previous") && !recordingRename(path+".previous",path)) return false;
-    String content=header+",10PM,ExtensionMin\n";
+    String content=header+"\n";
     File f=recordingOpen(path,FILE_READ);
     if (!f && SD.exists(path)) return false;
     if (f) {
         // Bound memory use; refuse to truncate an unexpectedly large metrics file.
         if (f.size()>65536) { f.close();return false; }
         String oldHeader=f.readStringUntil('\n');oldHeader.trim();
-        bool oldSchema=oldHeader==header;
-        if (!oldSchema && oldHeader!=header+",10PM,ExtensionMin") { f.close();return false; }
+        String legacy=buckets?"Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp":"Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp";
+        bool migrate=oldHeader!=header;
+        if(migrate) {
+            if((oldHeader!=legacy && oldHeader!=legacy+",10PM,ExtensionMin") || !preserveLegacy(f,path) || !f.seek(0)){f.close();return false;}
+            f.readStringUntil('\n');
+        }
         while (f.available()) {
             String line=f.readStringUntil('\n');line.trim();
             if (!line.length() || line.startsWith(date+",")) continue;
-            // Preserve every historical value; migration adds only empty cells.
-            content+=line+(oldSchema ? ",,":"")+"\n";
+            content+=(migrate ? migratedRow(line,buckets) : line)+"\n";
         }
         f.close();
     }
@@ -82,9 +163,8 @@ bool writeOfficialSummaries() {
     for(int i=0;i<24;++i) total+=officialHourly[i];
     unsigned int b6=officialHourly[17],b7=officialHourly[18],b8=officialHourly[19],b9=officialHourly[20];
     int extension=effectiveExtension();
-    // 9PM always means the hour ending at 21:00. Closing-grace cars are
-    // included in DailyTotal, never mislabeled as 8-9 PM traffic. The late
-    // 10PM field is populated only on explicitly extended nights.
+    unsigned int late=0;
+    for(int hour=21;hour<24;++hour)late+=officialHourly[hour];
     unsigned int c6=b6,c7=c6+b7,c8=c7+b8,c9=c8+b9;
     // Missing is blank, not 0 F. Weight all valid official-window samples equally.
     float average=0;char averageText[24]="";
@@ -98,23 +178,21 @@ bool writeOfficialSummaries() {
             if(saved.length()){snprintf(averageText,sizeof(averageText),"%s",saved.c_str());break;}
         }
     }
-    char suffix[48];
-    if(extension) snprintf(suffix,sizeof(suffix),",%u,%d",officialHourly[21],extension);
-    else snprintf(suffix,sizeof(suffix),",,");
-    char cumulativeSuffix[48];
-    if (extension) snprintf(cumulativeSuffix,sizeof(cumulativeSuffix),",%u,%d",c9+officialHourly[21],extension);
-    else snprintf(cumulativeSuffix,sizeof(cumulativeSuffix),",,");
     char cumulative[256],buckets[256];
-    snprintf(cumulative,sizeof(cumulative),"%s,%d,%u,%u,%u,%u,%u,%d,%s%s",
-        date,recordingDaysRunning(),before,c6,c7,c8,c9,totalShowCars,averageText,cumulativeSuffix);
-    snprintf(buckets,sizeof(buckets),"%s,%d,%u,%u,%u,%u,%u,%d,%s%s",
-        date,recordingDaysRunning(),b6,b7,b8,b9,total,totalShowCars,averageText,suffix);
-    // Both counters now provide the same cumulative AND hourly metrics schemas.
-    bool a=upsertSummary(summaryPath("ShowSummary.csv"),
-        "Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp",date,cumulative);
-    bool b=upsertSummary(summaryPath("ShowSummaryBuckets.csv"),
-        "Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp",date,buckets);
+    snprintf(cumulative,sizeof(cumulative),"%s,%d,%u,%u,%u,%u,%u,%u,%u,%d,%s,%d",
+        date,recordingDaysRunning(),before,c6,c7,c8,c9,total,total,totalShowCars,averageText,extension);
+    snprintf(buckets,sizeof(buckets),"%s,%d,%u,%u,%u,%u,%u,%u,%d,%s,%d",
+        date,recordingDaysRunning(),b6,b7,b8,b9,late,total,totalShowCars,averageText,extension);
+    bool a=upsertSummary(summaryPath("ShowSummary.csv"),false,date,cumulative);
+    bool b=upsertSummary(summaryPath("ShowSummaryBuckets.csv"),true,date,buckets);
     summaryHealth=a && b ? "OK":"WRITE_FAILED_RETRY";
-    if (a && b) publishMQTT(MQTT_PUB_SUMMARY,cumulative);
+    if(a && b) {
+        // HA consumers still receive the original cumulative format, including its optional hour 21.
+        char legacy[256],suffix[40]=",";
+        if(extension)snprintf(suffix,sizeof(suffix),"%u,%d",c9+officialHourly[21],extension);
+        snprintf(legacy,sizeof(legacy),"%s,%d,%u,%u,%u,%u,%u,%d,%s,%s",date,
+            recordingDaysRunning(),before,c6,c7,c8,c9,totalShowCars,averageText,suffix);
+        publishMQTT(MQTT_PUB_SUMMARY,legacy);
+    }
     return a && b && commitClosingCheckpoint();
 }

@@ -1,3 +1,4 @@
+#include "traffic/NightlyCsv.h"
 #include "traffic/Firmware.h"
 
 // Extracted from the production baseline; behavior fixes are separate changes.
@@ -629,6 +630,8 @@ void checkAndCreateFile(const String &fileName, const String &header) {
         fullPath = folder + fname;
     }
 
+    // The report writer restores its last complete file after an interrupted rename.
+    if ((header==NightlyCsv::buckets || header==NightlyCsv::cumulative) && SD.exists(fullPath+".previous") && !SD.exists(fullPath)) return;
     if (!SD.exists(fullPath)) {
         Serial.printf("%s not found. Creating...\n", fullPath.c_str());
 
@@ -875,7 +878,7 @@ void applyRecordingCalendar() {
     checkAndCreateFile(fileName3);
     checkAndCreateFile(fileName4);
     checkAndCreateFile(fileName6,"DateTime, TimeToPass_ms, EnterDailyTotal, AB_Follow_ms, TimeBetweenCars_ms");
-    checkAndCreateFile(fileName7,"Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp");
-    checkAndCreateFile(fileName10,"Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp");
+    checkAndCreateFile(fileName7,NightlyCsv::cumulative);
+    checkAndCreateFile(fileName10,NightlyCsv::buckets);
     createAndInitializeHourlyFile(fileName5);
 }
