@@ -11,6 +11,20 @@
 
 
 
+static void sendNightlyReport(AsyncWebServerRequest* request,bool buckets) {
+    String csv;
+    int status=readNightlyReport(buckets,csv);
+    if (status!=200) {
+        request->send(status,"text/plain",status==404 ? "No nightly report yet" :
+            status==422 ? "Unrecognized nightly CSV header" : "Nightly report unavailable");
+        return;
+    }
+    AsyncWebServerResponse* response=request->beginResponse(200,"text/csv",csv);
+    response->addHeader("Cache-Control","no-store");
+    response->addHeader("Access-Control-Allow-Origin","*");
+    request->send(response);
+}
+
 void downloadSDFile(AsyncWebServerRequest *request) {
     if (!request->hasParam("filename")) {
         request->send(400, "text/plain", "Filename is required");
@@ -261,62 +275,14 @@ void setupServer() {
     // Shared embedded report viewer registered by setupFileManagerRoutes().
 
     // ----------------------------
-    // Seasonal ShowSummary.csv
-    // /CC/YYYY/ShowSummary.csv
-    // ----------------------------
+    // Downloads, HTML tables and printed reports all read these two routes.
     server.on("/ShowSummary.csv", HTTP_GET, [](AsyncWebServerRequest *request) {
-
-        if (!sdAvailable) {
-            request->send(503, "text/plain", "SD not available");
-            return;
-        }
-
-        String fullPath = String(seasonFolder) + "/ShowSummary.csv";
-
-        if (!SD.exists(fullPath)) {
-            request->send(404, "text/plain",
-                          "ShowSummary.csv not found in season folder");
-            return;
-        }
-
-        AsyncWebServerResponse *response =
-            request->beginResponse(SD, fullPath, "text/csv");
-        response->addHeader("Access-Control-Allow-Origin", "*");
-        request->send(response);
+        sendNightlyReport(request,false);
     });
-
-    // ----------------------------
-    // Serve Show Summary Buckets webpage
-    // Put showSummaryBuckets.html in /data/
-    // ----------------------------
-    // Shared embedded report viewer registered by setupFileManagerRoutes().
-
-    // ----------------------------
-    // Seasonal ShowSummaryBuckets.csv
-    // /CC/YYYY/ShowSummaryBuckets.csv
-    // ----------------------------
     server.on("/ShowSummaryBuckets.csv", HTTP_GET, [](AsyncWebServerRequest *request) {
-
-        if (!sdAvailable) {
-            request->send(503, "text/plain", "SD not available");
-            return;
-        }
-
-        String fullPath = String(seasonFolder) + "/ShowSummaryBuckets.csv";
-
-        if (!SD.exists(fullPath)) {
-            request->send(404, "text/plain",
-                          "ShowSummaryBuckets.csv not found in season folder");
-            return;
-        }
-
-        AsyncWebServerResponse *response =
-            request->beginResponse(SD, fullPath, "text/csv");
-        response->addHeader("Access-Control-Allow-Origin", "*");
-        request->send(response);
+        sendNightlyReport(request,true);
     });
 
-    // ----------------------------
     // File manager / SD routes
     // ----------------------------
     // /listFiles is registered by the common file manager.

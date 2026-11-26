@@ -9,6 +9,7 @@ int effectiveShowEnd();
 int effectiveExtension();
 void recordOfficialVehicle();
 bool writeOfficialSummaries();
+int readNightlyReport(bool buckets,String& csv);
 void applyOperatingDetector(int alarmMs,int detectMs);
 const char* summaryExportStatus();
 bool officialSeriesCanStart();

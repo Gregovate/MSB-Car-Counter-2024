@@ -124,7 +124,7 @@
   "summaryReplace": "beb1016aecbd33df5160e8dad1f37d2069af8e8e30f4bd31fd686553ae6ca3c1",
   "summaryCell": "b6dcdadbc4e087fb13bf70475d921f651d92d38599a52e09fc76e27a55608155",
   "savedSummaryTemperature": "b8da85f467e0e38698ed72d7d2654c3bcf4d2b79c92850b705d43655856e4120",
-  "upsertSummary": "63ecb7ca68c46369bdecbccae3f810d740af2885f6e17466e8bc35686aebe462",
+  "upsertSummary": "2fb1244dcde57cbf42fd6dabf9cb20b5b303c14642435fdf1c24ef9340749250",
   "recordOfficialVehicle": "bbf3f6007def50634fa326c6a6499b8a4035501a909db1b31d6fc20181fc9741",
   "writeOfficialSummaries": "9f29e65676aecef3d3b85b04b813ba38f494fe6448efd9c93416bbda4d1351c6",
   "checkSdHealth": "0730fecdba054dc022de985854dc1ea59e09889132da2707cdf81f4803d2ce81",
@@ -172,7 +172,7 @@
   "changeDirectory": "c48d9632ce990c441ba41387b94668f7c94b14126fc031d617026ace4da09914",
   "deleteSDFile": "471d9b3bbaf5b6633fa47ea2c63d1e2bfe23bdc4bd538280784adf3339ab353e",
   "renameSDFile": "e6d8fe3eb12eb832ea366cefbef0b25db5cfad95e26b4ecb74adcd9e27b23082",
-  "setupServer": "a908ab3c1add84828fbed81968ee1163dba54de2123cfd207a21eb446e3732f1",
+  "setupServer": "9e10452dfb528d1ab8dcf1167bb06c36a28e83c17cebc23ec5bfac52bc4eade2",
   "resetSessionRam": "d47e388f9e5b1eea53a09ce8d142e10b60c46b2d26b58a6621755333d0731430",
   "officialDailyPassages": "14c3c5c62a1d0f5e97d7dc1d862c2f2e974ddd6e1ab3842d6004b9419a8ed3e7",
   "validSession": "a0ff869470e1dfb0fd2fd6d063fb9def8907d6f08584bbb38cc1a84d1e202c18",
@@ -200,5 +200,8 @@
   "savedSummaryCell": "828f7a0b149f2cd9557354880cbd71bbf6790f66cd0a6a3d986e2a7b2d3b0f24",
   "parseHistoricalCount": "2fcbaf6918eed49ca479da5b73cd910aec4985fadce108f09eb416068c477134",
   "migratedRow": "b674f67cb6a5b44889605fd7f9574baba32861a0e0fad61b5d43e03b5fde5df2",
-  "preserveLegacy": "768a21f947c030d1a7f493d87547ea638eaeacff9d1b462b9881f3597a99692d"
+  "preserveLegacy": "768a21f947c030d1a7f493d87547ea638eaeacff9d1b462b9881f3597a99692d",
+  "sendNightlyReport": "ea433986950b84d446365aaa999737e164e15cb44fec59baa6441bd9ed5b6b03",
+  "legacyReportHeader": "d08f0e630b6a7e5d82f0b66039b81ab4201da2e911c393dfb743b18bd3d3a74c",
+  "readNightlyReport": "f9d923a2fc29f851256ed406ae6c93935e7809855b33c22bfb90ef9901da9603"
 }

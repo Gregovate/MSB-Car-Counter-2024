@@ -120,6 +120,13 @@ int main() {
     disk.erase(root+"ShowSummaryBuckets.csv.legacy");
     disk[root+"ShowSummaryBuckets.csv"]=legacyBuckets;
     disk[root+"ShowSummary.csv"]=legacySummary;
+    String download;
+    auto untouched=disk;
+    assert(readNightlyReport(true,download)==200);
+    assert(download==std::string(NightlyCsv::buckets)+"\n2026-11-25,1,8,3,0,0,2,13,15,31.0,\n");
+    assert(readNightlyReport(false,download)==200);
+    assert(download==std::string(NightlyCsv::cumulative)+"\n2026-11-25,1,0,8,11,11,11,13,13,15,31.0,\n2026-11-24,1,0,4,4,4,4,,,4,32.0,\n");
+    assert(disk==untouched);
     for(int extra:{0,2}) for(int minutes:{0,30}) {
         configure(false,minutes);
         for(auto& hour:officialHourly)hour=0;

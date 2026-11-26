@@ -2,7 +2,7 @@
   "tests/count_stubs/traffic/Firmware.h": "3988b1efda5b392b3ddbbda22c2eafb4f5842af2253de9814519c0ac0d1d2db7",
   "include/traffic/OperatingPolicy.h": "93fed668dae7b14191837e36770d58dea51b198b43ae7ce6554ab18801d0e6b5",
   "src/services/OperatingSettings.cpp": "48c1e9f4358f8adf7d7539f7b2ef90824729ce3e7963e68f38c05c8dd456e682",
-  "tests/operating_release_test.cpp": "d73fbf46473f638b756406169b50231a51d6ea1e683b35f2c6d469a0135e5e57",
+  "tests/operating_release_test.cpp": "3bf28d26def8b4f21f46389adf23affcb825b9e64d26787f2db998793f1ea9f2",
   "include/traffic/JournalInspection.h": "d67ce65a83f8f0092f28c5991407021a082081559e898dde21554ab0fcc7be15",
   "src/services/JournalInspection.cpp": "53ea30f446d0a9b81de5745f0225645362ae0111d1680fc291c62283c7cf8acd",
   "tools/Collect-CarJournalInspection.ps1": "a608f0d35e3d3a7d04f2b4424aebcb6da6569573307ae7f1789e84232d526590",

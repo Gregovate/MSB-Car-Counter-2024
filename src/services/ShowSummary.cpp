@@ -116,6 +116,11 @@ bool preserveLegacy(File& f,const String& path) {
     check.close();
     return !create || recordingRename(candidate,backup);
 }
+bool legacyReportHeader(const String& header,bool buckets) {
+    String legacy=buckets?"Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp":"Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp";
+    return header==legacy || header==legacy+",10PM,ExtensionMin";
+}
+
 bool upsertSummary(const String& path,bool buckets,const String& date,const String& row) {
     String header=buckets?NightlyCsv::buckets:NightlyCsv::cumulative;
     // Recovery precedes any initialization. The prior complete CSV survives
@@ -128,10 +133,9 @@ bool upsertSummary(const String& path,bool buckets,const String& date,const Stri
         // Bound memory use; refuse to truncate an unexpectedly large metrics file.
         if (f.size()>65536) { f.close();return false; }
         String oldHeader=f.readStringUntil('\n');oldHeader.trim();
-        String legacy=buckets?"Date,DaysRunning,6PM,7PM,8PM,9PM,DailyTotal,ShowTotal,DailyAvgTemp":"Date,DaysRunning,Before5,6PM,7PM,8PM,9PM,ShowTotal,DailyAvgTemp";
         bool migrate=oldHeader!=header;
         if(migrate) {
-            if((oldHeader!=legacy && oldHeader!=legacy+",10PM,ExtensionMin") || !preserveLegacy(f,path) || !f.seek(0)){f.close();return false;}
+            if(!legacyReportHeader(oldHeader,buckets) || !preserveLegacy(f,path) || !f.seek(0)){f.close();return false;}
             f.readStringUntil('\n');
         }
         while (f.available()) {
@@ -144,6 +148,38 @@ bool upsertSummary(const String& path,bool buckets,const String& date,const Stri
     content+=row+"\n";
     return summaryReplace(path,content);
 }
+}
+
+// Serve a read-only view before the next nightly write migrates the SD files.
+int readNightlyReport(bool buckets,String& csv) {
+    if (!sdAvailable) return 503;
+    String path=summaryPath(buckets ? "ShowSummaryBuckets.csv" : "ShowSummary.csv");
+    if (!SD.exists(path)) {
+        path+=".previous";
+        if (!SD.exists(path)) return 404;
+    }
+    File file=recordingOpen(path,FILE_READ);
+    if (!file || file.size()>65536) return 503;
+    String header=file.readStringUntil('\n');
+    header.trim();
+    const char* current=buckets ? NightlyCsv::buckets : NightlyCsv::cumulative;
+    bool legacy=header!=current;
+    if (legacy && !legacyReportHeader(header,buckets)) return 422;
+    csv=current;
+    csv+="\n";
+    while (file.available()) {
+        size_t start=file.position();
+        String line=file.readStringUntil('\n');
+        if (file.position()<=start) return 503;
+        line.trim();
+        if (!line.length()) continue;
+        String row=legacy ? migratedRow(line,buckets) : line;
+        size_t expected=csv.length()+row.length()+1;
+        csv+=row;
+        csv+="\n";
+        if (!row.length() || csv.length()!=expected) return 503;
+    }
+    return file.position()==file.size() ? 200 : 503;
 }
 
 const char* summaryExportStatus() { return summaryHealth; }
