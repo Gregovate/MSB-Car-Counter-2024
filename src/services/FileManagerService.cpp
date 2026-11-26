@@ -5,6 +5,11 @@
 // A page visit opens the active recording season, not the machine's date/year.
 // Browsing afterward remains explicit; no count/settings file is moved or reset.
 void setupFileManagerRoutes() {
+    // Use the device identity for every page, even when SD or status reads fail.
+    server.on("/counter-theme.css",HTTP_GET,[](AsyncWebServerRequest* request) {
+        const bool gate=String(THIS_MQTT_CLIENT)=="espGateCounter";
+        request->send(200,"text/css",gate ? ":root{--accent:#164aa0}" : ":root{--accent:#ae1e1e}");
+    });
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
         if(seasonFolder[0]=='/') currentDirectory=String(seasonFolder);
         auto* response=request->beginResponse(200,"text/html",fileManagerPage);

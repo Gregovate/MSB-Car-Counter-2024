@@ -46,6 +46,9 @@ void listSDFiles(AsyncWebServerRequest*);
 '''
   harness=r'''
 int main(){setupFileManagerRoutes();AsyncWebServerRequest req;
+ server.routes.at("/counter-theme.css")(&req);assert(req.result.type=="text/css" && req.result.body==":root{--accent:#164aa0}");
+ THIS_MQTT_CLIENT="espCarCounter";server.routes.at("/counter-theme.css")(&req);
+ assert(req.result.body==":root{--accent:#ae1e1e}");THIS_MQTT_CLIENT="espGateCounter";
  server.routes.at("/")(&req);assert(currentDirectory=="/GC/2026" && req.result.status==200);
  assert(req.result.body.find("Storage and recovery")!=std::string::npos);
  server.routes.at("/showSummary.html")(&req);assert(req.result.body.find("Copy report for email")!=std::string::npos);

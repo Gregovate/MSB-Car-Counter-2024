@@ -1,6 +1,6 @@
 #pragma once
 static const char occupancyPage[] PROGMEM=R"OCC(<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Hourly park occupancy</title>
-<style>body{font:17px system-ui;margin:2rem;color:#202a36}label,button,a{margin-right:.7rem}input,button{font:inherit;padding:.3rem}table{border-collapse:collapse}td,th{padding:.5rem;border:1px solid #aaa;text-align:right}@media print{nav,form{display:none}}</style>
+<link rel="stylesheet" href="/counter-theme.css"><style>body{font:17px system-ui;margin:2rem;color:#202a36}label,button,a{margin-right:.7rem}input,button{font:inherit;padding:.3rem}button,nav a{background:var(--accent,#475569);color:white;border:0;border-radius:4px;padding:.5rem;text-decoration:none}button:disabled{opacity:.55}table{border-collapse:collapse}td,th{padding:.5rem;border:1px solid #aaa;text-align:right}@media print{nav,form{display:none}}</style>
 <h1>Hourly park occupancy</h1><nav><a href="/showSummaryBuckets.html">Hourly show buckets</a></nav>
 <form id="form"><p><label>Show date <input required type="date" id="night"></label></p>
 <label>Car address <input id="cc" value="192.168.3.31"></label><label>Gate address <input id="gc" value="192.168.3.30"></label><button>Load report</button></form>

@@ -8,6 +8,8 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 26.11.25.3 — 2026-11-25
+ *   - Match report controls to the Car red and Gate blue file manager colors.
  * 26.11.25.2 — 2026-11-25
  *   - Serve legacy nightly reports in current column order before the next nightly write.
  * 26.11.25.1 — 2026-11-25
@@ -147,7 +149,7 @@
  */
 #include "traffic/NightlyCsv.h"
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "26.11.25.2";
+const char FWVersion[] = "26.11.25.3";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"
