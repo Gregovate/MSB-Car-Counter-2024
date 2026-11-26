@@ -201,7 +201,9 @@
   "parseHistoricalCount": "2fcbaf6918eed49ca479da5b73cd910aec4985fadce108f09eb416068c477134",
   "migratedRow": "b674f67cb6a5b44889605fd7f9574baba32861a0e0fad61b5d43e03b5fde5df2",
   "preserveLegacy": "768a21f947c030d1a7f493d87547ea638eaeacff9d1b462b9881f3597a99692d",
-  "sendNightlyReport": "ea433986950b84d446365aaa999737e164e15cb44fec59baa6441bd9ed5b6b03",
+  "sendNightlyReport": "98a52cd063c2c5a45908cc8c43308d772d77f144aa738d31baa88352b7910982",
   "legacyReportHeader": "d08f0e630b6a7e5d82f0b66039b81ab4201da2e911c393dfb743b18bd3d3a74c",
-  "readNightlyReport": "f9d923a2fc29f851256ed406ae6c93935e7809855b33c22bfb90ef9901da9603"
+  "readNightlyReport": "f9d923a2fc29f851256ed406ae6c93935e7809855b33c22bfb90ef9901da9603",
+  "downloadName": "c1ad16900a70e41fab5fb85c14adc905117361c466bae3d94bccd0d7a7fbb446",
+  "downloadSDFile": "4d1318a8981d27ff46c6afe4ad561fe5f6a054876c9b9f59c1ac1f9cf79d3560"
 }

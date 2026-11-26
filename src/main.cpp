@@ -8,6 +8,8 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 26.11.25.5 — 2026-11-25
+ *   - Identify this counter in downloaded nightly report filenames.
  * 26.11.25.4 — 2026-11-25
  *   - Explain passage-based hourly peaks and distinguish production session and SD errors.
  * 26.11.25.3 — 2026-11-25
@@ -151,7 +153,7 @@
  */
 #include "traffic/NightlyCsv.h"
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "26.11.25.4";
+const char FWVersion[] = "26.11.25.5";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"

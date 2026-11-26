@@ -1,6 +1,6 @@
 # MSB Car Counter 2024 Documentation
 
-Current firmware on `main` is **26.11.25.4**. The occupancy viewer explains how individual timestamped passages determine the hourly peak and identifies the counter reporting an archive error. File manager and report controls use Car red or Gate blue. Both report downloads and their HTML/print views convert existing legacy season rows on read. The original files remain available in the season folder.
+Current firmware on `main` is **26.11.25.5**. This counter downloads `EnterShowSummary.csv` and `EnterShowSummaryBuckets.csv`. Existing HTTP and SD paths are unchanged. The occupancy viewer explains how individual timestamped passages determine the hourly peak and identifies the counter reporting an archive error. File manager and report controls use Car red or Gate blue. Both report downloads and their HTML/print views convert existing legacy season rows on read. The original files remain available in the season folder.
 
 Previous paired release: **26.11.25.1** (November 25, Central). Both devices reported the preceding Car .32 and Gate .25 builds installed. This release changes the embedded version only. Use YY.MM.DD.revision for official builds, starting at 1 each local release date. Increment for a distinct release on the same date. Reflashing the same binary keeps its version. The counters completed a year of testing. The first public production run is Friday, November 27, 2026.
 

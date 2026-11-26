@@ -11,6 +11,13 @@
 
 
 
+// Give exported season reports a recognizable device name while keeping SD paths stable.
+static String downloadName(const String& filename) {
+    if (filename=="ShowSummary.csv") return "EnterShowSummary.csv";
+    if (filename=="ShowSummaryBuckets.csv") return "EnterShowSummaryBuckets.csv";
+    return filename;
+}
+
 static void sendNightlyReport(AsyncWebServerRequest* request,bool buckets) {
     String csv;
     int status=readNightlyReport(buckets,csv);
@@ -20,6 +27,8 @@ static void sendNightlyReport(AsyncWebServerRequest* request,bool buckets) {
         return;
     }
     AsyncWebServerResponse* response=request->beginResponse(200,"text/csv",csv);
+    String filename=downloadName(buckets ? "ShowSummaryBuckets.csv" : "ShowSummary.csv");
+    response->addHeader("Content-Disposition","attachment; filename=\"" + filename + "\"");
     response->addHeader("Cache-Control","no-store");
     response->addHeader("Access-Control-Allow-Origin","*");
     request->send(response);
@@ -51,7 +60,7 @@ void downloadSDFile(AsyncWebServerRequest *request) {
 
     response->addHeader(
         "Content-Disposition",
-        "attachment; filename=\"" + fileName + "\""
+        "attachment; filename=\"" + downloadName(fileName) + "\""
     );
 
     request->send(response);
