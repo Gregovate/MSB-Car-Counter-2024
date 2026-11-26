@@ -214,4 +214,5 @@
 (text "• RTC clock: check J1.3 to A2.36 (GPIO22). The screenshot shows a lead there." (at 18 246.6 0) (effects (font (size 1.65 1.65)) (justify left)) (uuid eb5499af-6c50-4995-aa4f-fa61db17f088))
 (text "• Beam common: J3.2 and J4.2 reach J13.1. Verify the return to ground." (at 18 252.4 0) (effects (font (size 1.65 1.65)) (justify left)) (uuid f640ad2c-fd90-4be1-bc82-f775ac890a28))
 (text "• OLED reset: J14.5 reaches J8.5. Verify how reset is strapped; J8.6 carries EN." (at 18 258.2 0) (effects (font (size 1.65 1.65)) (justify left)) (uuid 4af2f2fd-584c-44c8-a442-6d857c600295))
-(text "• J11 and J12 have no identified far-end connections in the source file." (at 18 264.0 0) (effects (font (size 1.65 1.65)) (justify left)) (uuid 4b9c1257-2e79-42ed-8db1-123bd7a5032b))(sheet_instances(path "/" (page "1"))))
+(text "• J11 and J12 have no identified far-end connections in the source file." (at 18 264.0 0) (effects (font (size 1.65 1.65)) (justify left)) (uuid 4b9c1257-2e79-42ed-8db1-123bd7a5032b))(text "J8 pin 5  →  J14 pin 5 (OLED RES)" (at 20 210 0) (effects (font (size 1.7 1.7)) (justify left)) (uuid 37a7966d-3bb8-45a4-bce7-919b1cff316b))
+(sheet_instances(path "/" (page "1"))))
