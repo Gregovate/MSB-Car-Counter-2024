@@ -1,12 +1,16 @@
 #pragma once
 static const char occupancyPage[] PROGMEM=R"OCC(<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Hourly park occupancy</title>
 <link rel="stylesheet" href="/counter-theme.css"><style>body{font:17px system-ui;margin:2rem;color:#202a36}label,button,a{margin-right:.7rem}input,button{font:inherit;padding:.3rem}button,nav a{background:var(--accent,#475569);color:white;border:0;border-radius:4px;padding:.5rem;text-decoration:none}button:disabled{opacity:.55}table{border-collapse:collapse}td,th{padding:.5rem;border:1px solid #aaa;text-align:right}@media print{nav,form{display:none}}</style>
-<h1>Hourly park occupancy</h1><nav><a href="/showSummaryBuckets.html">Hourly show buckets</a></nav>
+<h1>Cars in the park by hour</h1>
+<p>Starting at zero for the show, each recorded entrance adds one car and each exit subtracts one. The running count carries into the next hour.</p>
+<p><strong>Hourly peak</strong> is the highest count reached as those passages occurred. For example, if the count rises from 40 to 70 and falls to 54, the hourly peak is 70 and the hour ends with 54 cars.</p><nav><a href="/showSummaryBuckets.html">Hourly show buckets</a></nav>
 <form id="form"><p><label>Show date <input required type="date" id="night"></label></p>
-<label>Car address <input id="cc" value="192.168.3.31"></label><label>Gate address <input id="gc" value="192.168.3.30"></label><button>Load report</button></form>
-<p id="status" role="status"></p><section id="report"></section><nav><button id="csv" disabled>Download CSV</button><button id="copy" disabled>Copy for email</button><button onclick="print()">Print / Save PDF</button></nav><script>
+<button>Load report</button><details><summary>Counter addresses</summary><label>Car Counter (entries) <input id="cc" value="192.168.3.31"></label><label>Gate Counter (exits) <input id="gc" value="192.168.3.30"></label></details></form>
+<p id="status" role="status"></p><section id="report"></section><nav><button id="csv" disabled>Download CSV</button><button id="copy" disabled>Copy for email</button><button id="print" disabled onclick="print()">Print / Save PDF</button></nav><script>
 const byId=id=>document.getElementById(id);
 const headers=['Date','Hour beginning (local)','Entries','Exits','Net','End occupancy','Observed peak','Possible peak at tied timestamps','Evidence'];
+// Keep the existing CSV headers for spreadsheet consumers.
+const labels={'Net':'Change this hour','End occupancy':'Cars at end of hour','Observed peak':'Hourly peak','Possible peak at tied timestamps':'Possible peak if entries came first'};
 function hash(bytes){let h=2166136261;for(const b of bytes)h=Math.imul(h^b,16777619);return h>>>0;}
 function decode(bytes,sequence){
     const d=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),u=i=>d.getUint32(i*4,true);
@@ -17,7 +21,7 @@ function decode(bytes,sequence){
 }
 async function readNight(address,date){
     const url=new URL('/occupancyJournal','http://'+address);
-    async function get(params){url.search=params;const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error(address+' '+await r.text());return r;}
+    async function get(params){url.search=params;const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error(await r.text());return r;}
     const meta=await (await get('')).json(),end=meta.last;
     if(!Number.isSafeInteger(end)||end<meta.floor||!meta.floor)throw Error(address+' has no verified production archive');
     const issues=new Set();
@@ -74,15 +78,19 @@ let output=[];
 const today=new Date();byId('night').value=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(today);
 byId('form').onsubmit=async e=>{
     e.preventDefault();const submit=e.target.querySelector('button');submit.disabled=true;
-    output=[];byId('report').replaceChildren();byId('csv').disabled=byId('copy').disabled=true;
+    output=[];byId('report').replaceChildren();byId('print').disabled=byId('csv').disabled=byId('copy').disabled=true;
     byId('status').textContent='Reading verified journal records from both counters…';
     try{const night=byId('night').value,date=Number(night.replaceAll('-',''));
-        const [car,gate]=await Promise.all(['cc','gc'].map(id=>readNight(byId(id).value.trim(),date)));
+        const [car,gate]=await Promise.all(['cc','gc'].map(async id=>{
+            const name=id==='cc'?'Car Counter':'Gate Counter';
+            try{return await readNight(byId(id).value.trim(),date);}
+            catch(err){throw Error(name+' — '+err.message);}
+        }));
         if(car.device!=='espCarCounter'||gate.device!=='espGateCounter')throw Error('Check Car and Gate addresses');
         output=[headers,...hourly(night,car,gate)];const table=document.createElement('table');
-        for(const [index,row] of output.entries()){const tr=table.insertRow();for(const cell of row){const td=document.createElement(index?'td':'th');td.textContent=cell;tr.append(td);}}
-        byId('report').append(table);byId('csv').disabled=byId('copy').disabled=false;
-        byId('status').textContent='Peak bounds reflect one-second timestamps. Review any evidence gaps before using the totals.';
+        for(const [index,row] of output.entries()){const tr=table.insertRow();for(const cell of row){const td=document.createElement(index?'td':'th');td.textContent=index ? cell : (labels[cell] || cell);tr.append(td);}}
+        byId('report').append(table);byId('print').disabled=byId('csv').disabled=byId('copy').disabled=false;
+        byId('status').textContent='If entries and exits share a second, their order is unknown. The possible peak counts those entries first. Check the Evidence column for gaps.';
     }catch(err){byId('status').textContent=err.message;}finally{submit.disabled=false;}
 };
 byId('csv').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([output.map(row=>row.join(',')).join('\r\n')],{type:'text/csv'}));a.download='Occupancy-'+output[1][0]+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};

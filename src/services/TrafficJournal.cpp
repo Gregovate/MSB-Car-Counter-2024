@@ -303,7 +303,14 @@ void setupOccupancyRoutes() {
     server.on("/occupancyJournal",HTTP_GET,[](AsyncWebServerRequest* request) {
         // Serve immutable verified SD records only. The browser combines the two
         // device streams; no network request or full-season scan runs in the detector.
-        if(!productionActive() || !sdAvailable){request->send(503,"text/plain","Production archive unavailable");return;}
+        if(!productionActive() || !sdAvailable) {
+            const char* reason=productionActive() ? "SD storage is unavailable." :
+                "No active production session. This report uses production show records.";
+            auto* response=request->beginResponse(503,"text/plain",reason);
+            response->addHeader("Access-Control-Allow-Origin","*");
+            request->send(response);
+            return;
+        }
         if(!request->hasParam("first")) {
             char json[160];snprintf(json,sizeof(json),"{\"floor\":%lu,\"last\":%lu,\"device\":\"%s\"}",
                 (unsigned long)session.floor,(unsigned long)archivedThrough,THIS_MQTT_CLIENT);
