@@ -1,6 +1,6 @@
 # Firmware Refactoring Analysis — Part 2 checkpoint
 
-Paired firmware release on `main`: **26.11.25.0** (November 25, Central). Both devices reported the preceding Car .32 and Gate .25 builds installed. This release changes the embedded version only. Opening-night field acceptance remains pending.
+Paired firmware release on `main`: **26.11.25** (November 25, Central). Both devices reported the preceding Car .32 and Gate .25 builds installed. This release changes the embedded version only. The counters completed a year of testing. The first public production run is Friday, November 27, 2026.
 
 November 25 update: .32 introduces the [nightly report contract](Nightly_Reports.md). Installation confirmed by device identity.
 

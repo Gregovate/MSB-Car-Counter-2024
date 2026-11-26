@@ -1,6 +1,6 @@
 # MSB Car Counter 2024 Documentation
 
-Paired firmware release on `main`: **26.11.25.0** (November 25, Central). Both devices reported the preceding Car .32 and Gate .25 builds installed. This release changes the embedded version only. Opening-night field acceptance remains pending.
+Paired firmware release on `main`: **26.11.25** (November 25, Central). Both devices reported the preceding Car .32 and Gate .25 builds installed. This release changes the embedded version only. The counters completed a year of testing. The first public production run is Friday, November 27, 2026.
 
 **November 25 handoff for Firmware Refactoring Analysis Part 2.** Resume from `main` in all three repositories. Home Assistant owns the schedule, offsets and dated extension. Both counters consume those settings and return applied state, traffic observations and recording health. The November 24 source baseline was Car .31 / Gate .24. Production testing has been limited. Friday, November 27 is the first public-night field evaluation. November 24 telemetry confirmed both installed versions in TEST. Record Friday’s production observations in the linked system check.
 
