@@ -97,6 +97,16 @@ int main(){
  for(unsigned i=0;i<100;++i){unsigned t=2000000+i*1300;captureForLater(t,1,0);captureForLater(t+200,1,1);captureForLater(t+900,0,1);captureForLater(t+1100,0,0);}
  ticks=2200000;detectCar();assert(totalDailyCars==int(beforeStall+100));
  assert(timeBetweenCars_ms==1300);
+ // Exercise the real idle service during a single-beam walk and B-first reverse.
+ int unchanged=totalDailyCars;
+ sample(0,0,2300000);serviceIdleArchPattern(); // begin cycling
+ auto idleTimer=noCarTimer;
+ sample(1,0,2301000);auto n=writes;serviceIdleArchPattern();
+ assert(writes==n+2 && noCarTimer==idleTimer);sample(0,0,2301300);
+ sample(0,1,2302000);serviceIdleArchPattern();
+ sample(1,1,2302300);sample(1,1,2303200);n=writes;serviceIdleArchPattern();
+ assert(writes==n+2 && noCarTimer==idleTimer);
+ sample(1,0,2303500);sample(0,0,2303800);assert(totalDailyCars==unchanged);
  std::cout<<"PASS: actual debounce/direction/count callback, reverse pair, walkers, six-second cars, stopped car, debug ON/OFF/reconnect and arch ownership\n";
 }
 '''

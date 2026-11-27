@@ -212,11 +212,10 @@ void processBeamSample(uint32_t now,bool rawA,bool rawB) {
     currentCarDetectState=passage.active ? (firstBeamState && secondBeamState ? BOTH_BEAMS_HIGH:FIRST_BEAM_HIGH):WAITING_FOR_CAR;
 }
 
-// Occupancy owns the arches, even before qualification and after B-clear.
-// An alarm never releases an unresolved passage to the idle animation.
+// Only qualified forward traffic can interrupt the idle arch sequence.
+// Keep the accepted indication while a qualified vehicle is still on a beam.
 bool vehicleArchFeedbackActive() {
-    return passage.active || stableFirstBeamState || stableSecondBeamState ||
-        digitalRead(firstBeamPin) || digitalRead(secondBeamPin) || carStuckAlarmActive;
+    return passage.active && passage.qualified;
 }
 
 void detectCar(){serviceBeamCapture(debounceDelay,processBeamSample);}

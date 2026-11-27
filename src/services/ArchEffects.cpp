@@ -70,8 +70,7 @@ void playPattern() {
     }
 }
 
-// Every occupied or unresolved passage suspends idle output. Restart the
-// full idle interval after the last occupied observation, including long stops.
+// Restart the idle interval while a qualified forward vehicle owns the arches.
 void stopIdleArchPattern() {
     currentPatternState=INITIAL_OFF;patternModeMillis=millis();
 }

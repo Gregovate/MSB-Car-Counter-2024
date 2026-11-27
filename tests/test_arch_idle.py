@@ -28,7 +28,7 @@ int main(){
  ticks=29999;serviceIdleArchPattern();assert(writes==0);
  ticks=30000;serviceIdleArchPattern();assert(writes==2);
  ticks+=500;serviceIdleArchPattern();assert(pins[redArchPin]==LOW && pins[greenArchPin]==HIGH);
- // Raw/unqualified occupancy and alarms suspend idle for the full stop.
+ // A qualified forward vehicle holds feedback through a long stop.
  occupied=true;pins[firstBeamPin]=HIGH;stableSecondBeamState=true;carStuckAlarmActive=true;
  auto n=writes;ticks+=600000;serviceIdleArchPattern();assert(writes==n && noCarTimer==ticks);
  ticks+=500;serviceIdleArchPattern();assert(writes==n && noCarTimer==ticks);
