@@ -82,6 +82,10 @@ int main() {
         rtc.current=DateTime(2026,11,27,23,0);vehicle();assert(totalShowCars==int(show));
         assert(hourlyCount[23]==1); // volunteers remain in raw traffic
         assert(writeOfficialSummaries());
+        nativeProduction=true;
+        assert(writeOfficialSummaries());
+        assert(disk["/CC/2026/ShowSummary.csv"].find("2026-11-27,0,0,")!=std::string::npos);
+        nativeProduction=false;
         auto csv=disk["/CC/2026/ShowSummaryBuckets.csv"];
         assert(csv.find("After9PM,DailyTotal,ShowTotal,DailyAvgTemp,ExtensionMin")!=std::string::npos);
         // No 21:00 vehicle is misreported in the 20:00-20:59 bucket.

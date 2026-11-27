@@ -44,7 +44,7 @@ void countTheCar() {
 
     // Increment hourly car count
     int currentHour = now.hour();
-    if (recordPassage) hourlyCount[currentHour]++;
+    hourlyCount[currentHour]++; // Live MQTT buckets include equipment checks at any hour.
 
     // Construct the MQTT topic dynamically
     char topic[60];

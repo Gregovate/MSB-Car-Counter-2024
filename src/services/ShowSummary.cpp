@@ -195,7 +195,7 @@ bool writeOfficialSummaries() {
     DateTime now=rtc.now();char date[16];
     snprintf(date,sizeof(date),"%04d-%02d-%02d",now.year(),now.month(),now.day());
     unsigned int before=0,total=0;
-    for(int i=0;i<17;++i) before+=hourlyCount[i];
+    for(int i=0;i<17;++i) before+=(productionActive() ? officialHourly[i] : hourlyCount[i]);
     for(int i=0;i<24;++i) total+=officialHourly[i];
     unsigned int b6=officialHourly[17],b7=officialHourly[18],b8=officialHourly[19],b9=officialHourly[20];
     int extension=effectiveExtension();

@@ -38,21 +38,31 @@ int main() {
     showTime=false;
     auto daily=totalDailyCars;
     auto show=totalShowCars;
-    auto hourly=hourlyCount[16];
+    rtc.current=DateTime(2026,11,4,10,0,0);
+    auto hourly=hourlyCount[10];
     auto official=officialDailyPassages();
     auto events=vehicleActivations;
+    messages.clear(); messageRetained.clear();
 #ifdef HIGH
     auto greenBefore=greenWrites;
 #endif
     countTheCar();
     assert(totalDailyCars==daily+1 && totalShowCars==show);
-    assert(hourlyCount[16]==hourly && officialDailyPassages()==official);
+    bool publishedHour=false;
+    for(size_t i=0;i<messages.size();++i) {
+        if(messages[i].first=="hour/10" && messages[i].second==String(hourly+1))
+            publishedHour=messageRetained[i];
+    }
+    assert(publishedHour);
+    assert(hourlyCount[10]==hourly+1 && officialDailyPassages()==official);
     assert(vehicleActivations==events);
 #ifdef HIGH
     assert(greenWrites==greenBefore+1);
 #endif
     reboot();
     assert(restoreCountState() && totalDailyCars==daily+1);
+    assert(hourlyCount[10]==hourly+1);
+    rtc.current=DateTime(2026,11,4,17,10,0);
     assert(resetCountsForShow() && totalDailyCars==0);
     showTime=true;
     countTheCar();

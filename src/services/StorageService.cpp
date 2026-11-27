@@ -511,6 +511,7 @@ void saveHourlyCounts() {
         publishMQTT(MQTT_DEBUG_LOG, "Hourly export read failed; existing file preserved");
         return;
     }
+    const auto& exportHours = productionActive() ? officialHourly : hourlyCount;
     String updatedContent = "";
     bool rowExists = false;
 
@@ -534,7 +535,7 @@ void saveHourlyCounts() {
                         ? nextCommaIndex + 1
                         : lastCommaIndex;
 
-                    updatedContent += "," + String(hourlyCount[i]);
+                    updatedContent += "," + String(exportHours[i]);
                 }
 
                 updatedContent += "\n";
@@ -562,7 +563,7 @@ void saveHourlyCounts() {
     if (!rowExists) {
         updatedContent += dateBuffer;
         for (int i = 0; i < 24; i++) {
-            updatedContent += "," + String(hourlyCount[i]);
+            updatedContent += "," + String(exportHours[i]);
         }
         updatedContent += "\n";
 

@@ -39,7 +39,10 @@ settings transaction. The normal nightly daily resets remain separate.
 ## Official show traffic only
 
 Qualified passages increment the live daily entrance/exit counter throughout the day.
-Car arch feedback remains enabled. The configured daily reset clears the live count
+Each passage increments its local-hour MQTT bucket (Cars/hour/00 through 23).
+Cars/hour/json carries the same live buckets on the next snapshot. Hourly MQTT
+buckets span the calendar day and roll over at midnight. Production hourly CSVs
+and nightly reports use the separate official series. Car arch feedback remains enabled. The configured daily reset clears the live count
 before show counting (at the delayed opening for Gate). Outside the recording
 window, persist the live count as a recovery checkpoint. Only eligible passages
 enter the official event logs, hourly buckets, season totals and nightly reports.
