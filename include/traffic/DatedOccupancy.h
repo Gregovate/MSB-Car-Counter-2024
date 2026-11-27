@@ -4,6 +4,7 @@
 
 namespace traffic {
 constexpr char datedEntryTopic[]="msb/traffic/CarCounter/Cars/officialEntriesDated";
+constexpr char liveEntryTopic[]="msb/traffic/CarCounter/Cars/liveEntriesDated";
 struct EntranceReading {
     uint32_t date=0,passages=0,stamp=0;
     bool fresh(uint32_t today,uint32_t now) const {

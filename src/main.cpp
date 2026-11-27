@@ -8,6 +8,8 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
+ * 26.11.27.1 — Restore daytime live passage counts and occupancy for field checks.
+ *
  * 26.11.25.5 — 2026-11-25
  *   - Identify this counter in downloaded nightly report filenames.
  * 26.11.25.4 — 2026-11-25
@@ -153,7 +155,7 @@
  */
 #include "traffic/NightlyCsv.h"
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "26.11.25.5";
+const char FWVersion[] = "26.11.27.1";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"

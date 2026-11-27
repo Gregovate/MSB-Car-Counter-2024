@@ -1,5 +1,5 @@
 {
-  "tests/count_stubs/traffic/Firmware.h": "3988b1efda5b392b3ddbbda22c2eafb4f5842af2253de9814519c0ac0d1d2db7",
+  "tests/count_stubs/traffic/Firmware.h": "26ac4b0f43b685188688cf55b3b58c3c293ccb58a90033214cfdc47dbb76e947",
   "include/traffic/OperatingPolicy.h": "93fed668dae7b14191837e36770d58dea51b198b43ae7ce6554ab18801d0e6b5",
   "src/services/OperatingSettings.cpp": "48c1e9f4358f8adf7d7539f7b2ef90824729ce3e7963e68f38c05c8dd456e682",
   "tests/operating_release_test.cpp": "3bf28d26def8b4f21f46389adf23affcb825b9e64d26787f2db998793f1ea9f2",

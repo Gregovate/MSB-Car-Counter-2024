@@ -189,7 +189,8 @@ bool showTemperatureAverage(float&);
 #define LOW 0
 #define HIGH 1
 inline const int redArchPin=25,greenArchPin=26;
-inline void digitalWrite(int,int){}
+inline int greenWrites=0;
+inline void digitalWrite(int pin,int value){if(pin==greenArchPin && value==HIGH)++greenWrites;}
 
 #include "traffic/TrafficJournal.h"
 inline bool nativeJournalEnabled=false;
@@ -218,7 +219,8 @@ inline bool appendTrafficCorrection(const traffic::CountRecord& c,uint32_t n){if
 inline const char* nativeJournalHealthOverride=nullptr;
 inline const char* trafficJournalHealth(){return nativeJournalHealthOverride?nativeJournalHealthOverride:nativeJournalEnabled?"OK":"NOT_INITIALIZED";}
 
-inline void activateTrafficVehicleEvent(){}
+inline int vehicleActivations=0;
+inline void activateTrafficVehicleEvent(){++vehicleActivations;}
 #ifndef TRAFFIC_OPERATING_TEST
 inline void serviceEventReset(){}
 #endif

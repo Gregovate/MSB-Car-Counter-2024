@@ -38,11 +38,13 @@ settings transaction. The normal nightly daily resets remain separate.
 
 ## Official show traffic only
 
-During the production season, only official show traffic contributes to counts,
-active vehicle/event logs, occupancy, hourly peaks, capacity comparisons and
-nightly reports. Pre-show and post-window raw passages are informational only;
-Greg does not want them accumulating in the production traffic logs or totals.
-Do not continue 24/7 raw vehicle logging as an unannounced alternative.
+Qualified passages increment the live daily entrance/exit counter throughout the day.
+Car arch feedback remains enabled. The configured daily reset clears the live count
+before show counting (at the delayed opening for Gate). Outside the recording
+window, persist the live count as a recovery checkpoint. Only eligible passages
+enter the official event logs, hourly buckets, season totals and nightly reports.
+Gate uses dated live totals for diagnostic occupancy outside show hours and dated
+official passages from show opening through the Gate cutoff.
 
 Physical beam sensing, occupancy/stuck-beam protection and alarms must continue
 working outside the logging window. Disabling logging must not disable sensing

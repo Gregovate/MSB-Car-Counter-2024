@@ -14,7 +14,56 @@ class CountRecovery(unittest.TestCase):
         source=(ROOT/"src/services/VehicleDetector.cpp").read_text(encoding="utf-8")
         body=re.search(r"void countTheCar\(\) \{.*?^\}", source, re.S|re.M).group(0)
         harness='#define main recovery_scenarios\n#include "'+str(ROOT/"tests/count_recovery_test.cpp")+'"\n#undef main\n'+re.search(r'void recordOfficialVehicle\(\) \{.*?^\}',(ROOT/'src/services/ShowSummary.cpp').read_text(),re.S|re.M).group(0)+'\n'+body+\
-            "\nint main(){legacy();assert(restoreCountState());showTime=true;countTheCar();reboot();assert(restoreCountState());assert(totalDailyCars==41 && totalShowCars==401 && hourlyCount[16]==41);reboot();rtc.lost=true;assert(!restoreCountState());auto before=disk;auto pending=pendingVehicles;countTheCar();assert(pendingVehicles==pending+1 && disk==before && totalDailyCars==0);nativeProduction=true;rtc.lost=false;reboot();assert(restoreCountState());showTime=false;auto archive=disk;auto daily=totalDailyCars;auto show=totalShowCars;countTheCar();assert(totalDailyCars==daily && totalShowCars==show && disk==archive);showTime=true;countTheCar();assert(totalDailyCars==daily+1 && totalShowCars==show+1);return 0;}"
+            r"""
+int main() {
+    legacy();
+    assert(restoreCountState());
+    showTime=true;
+    countTheCar();
+    reboot();
+    assert(restoreCountState());
+    assert(totalDailyCars==41 && totalShowCars==401 && hourlyCount[16]==41);
+    reboot();
+    rtc.lost=true;
+    assert(!restoreCountState());
+    auto before=disk;
+    auto pending=pendingVehicles;
+    countTheCar();
+    assert(pendingVehicles==pending+1 && disk==before && totalDailyCars==0);
+
+    nativeProduction=true;
+    rtc.lost=false;
+    reboot();
+    assert(restoreCountState());
+    showTime=false;
+    auto daily=totalDailyCars;
+    auto show=totalShowCars;
+    auto hourly=hourlyCount[16];
+    auto official=officialDailyPassages();
+    auto events=vehicleActivations;
+#ifdef HIGH
+    auto greenBefore=greenWrites;
+#endif
+    countTheCar();
+    assert(totalDailyCars==daily+1 && totalShowCars==show);
+    assert(hourlyCount[16]==hourly && officialDailyPassages()==official);
+    assert(vehicleActivations==events);
+#ifdef HIGH
+    assert(greenWrites==greenBefore+1);
+#endif
+    reboot();
+    assert(restoreCountState() && totalDailyCars==daily+1);
+    assert(resetCountsForShow() && totalDailyCars==0);
+    showTime=true;
+    countTheCar();
+    assert(totalDailyCars==1 && totalShowCars==show+1 && officialDailyPassages()==1);
+    assert(vehicleActivations==events+1);
+    showTime=false;
+    countTheCar();
+    assert(totalDailyCars==2 && totalShowCars==show+1 && officialDailyPassages()==1);
+    assert(vehicleActivations==events+1);
+}
+"""
         with tempfile.TemporaryDirectory() as tmp:
             cpp=pathlib.Path(tmp)/"event.cpp";cpp.write_text(harness)
             exe=str(pathlib.Path(tmp)/"event")

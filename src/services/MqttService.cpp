@@ -11,6 +11,9 @@ void publishMQTT(const char *topic, const String &message, bool retainFlag) {
         traffic::EntranceReading reading;
         reading.date=officialCountDate();reading.passages=officialDailyPassages();reading.stamp=rtc.now().unixtime();
         char payload[48];reading.encode(payload);mqtt_client.publish(traffic::datedEntryTopic,payload,true);
+        reading.passages=totalDailyCars;
+        reading.encode(payload);
+        mqtt_client.publish(traffic::liveEntryTopic,payload,true);
     }
     start_MqttMillis=millis();
 }
