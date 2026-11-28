@@ -9,7 +9,7 @@ struct PassagePolicy {
     bool qualified=false,completed=false;
     bool a=false,b=false,sawB=false,overlap=false;
     uint32_t start=0,last=0,aMs=0,bMs=0,overlapMs=0,overlapRun=0,maxOverlap=0,followMs=0;
-    uint32_t beamMinimum=100,overlapMinimum=500;
+    uint32_t beamMinimum=100,bHoldMinimum=500;
     const char* reason="IDLE";
     const char* order="NONE";
     void update(bool nextA,bool nextB,uint32_t now,uint32_t beamMin,uint32_t detectMin) {
@@ -20,7 +20,7 @@ struct PassagePolicy {
             active=started=true;accepted=qualified=completed=false;start=last=now;
             a=nextA;b=nextB;sawB=nextB;overlap=nextA && nextB;
             aMs=bMs=overlapMs=overlapRun=maxOverlap=followMs=0;
-            beamMinimum=beamMin;overlapMinimum=detectMin;
+            beamMinimum=beamMin;bHoldMinimum=detectMin;
             order=nextA && !nextB ? "A_THEN_B" : nextB && !nextA ? "B_FIRST":"SIMULTANEOUS";
             reason=nextA && !nextB ? "PENDING" : nextB && !nextA ? "REVERSE_B_FIRST":"AMBIGUOUS_START";
             return;
@@ -44,8 +44,11 @@ struct PassagePolicy {
 
         }
         bool bCleared=b && !nextB;
+        // Once A -> B is established, measure the B hold through B-clear,
+        // including time spent on B after A clears (as at the Gate).
+        // Use captured edge times even when the main loop drains late.
         if(strcmp(reason,"PENDING")==0 && overlap && aMs>=beamMinimum &&
-            bMs>=beamMinimum && maxOverlap>=overlapMinimum) qualified=true;
+            bMs>=beamMinimum && bMs>=bHoldMinimum) qualified=true;
         a=nextA;b=nextB;
         if((a || b) && (!bCleared || strcmp(reason,"PENDING")!=0)) return;
         completed=finished=true;
@@ -54,7 +57,7 @@ struct PassagePolicy {
         if(!overlap) reason="NO_OVERLAP";
         else if(aMs<beamMinimum) reason="SHORT_BEAM_A";
         else if(bMs<beamMinimum) reason="SHORT_BEAM_B";
-        else if(maxOverlap<overlapMinimum) reason="SHORT_OVERLAP";
+        else if(!qualified) reason="SHORT_B_HOLD";
         else {reason="ACCEPTED_FORWARD";accepted=true;}
     }
 };

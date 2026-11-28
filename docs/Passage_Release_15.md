@@ -1,5 +1,8 @@
 # Car .15 — passage qualification and optional HA diagnostics
 
+**26.11.28.1 update.** The historical continuous-overlap rule below was superseded after the opening-night audit. Car Detect ms is the minimum time beam B stays blocked after the forward sequence begins. Direction, beam minimums and both-clear rearming still apply.
+
+
 ## Observed failures and ownership
 
 November 17, 2026: .14 counted pedestrians and at least one confirmed reverse
@@ -122,3 +125,15 @@ rejected (unchanged count and idle effect); ordinary walkers rejected; slow/stop
 forward completion; OFF ceases passage messages. Review observed overlap before
 changing Car Detect ms. Keep the prior .14 binary for rollback under the existing
 procedure; rollback reintroduces its known false-count/arch defects.
+
+## November 27, 2026 entrance audit and timing correction
+
+D4 showed 1,023 car entries. EnterLog had 930 records, including one motorcycle-associated passage and 929 matched cars. The corrected hourly entry buckets are 335, 276, 236, 176 and 0. The season adjustment is +93, applied once to Car only. Preserve the original sensor log. Camera-only entries have no measured millisecond beam data.
+
+Car firmware 26.11.27.3 required 500 ms of continuous simultaneous beam blockage. The 2025 detector measured waitDuration from A, allowing B to stay occupied after A cleared. Release 26.11.28.1 uses the Gate B-duration rule after confirming forward order and real overlap. It keeps the entrance setting (500 ms), the independent per-beam minimums and both-clear rearming. This also preserves the existing rejection of the tested walking-length sequence. Raw rejected beam traces for opening night were unavailable, so the audit cannot assign every miss to this regression.
+
+For field acceptance compare individual D4 crossings with the next EnterLog. Include close arrivals, a short overlap, a stopped vehicle and reverse traffic. Enable passage debug during the check to capture rejected decisions and timings. A successful build or an arch flash alone cannot verify physical counts.
+
+Two beams alone cannot distinguish a pedestrian pair from a car when their beam transitions are identical. Include pedestrians in the field comparison.
+
+Before the next show, if Car Cars/ShowTotal is still 930 and the correction has not already been applied, the existing firmware accepts a non-retained MQTT publish on msb/traffic/CarCounter/Config/countCorrection. Payload: local RTC YYYYMMDDhhmmss,show,1023 (timestamp no more than 60 seconds old). Check the next heartbeat's show field for 1023 and the current day's daily total for its previous value. This updates the season checkpoint. It does not rewrite the archived November 27 log or nightly summary. If additional official entries have accrued, reconcile the current baseline before issuing an absolute correction.

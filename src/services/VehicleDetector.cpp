@@ -133,7 +133,7 @@ void reportPassage(const char* kind,int after) {
         passage.finished ? (passage.accepted ? "ACCEPT":"REJECT"):"PENDING",passage.reason,
         static_cast<unsigned long>(passage.aMs),static_cast<unsigned long>(passage.bMs),
         static_cast<unsigned long>(passage.overlapMs),static_cast<unsigned long>(passage.maxOverlap),
-        static_cast<unsigned long>(passage.beamMinimum),static_cast<unsigned long>(passage.overlapMinimum),
+        static_cast<unsigned long>(passage.beamMinimum),static_cast<unsigned long>(passage.bHoldMinimum),
         passageCountBefore,after);
     if(mqtt_client.getBufferSize()<1024 && !mqtt_client.setBufferSize(1024)) return;
     publishMQTT((String(topic_base_path)+"/Sensors/passageEvent").c_str(),String(message),false);

@@ -160,7 +160,7 @@
   "activateTrafficVehicleEvent": "e0581e432afa8917e641bd66ddd5f6246b7198aae72307a29296fc7ccde24741",
   "removeRetiredJournalArchive": "11a0e350b8446976ea0d3ade1e7b0a0fbfd42b037c38a09745858d81d9cd10a1",
   "countTheCar": "80a910f3f9efe496f1a2fae9889be2f073fea63233b59d626d97fac9dacb2a21",
-  "reportPassage": "f4ab0b96bc8e1793eff27e688075d12ad2347cb31ea74381c6a33d847d62c670",
+  "reportPassage": "20e6429f25b73f54a8aef1502e55293a9ad529a975491dbe1676784af6bf7db3",
   "publishPassageDebugState": "2c40672c5aef4136153ca08da72efcb486939856cf2fb8ceb247b6a42ab7357f",
   "resetPassageDebugConnection": "002cde2ef244b2c5c439e7cfb133656db42154382b0e20957fdae96479c11f56",
   "handlePassageDebugCommand": "db5360c17c7e9385542d4c558da92b4e917350ea082b8e14d4e08a6822e99bae",

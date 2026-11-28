@@ -31,7 +31,7 @@ cards:
       | B blocked | {{ state_attr(e, 'bMs') }} |
       | Longest simultaneous blockage | {{ state_attr(e, 'maxOverlapMs') }} |
       | Required per beam | {{ state_attr(e, 'beamMinMs') }} |
-      | Required overlap (Car Detect ms) | {{ state_attr(e, 'detectMs') }} |
+      | Required B hold (Car Detect ms) | {{ state_attr(e, 'detectMs') }} |
 
       Order: **{{ state_attr(e, 'order') }}**
 
