@@ -22,20 +22,24 @@ int main(){
   update(p,true,false,t);update(p,false,false,t+200);assert(!p.accepted);
   update(p,false,true,t+500);update(p,false,false,t+700);assert(!p.accepted);
  }
- update(p,true,false,35000);update(p,true,true,35200);update(p,false,true,35400);
- update(p,false,false,35600);assert(!p.accepted && !strcmp(p.reason,"SHORT_B_HOLD"));
- // A long approach and a short overlap still describe one forward vehicle.
- update(p,true,false,40000);update(p,true,true,50000);update(p,false,true,50100);
- update(p,false,false,51000);assert(p.finished && p.accepted && p.maxOverlap==100);
- // B is held for exactly 500 ms; A overlaps B for only 30 ms.
- update(p,true,false,52000);update(p,true,true,52200);update(p,false,true,52230);
- update(p,false,false,52700);assert(p.finished && p.accepted && p.maxOverlap==30);
- // One millisecond below the B hold does not count, even after a long approach.
- update(p,true,false,52701);update(p,true,true,52811);update(p,false,true,52841);
- update(p,false,false,53310);assert(!p.accepted && !strcmp(p.reason,"SHORT_B_HOLD"));
- // A brief pulse on B still fails the separate beam minimum.
- update(p,true,false,54000);update(p,true,true,54500);
- update(p,false,false,54599);assert(!p.accepted && !strcmp(p.reason,"SHORT_BEAM_B"));
+ // Compare the 2025 predicate at every millisecond with sparse edge replay.
+ // A starts at 0. An A-clear/B-rise handoff on the same tick is forward.
+ for(uint32_t wait : {50U,500U,950U}) {
+  for(uint32_t rise : {50U,100U,300U,499U,500U,700U,950U}) {
+   for(uint32_t hold : {50U,99U,100U,199U,200U,201U,499U,500U}) {
+    for(uint32_t overlapTime : {0U,30U,600U}) {
+     PassagePolicy q;q.update(false,false,0,100,wait);q.update(true,false,10,100,wait);
+     q.update(overlapTime>0,true,10+rise,100,wait);
+     if(overlapTime && overlapTime<hold) q.update(false,true,10+rise+overlapTime,100,wait);
+     q.update(overlapTime>hold,false,10+rise+hold,100,wait);
+     bool expected=false;
+     for(uint32_t age=rise;age<rise+hold;++age)
+      if(age>=100 && age>=wait) expected=true;
+     assert(q.finished && q.accepted==expected);
+    }
+   }
+  }
+ }
  // Hold longer than alarm timeout: still pending, then one final acceptance.
  update(p,true,false,60000);update(p,true,true,60200);update(p,true,true,180000);
  assert(p.active && !p.finished);update(p,false,true,180100);update(p,false,false,180300);

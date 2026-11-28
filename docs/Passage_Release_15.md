@@ -1,6 +1,6 @@
 # Car .15 — passage qualification and optional HA diagnostics
 
-**26.11.28.1 update.** The historical continuous-overlap rule below was superseded after the opening-night audit. Car Detect ms is the minimum time beam B stays blocked after the forward sequence begins. Direction, beam minimums and both-clear rearming still apply.
+**26.11.28.2 update.** The historical continuous-overlap rule below was superseded after the opening-night audit. Both activation and Car Detect delays start at A. B must be occupied when the delays have elapsed. Forward ordering and both-clear rearming still apply.
 
 
 ## Observed failures and ownership
@@ -130,7 +130,15 @@ procedure; rollback reintroduces its known false-count/arch defects.
 
 D4 showed 1,023 car entries. EnterLog had 930 records, including one motorcycle-associated passage and 929 matched cars. The corrected hourly entry buckets are 335, 276, 236, 176 and 0. The season adjustment is +93, applied once to Car only. Preserve the original sensor log. Camera-only entries have no measured millisecond beam data.
 
-Car firmware 26.11.27.3 required 500 ms of continuous simultaneous beam blockage. The 2025 detector measured waitDuration from A, allowing B to stay occupied after A cleared. Release 26.11.28.1 uses the Gate B-duration rule after confirming forward order and real overlap. It keeps the entrance setting (500 ms), the independent per-beam minimums and both-clear rearming. This also preserves the existing rejection of the tested walking-length sequence. Raw rejected beam traces for opening night were unavailable, so the audit cannot assign every miss to this regression.
+Car firmware 26.11.27.3 required 500 ms of continuous simultaneous beam blockage. The 2025 detector measured waitDuration from A, allowing B to stay occupied after A cleared. Release 26.11.28.2 restores the timing predicate in the December 14, 2025 Car source (1760015, src/main.cpp lines 2975–3040). B can follow on the sample that clears A. Qualification latches once elapsed time since A meets both configured limits while B is occupied. B clear then counts once. The 2025 compiled default was 950 ms and could be overridden; the supplied 2026 effective setting was 500 ms. This change leaves the configured value alone. Startup clear, B-first/simultaneous-start rejection and both-clear rearming remain deliberate differences from the legacy Car state machine.
+
+### Gate comparison (opening-night Gate 26.11.27.2, db2e303)
+
+Gate begins on A alone. When it sees B and at least minActivationDuration has elapsed since A, it latches a second timestamp. On B clear, Gate requires the time since that latch to meet carDetectMS (reported effective value 100 ms). Car starts both clocks at A and applies no second duration test at B clear. Gate ignores B-first activity while idle and may later start on A alone; Car locks a B-first or simultaneous-start transaction out until both clear. After an accepted passage with residual A, both wait for both-clear. Gate returns to waiting immediately on a short rejected B hold. Late B follow on Gate produces a diagnostic with no timeout reset. Gate detector source: src/services/VehicleDetector.cpp, WAITING_FOR_CAR through CAR_DETECTED. Gate code and settings are outside this PR.
+
+### Evidence from opening night
+
+The video and CSVs establish the unmatched crossings. The flash journal's vehicle records contain accepted passage timing. Completed rejected passages can be emitted to Sensors/passageEvent when debugging and MQTT are both active. These messages are non-retained and are not appended to SD. A saved MQTT/HA capture, if one exists for November 27, could provide per-event reasons; the after-midnight OFF snapshot does not establish whether debug was enabled earlier. The supplied files do not identify the electrical reason for each miss.
 
 For field acceptance compare individual D4 crossings with the next EnterLog. Include close arrivals, a short overlap, a stopped vehicle and reverse traffic. Enable passage debug during the check to capture rejected decisions and timings. A successful build or an arch flash alone cannot verify physical counts.
 

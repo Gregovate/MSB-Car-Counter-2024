@@ -73,8 +73,8 @@ int main(){
  reverse(14000);assert(totalDailyCars==26 && events()==1 && writes==0);
  auto last=messages.back().payload;assert(last.find("REVERSE_B_FIRST")!=std::string::npos);
  assert(last.find("\"before\":26,\"after\":26")!=std::string::npos);
- // Short walking-length overlap: no counts or arch writes.
- sample(1,0,20000);sample(1,1,20200);sample(0,1,20400);sample(0,0,20600);
+ // B clears before 500 ms from A: no count or arch writes.
+ sample(1,0,20000);sample(1,1,20200);sample(0,1,20400);sample(0,0,20499);
  assert(totalDailyCars==26 && writes==0);
  forward(26000);assert(totalDailyCars==27 && noCarTimer>26000 && writes==4);
  forward(32000);assert(totalDailyCars==28); // six seconds apart
@@ -107,6 +107,11 @@ int main(){
  sample(1,1,2302300);sample(1,1,2303200);n=writes;serviceIdleArchPattern();
  assert(writes==n+2 && noCarTimer==idleTimer);
  sample(1,0,2303500);sample(0,0,2303800);assert(totalDailyCars==unchanged);
+ // The previous short-overlap fixture runs 600 ms from A. The 2025
+ // rule accepts it; its waveform alone cannot identify a walker.
+ int baseline=totalDailyCars;
+ sample(1,0,2400000);sample(1,1,2400200);sample(0,1,2400400);sample(0,0,2400600);
+ assert(totalDailyCars==baseline+1);
  std::cout<<"PASS: actual debounce/direction/count callback, reverse pair, walkers, six-second cars, stopped car, debug ON/OFF/reconnect and arch ownership\n";
 }
 '''

@@ -9,7 +9,7 @@ struct PassagePolicy {
     bool qualified=false,completed=false;
     bool a=false,b=false,sawB=false,overlap=false;
     uint32_t start=0,last=0,aMs=0,bMs=0,overlapMs=0,overlapRun=0,maxOverlap=0,followMs=0;
-    uint32_t beamMinimum=100,bHoldMinimum=500;
+    uint32_t activationMinimum=100,waitMinimum=500;
     const char* reason="IDLE";
     const char* order="NONE";
     void update(bool nextA,bool nextB,uint32_t now,uint32_t beamMin,uint32_t detectMin) {
@@ -20,7 +20,7 @@ struct PassagePolicy {
             active=started=true;accepted=qualified=completed=false;start=last=now;
             a=nextA;b=nextB;sawB=nextB;overlap=nextA && nextB;
             aMs=bMs=overlapMs=overlapRun=maxOverlap=followMs=0;
-            beamMinimum=beamMin;bHoldMinimum=detectMin;
+            activationMinimum=beamMin;waitMinimum=detectMin;
             order=nextA && !nextB ? "A_THEN_B" : nextB && !nextA ? "B_FIRST":"SIMULTANEOUS";
             reason=nextA && !nextB ? "PENDING" : nextB && !nextA ? "REVERSE_B_FIRST":"AMBIGUOUS_START";
             return;
@@ -34,8 +34,8 @@ struct PassagePolicy {
         else overlapRun=0;
         if(strcmp(reason,"PENDING")==0) {
             if(!b && nextB) {
-                if(sawB || !a || !nextA) reason="AMBIGUOUS_SEQUENCE";
-                else {sawB=true;followMs=now-start;overlap=true;}
+                if(sawB || !a) reason="AMBIGUOUS_SEQUENCE";
+                else {sawB=true;followMs=now-start;overlap=nextA;}
             }
             if(a && !nextA && !sawB) reason="A_ONLY";
             // A may clear/rebreak at a trailer or axle gap while B is still held.
@@ -44,20 +44,20 @@ struct PassagePolicy {
 
         }
         bool bCleared=b && !nextB;
-        // Once A -> B is established, measure the B hold through B-clear,
-        // including time spent on B after A clears (as at the Gate).
-        // Use captured edge times even when the main loop drains late.
-        if(strcmp(reason,"PENDING")==0 && overlap && aMs>=beamMinimum &&
-            bMs>=beamMinimum && bMs>=bHoldMinimum) qualified=true;
+        // 2025 FIRST_BEAM_HIGH: while B is blocked, both limits use
+        // elapsed time since the initial A trip. A may already be clear.
+        // In a delayed replay the deadline can fall between two samples.
+        // At the exact B-clear timestamp the new B level is already low.
+        const uint32_t age=now-start;
+        const uint32_t delay=activationMinimum>waitMinimum ? activationMinimum : waitMinimum;
+        if(strcmp(reason,"PENDING")==0 && sawB &&
+           ((nextB && age>=delay) || (bCleared && age>delay))) qualified=true;
         a=nextA;b=nextB;
         if((a || b) && (!bCleared || strcmp(reason,"PENDING")!=0)) return;
         completed=finished=true;
         if(!a && !b) active=false;
         if(strcmp(reason,"PENDING")!=0) return;
-        if(!overlap) reason="NO_OVERLAP";
-        else if(aMs<beamMinimum) reason="SHORT_BEAM_A";
-        else if(bMs<beamMinimum) reason="SHORT_BEAM_B";
-        else if(!qualified) reason="SHORT_B_HOLD";
+        if(!qualified) reason="B_CLEAR_BEFORE_A_DELAY";
         else {reason="ACCEPTED_FORWARD";accepted=true;}
     }
 };

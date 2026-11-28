@@ -8,7 +8,7 @@
  * Older original history is preserved in docs/Firmware_History.md.
  *
  * CHANGELOG — newest first
- * 26.11.28.1 — Qualify forward vehicles by B hold through B-clear, including travel after A clears.
+ * 26.11.28.2 — Restore 2025 Car qualification from A-trip time while B is blocked.
  * 26.11.27.3 — Only qualified forward passages interrupt the idle arch pattern.
  *
  * 26.11.27.2 — Restore all-day hourly MQTT counts and isolate production CSV exports.
@@ -160,7 +160,7 @@
  */
 #include "traffic/NightlyCsv.h"
 #include "traffic/FirmwareVersion.h"
-const char FWVersion[] = "26.11.28.1";
+const char FWVersion[] = "26.11.28.2";
 
 #include "traffic/Firmware.h"
 #include "traffic/JournalInspection.h"

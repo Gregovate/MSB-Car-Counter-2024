@@ -30,8 +30,8 @@ cards:
       | A blocked | {{ state_attr(e, 'aMs') }} |
       | B blocked | {{ state_attr(e, 'bMs') }} |
       | Longest simultaneous blockage | {{ state_attr(e, 'maxOverlapMs') }} |
-      | Required per beam | {{ state_attr(e, 'beamMinMs') }} |
-      | Required B hold (Car Detect ms) | {{ state_attr(e, 'detectMs') }} |
+      | Minimum activation from A trip | {{ state_attr(e, 'beamMinMs') }} |
+      | Delay from A trip (Car Detect ms) | {{ state_attr(e, 'detectMs') }} |
 
       Order: **{{ state_attr(e, 'order') }}**
 
